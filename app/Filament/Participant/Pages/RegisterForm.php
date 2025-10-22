@@ -27,7 +27,6 @@ class RegisterForm extends Page implements HasSchemas
     {
         return __('Fun Run 2025');
     }
-
     public function mount(): void
     {
         $this->form->fill([
@@ -41,7 +40,6 @@ class RegisterForm extends Page implements HasSchemas
                 ->extraAttributes(['class' => ''])
                 ->statePath('data');
     }
-
     public function create()
     {
         $this->validate();
@@ -85,5 +83,4 @@ class RegisterForm extends Page implements HasSchemas
                     ->send();
             }
     }
-    
 }
