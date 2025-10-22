@@ -110,8 +110,6 @@ class ParticipantsTable
                         return $queryResult;
                     }
 
-                    
-
                 })
                 ->fileName(fn (array $data): string =>
                     'participants-' . str($data['subcategory'])->slug()

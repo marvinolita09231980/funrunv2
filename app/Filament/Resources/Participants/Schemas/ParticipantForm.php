@@ -152,8 +152,7 @@ class ParticipantForm
                     ->label('Waiver?')
                     ->default(false)
                     ->inline(false)
-                    ->hidden(),
-       
+                    ->hidden(),    
         ]);
     }
 
@@ -164,6 +163,7 @@ class ParticipantForm
         $birthDate = $get('birthDate');
         $yearNow =  date('Y');
        
+        
         // Only proceed if all three fields are filled
         if ($firstName && $lastName && $birthDate) {
             $participant = Participant::where('year', $yearNow)
