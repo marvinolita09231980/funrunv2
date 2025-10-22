@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Participants\Schemas;
 
+use livewire;
+use App\Models\Participant;
 use App\Models\Subcategory;
 use Filament\Support\RawJs;
 use Filament\Schemas\Schema;
@@ -30,16 +32,42 @@ class ParticipantForm
                     ->schema([
                         TextInput::make('firstName')
                             ->required()
-                            ->columnSpan(2),
-
+                            ->columnSpan(2)
+                            ->reactive()
+                            ->afterStateUpdated(function ($state, callable $set, $get,$component) {
+                                 $livewire = $component->getLivewire();
+                               if (self::checkAndFillParticipant($get, $set)) {
+                                    $livewire->existingParticipant = true;
+                                } else {
+                                    $livewire->existingParticipant = false;
+                                }
+                            }),
                         TextInput::make('lastName')
                             ->required()
-                            ->columnSpan(2),
+                            ->columnSpan(2)
+                            ->reactive()
+                            ->afterStateUpdated(function ($state, callable $set, $get,$component) {
+                                 $livewire = $component->getLivewire();
+                               if (self::checkAndFillParticipant($get, $set)) {
+                                    $livewire->existingParticipant = true;
+                                } else {
+                                    $livewire->existingParticipant = false;
+                                }
+                            }),
 
                         TextInput::make('middleInitial')
                             ->maxLength(1),
                         DatePicker::make('birthDate')
-                            ->columnSpan(2),
+                            ->columnSpan(2)
+                            ->reactive()
+                            ->afterStateUpdated(function ($state, callable $set, $get,$component) {
+                                 $livewire = $component->getLivewire();
+                               if (self::checkAndFillParticipant($get, $set)) {
+                                    $livewire->existingParticipant = true;
+                                } else {
+                                    $livewire->existingParticipant = false;
+                                }
+                            }),
 
                         Select::make('gender')
                             ->options([
@@ -127,5 +155,39 @@ class ParticipantForm
                     ->hidden(),
        
         ]);
+    }
+
+    private static function checkAndFillParticipant(callable $get, callable $set): bool
+    {
+        $firstName = $get('firstName');
+        $lastName = $get('lastName');
+        $birthDate = $get('birthDate');
+        $yearNow =  date('Y');
+       
+        // Only proceed if all three fields are filled
+        if ($firstName && $lastName && $birthDate) {
+            $participant = Participant::where('year', $yearNow)
+                ->where('firstName', $firstName)
+                ->where('lastName', $lastName)
+                ->whereDate('birthDate', $birthDate)
+                ->first();
+
+            if ($participant) {
+                // Populate other fields automatically
+                $set('middleInitial', $participant->middleInitial);
+                $set('gender', $participant->gender);
+                $set('address', $participant->address);
+                $set('contactNumber', $participant->contactNumber);
+                $set('categoryDescription', $participant->categoryDescription);
+                $set('subDescription', $participant->subDescription);
+                $set('shirtSize', $participant->shirtSize);
+                $set('distanceCategory', $participant->distanceCategory);
+                $set('referenceNumber', $participant->referenceNumber);
+
+               
+                return true;
+            } 
+        }
+        return false;
     }
 }

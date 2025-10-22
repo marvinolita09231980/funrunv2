@@ -23,7 +23,7 @@ class RegisterForm extends Page implements HasSchemas
     protected string $view = 'filament.participant.pages.register-form';
     public array $data = [];
     public ?string $errorMessage = null;
-
+   
     public function getHeading(): string
     {
         return __('Fun Run 2025');
@@ -77,7 +77,7 @@ class RegisterForm extends Page implements HasSchemas
             $this->errorMessage = null; 
 
             } catch (\Throwable $th) {
-                
+
                 $this->errorMessage = $th->getMessage();
 
                 Notification::make()
