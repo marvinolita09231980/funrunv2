@@ -97,7 +97,6 @@ class ParticipantsTable
                     if (!$category) {
                         return []; 
                     }
-
                     if(!$distance)
                     {
                         $queryResult = $query 

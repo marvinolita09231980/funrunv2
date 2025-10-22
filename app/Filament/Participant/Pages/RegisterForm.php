@@ -19,7 +19,6 @@ use App\Filament\Resources\Participants\Schemas\ParticipantForm;
 class RegisterForm extends Page implements HasSchemas
 {
     use InteractsWithSchemas;
-
     protected string $view = 'filament.participant.pages.register-form';
     public array $data = [];
     public ?string $errorMessage = null;
@@ -34,7 +33,6 @@ class RegisterForm extends Page implements HasSchemas
         $this->form->fill([
             'waiver' => false
         ]);
-
     }
     
     public function form(Schema $schema): Schema
