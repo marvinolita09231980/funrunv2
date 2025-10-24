@@ -35,6 +35,7 @@ class ParticipantsTable
                 TextColumn::make('gender')->label('Gender')
                 ->searchable(),
             ])
+            ->recordUrl(null)
             ->filters([
                 QueryBuilder::make()
                     ->constraints([

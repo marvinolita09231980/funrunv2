@@ -34,13 +34,19 @@
                     </x-filament::link>
                 </span>
             </div>
-            <div>
+            <div class="flex justify-between items-center mt-4 w-full gap-x-2">
                 <button 
-                    
-                    class="bg-orange-300 px-3 py-1 rounded-lg" 
+                    class="bg-orange-300 px-8 py-3 rounded-lg text-center font-large whitespace-nowrap"
                     :class="{'!bg-gray-300/60 !text-gray-600/80': !agreed}" 
                     :disabled="!agreed">
                     Submit Registration
+                </button>
+
+                <button 
+                    class="bg-black-300 px-4 py-3 rounded-lg border-solid font-large" 
+                    :class="{'!bg-gray-300/60'}"
+                    @click="window.location.reload()">
+                    Clear
                 </button>
             </div>
         </div>

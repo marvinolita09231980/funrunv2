@@ -35,41 +35,28 @@ class ParticipantForm
                             ->columnSpan(2)
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                 $livewire = $component->getLivewire();
-                               if (self::checkAndFillParticipant($get, $set)) {
-                                    $livewire->existingParticipant = true;
-                                } else {
-                                    $livewire->existingParticipant = false;
-                                }
+                                    self::checkAndFillParticipant($get, $set);
                             }),
                         TextInput::make('lastName')
                             ->required()
                             ->columnSpan(2)
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                 $livewire = $component->getLivewire();
-                               if (self::checkAndFillParticipant($get, $set)) {
-                                    $livewire->existingParticipant = true;
-                                } else {
-                                    $livewire->existingParticipant = false;
-                                }
+                                    self::checkAndFillParticipant($get, $set);
                             }),
 
                         TextInput::make('middleInitial')
                             ->maxLength(1),
                         DatePicker::make('birthDate')
                             ->columnSpan(2)
+                            ->required()
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                 $livewire = $component->getLivewire();
-                               if (self::checkAndFillParticipant($get, $set)) {
-                                    $livewire->existingParticipant = true;
-                                } else {
-                                    $livewire->existingParticipant = false;
-                                }
+                                    self::checkAndFillParticipant($get, $set);
                             }),
 
                         Select::make('gender')
+                            ->required()
                             ->options([
                                 'male' =>     'Male',
                                 'female' => 'Female',
@@ -80,10 +67,10 @@ class ParticipantForm
                                 'prefer not to say' => 'Prefer not to say'
                             ])
                             ->searchable()
-                            ->required()
                             ->columnSpan(3),
                         TextInput::make('address')
-                            ->columnSpan(5),
+                            ->columnSpan(5)
+                            ->required(),
 
                         TextInput::make('contactNumber')
                                 ->minLength(11)
@@ -140,13 +127,13 @@ class ParticipantForm
                                         ])
                                     ->inline()
                                     ->reactive(),
-                                TextInput::make('referenceNumber')
-                                    ->label('Reference Number')
-                                    ->visible(fn (callable $get) => $get('distanceCategory') === '10km')
-                                    ->required(fn (callable $get) => 
-                                        $get('distanceCategory') === '10km'
-                                        && Filament::getCurrentPanel()?->getId() === 'admin'
-                                    ),
+                                // TextInput::make('referenceNumber')
+                                //     ->label('Reference Number')
+                                //     ->visible(fn (callable $get) => $get('distanceCategory') === '10km')
+                                //     ->required(fn (callable $get) => 
+                                //         $get('distanceCategory') === '10km'
+                                //         && Filament::getCurrentPanel()?->getId() === 'admin'
+                                //     ),
                         ]),
                  Toggle::make('waiver')
                     ->label('Waiver?')
@@ -164,7 +151,7 @@ class ParticipantForm
         $yearNow =  date('Y');
        
         
-        // Only proceed if all three fields are filled
+        
         if ($firstName && $lastName && $birthDate) {
             $participant = Participant::where('year', $yearNow)
                 ->where('firstName', $firstName)
@@ -173,7 +160,7 @@ class ParticipantForm
                 ->first();
 
             if ($participant) {
-                // Populate other fields automatically
+              
                 $set('middleInitial', $participant->middleInitial);
                 $set('gender', $participant->gender);
                 $set('address', $participant->address);
@@ -183,8 +170,6 @@ class ParticipantForm
                 $set('shirtSize', $participant->shirtSize);
                 $set('distanceCategory', $participant->distanceCategory);
                 $set('referenceNumber', $participant->referenceNumber);
-
-               
                 return true;
             } 
         }

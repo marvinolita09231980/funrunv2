@@ -24,6 +24,7 @@ class SubcategoriesTable
                     ->label('No. Participants')
                     ->searchable(),
             ])
+            ->recordUrl(null)
             ->filters([
                 //
             ])

@@ -20,24 +20,24 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 
-class RegisterPanelProvider extends PanelProvider
+class FeedbackPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
         return $panel
-            ->id('register')
-            ->path('register')
+            ->id('feedback')
+            ->path('feedback')
             ->colors([
                 'primary' => Color::Amber,
             ])
             ->topbar(false)
             ->navigation(false)
-            ->discoverResources(in: app_path('Filament/Register/Resources'), for: 'App\Filament\Participant\Resources')
-            ->discoverPages(in: app_path('Filament/Participant/Pages'), for: 'App\Filament\Participant\Pages')
+            ->discoverResources(in: app_path('Filament/Feedback/Resources'), for: 'App\Filament\Feedback\Resources')
+            ->discoverPages(in: app_path('Filament/Feedback/Pages'), for: 'App\Filament\Feedback\Pages')
             ->pages([
-                //  Dashboard::class,
+                //Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Participant/Widgets'), for: 'App\Filament\Participant\Widgets')
+            ->discoverWidgets(in: app_path('Filament/Feedback/Widgets'), for: 'App\Filament\Feedback\Widgets')
             ->widgets([
                 AccountWidget::class,
                 FilamentInfoWidget::class,
@@ -54,7 +54,7 @@ class RegisterPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->authMiddleware([
-                // Authenticate::class,
+                //Authenticate::class,
             ])
             ->maxContentWidth(Width::TwoExtraLarge)
             ->viteTheme('resources/css/filament/register/theme.css');

@@ -20,9 +20,10 @@ class RegisterForm extends Page implements HasSchemas
 {
     use InteractsWithSchemas;
     protected string $view = 'filament.participant.pages.register-form';
+  
     public array $data = [];
     public ?string $errorMessage = null;
-   
+    
     public function getHeading(): string
     {
         return __('Fun Run 2025');
@@ -30,16 +31,19 @@ class RegisterForm extends Page implements HasSchemas
     public function mount(): void
     {
         $this->form->fill([
-            'waiver' => false
+             'waiver' => false
+          
         ]);
     }
     
     public function form(Schema $schema): Schema
     {
+       
         return ParticipantForm::configure($schema)
                 ->extraAttributes(['class' => ''])
                 ->statePath('data');
     }
+    
     public function create()
     {
         $this->validate();
@@ -47,7 +51,6 @@ class RegisterForm extends Page implements HasSchemas
 
 
             $this->data['year'] = date('Y');
-
             $exists = Participant::where('year', $this->data['year'])
             ->where('firstName', $this->data['firstName'])
             ->where('lastName', $this->data['lastName'])
@@ -80,6 +83,7 @@ class RegisterForm extends Page implements HasSchemas
                     ->danger()
                     ->title('Failed to register')
                     ->body($th->getMessage())
+                    ->persistent()
                     ->send();
             }
     }
