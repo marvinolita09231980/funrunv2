@@ -126,15 +126,13 @@ class FeedbackForm extends Page implements HasSchemas
            ])
            ->statePath('data');
     }
-
     public function create()
     {
         $this->validate();
-       
         $notifmessage = "";
         try {
             $this->data['year'] = date('Y');
-            
+
            $this->data['full_name'] = $this->data['firstName'] . ' ' . $this->data['lastName'];
            
             $feedback = Feedback::where('year', $this->data['year'])
@@ -142,17 +140,14 @@ class FeedbackForm extends Page implements HasSchemas
                 ->where('lastName', $this->data['lastName'])
                 ->whereDate('birthDate', $this->data['birthDate'])
                 ->first();
-
             if ($feedback) {
                
                 $feedback->update($this->data);
                 $notifmessage = "Record updated successfully.";
             } else {
-                
                 Feedback::create($this->data);
                 $notifmessage =  "Record created successfully.";
             }
-
             Notification::make()
                 ->success()
                 ->title('Success Message')
