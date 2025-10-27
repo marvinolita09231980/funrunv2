@@ -9,4 +9,6 @@ class Participant extends Model
 {
     use HasFactory;
     protected $guarded = [];
+
+   
 }

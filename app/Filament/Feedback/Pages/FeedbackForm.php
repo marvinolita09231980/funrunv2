@@ -129,6 +129,7 @@ class FeedbackForm extends Page implements HasSchemas
     public function create()
     {
         $this->validate();
+        
         $notifmessage = "";
         try {
             $this->data['year'] = date('Y');

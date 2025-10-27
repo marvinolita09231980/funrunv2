@@ -12,6 +12,7 @@ class Subcategory extends Model
         'categoryDescription',
         'nop',
         'subDescription',
+        'username',
     ];
 
 }

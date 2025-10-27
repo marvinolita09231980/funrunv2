@@ -3,6 +3,8 @@
 namespace App\Filament\Participant\Pages;
 
 use Filament\Pages\Page;
+use App\Models\Participant;
+use App\Models\Subcategory;
 use Filament\Schemas\Schema;
 use Livewire\Attributes\Computed;
 use Filament\Forms\Components\TextInput;
@@ -12,9 +14,9 @@ use Filament\Schemas\Contracts\HasSchemas;
 use Illuminate\Support\Facades\Exceptions;
 use Filament\Forms\Components\MarkdownEditor;
 use Illuminate\Validation\ValidationException;
-use App\Models\Participant;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use App\Filament\Resources\Participants\Schemas\ParticipantForm;
+use Illuminate\Support\Facades\DB;
 
 class RegisterForm extends Page implements HasSchemas
 {
@@ -43,13 +45,15 @@ class RegisterForm extends Page implements HasSchemas
                 ->extraAttributes(['class' => ''])
                 ->statePath('data');
     }
-    
+
     public function create()
     {
         $this->validate();
         try {
 
-
+            $this->data['waiver'] = true;
+            $this->data['referenceNumber'] = '0';
+            
             $this->data['year'] = date('Y');
             $exists = Participant::where('year', $this->data['year'])
             ->where('firstName', $this->data['firstName'])
@@ -61,6 +65,28 @@ class RegisterForm extends Page implements HasSchemas
             {
                  throw ValidationException::withMessages([
                 'duplicate' => 'Duplicate record! Participant is already registered for this year.',
+                ]);
+            }
+
+           
+              $max_n =  Subcategory::query()
+                        ->select([
+                            'subcategories.*',
+                            DB::raw("(SELECT COUNT(*) 
+                                      FROM participants 
+                                      WHERE participants.categoryDescription = subcategories.categoryDescription 
+                                      AND participants.subDescription = subcategories.subDescription 
+                                      AND participants.year = '2025') AS registered"),
+                        ])
+                        ->where('categoryDescription',$this->data['categoryDescription'])
+                        ->where('subDescription',$this->data['subDescription'])
+                        ->first();
+
+          
+            if($max_n['registered'] >= $max_n['nop'])
+            {
+                throw ValidationException::withMessages([
+                'Maximum Participants' => 'Participant slots are already full.',
                 ]);
             }
             

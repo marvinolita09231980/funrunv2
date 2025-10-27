@@ -34,6 +34,8 @@ class ParticipantsTable
                 ->searchable(),
                 TextColumn::make('gender')->label('Gender')
                 ->searchable(),
+                TextColumn::make('created_by')->label('Created By')
+                ->searchable(),
             ])
             ->recordUrl(null)
             ->filters([
