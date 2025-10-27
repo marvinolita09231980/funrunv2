@@ -12,13 +12,7 @@ class CreateSubcategories extends CreateRecord
     protected static string $resource = SubcategoriesResource::class;
     
 
-    protected function getFormActions(): array
-    {
-        return [
-            $this->getCreateAnotherFormAction(),
-            $this->getCancelFormAction(),       
-        ];
-    }
+   
 
 
     protected function beforeCreate(): void
@@ -48,15 +42,7 @@ class CreateSubcategories extends CreateRecord
         ->title('Subcategory created successfully')
         ->send();
 
-       
-         $this->form->fill([
-            'categoryDescription' => $data['categoryDescription'],
-         ]);
     }
 
-    protected function getRedirectUrl(): string
-    {
-        return static::getResource()::getUrl('create');
-
-    }
+    
 }
