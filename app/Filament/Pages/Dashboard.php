@@ -29,6 +29,7 @@ class Dashboard extends BaseDashboard implements HasTable
                                                 AND participants.subDescription = subcategories.subDescription 
                                                 AND participants.year = '2025') AS registered"),
                                     ])
+                                    ->orderBy('subcategories.categoryDescription', 'asc')
             )
             ->columns([
                 TextColumn::make('categoryDescription')
