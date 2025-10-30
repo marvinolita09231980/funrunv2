@@ -53,17 +53,17 @@ class Dashboard extends BaseDashboard implements HasTable
                                     ->orderBy('subcategories.categoryDescription', 'asc')
             )
             ->columns([
-                TextColumn::make('categoryDescription')
-                    ->label('Category')
-                    ->searchable(),
-                TextColumn::make('subDescription')
-                    ->label('Description')
-                    ->searchable(),
+                 TextColumn::make('categoryDescription')
+                     ->label('Category')
+                     ->searchable(),
+                 TextColumn::make('subDescription')
+                     ->label('Description')
+                     ->searchable(),
                 TextColumn::make('nop')
-                    ->label('No. Participants')
+                    ->label('Allot.')
                     ->sortable(),
                 TextColumn::make('registered')
-                    ->label('No. Registered')
+                    ->label('Registered')
                     ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
                     ->summarize(Sum::make()->label('Total')),
                     
