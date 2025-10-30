@@ -30,6 +30,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->globalSearch(false)
             ->brandName('Fun Run 2025') // ← Change this line
             ->colors([
                 'primary' => Color::Amber,
