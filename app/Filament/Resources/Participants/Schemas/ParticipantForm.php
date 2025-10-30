@@ -6,6 +6,7 @@ use livewire;
 use App\Models\Participant;
 use App\Models\Subcategory;
 use Filament\Support\RawJs;
+use Illuminate\Support\Str;
 use Filament\Schemas\Schema;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Html;
+use Illuminate\Support\Facades\Route;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Forms\Components\DatePicker;
@@ -89,13 +91,15 @@ class ParticipantForm
                             ->schema([
                                 Select::make('categoryDescription')
                                     ->required()
-                                     ->options(function () {
-                                            $query = Subcategory::query();
-                                            if (Auth::user()->username !== 'superadmin') {
-                                                $query->where('username', Auth::user()->username);
-                                            }
-                                            return $query->distinct()
-                                                        ->pluck('categoryDescription', 'categoryDescription');
+                                   ->options(function () {
+
+                                        if (Auth::check() && Auth::user()->username === 'superadmin') {
+                                            return Subcategory::query();
+                                        }
+                                        return Subcategory::query()
+                                            ->where('username', Auth::check()?Auth::user()->username:'OPEN')
+                                            ->pluck('categoryDescription', 'categoryDescription');
+
                                     })
                                     ->searchable()
                                     ->reactive()
@@ -104,30 +108,22 @@ class ParticipantForm
                                 Select::make('subDescription')
                                     ->options(function (callable $get) {
                                         $category = $get('categoryDescription');
+
                                         if (!$category) {
                                             return []; 
                                         }
+
                                         $query = Subcategory::query()
                                                     ->where('categoryDescription', $category);
 
-                                        if (Auth::user()->username !== 'superadmin') {
+                                        if (Auth::check() && Auth::user()->username !== 'superadmin') {
                                             $query->where('username', Auth::user()->username);
                                         }
+
                                         return $query->distinct()
                                                     ->pluck('subDescription', 'subDescription');
                                                
                                     })
-
-                                    // ->options(function (callable $get) {
-                                    //     $category = $get('categoryDescription');
-                                    //     if (!$category) {
-                                    //         return []; 
-                                    //     }
-                
-                                    //         return Subcategory::query()
-                                    //         ->where('categoryDescription', $category)
-                                    //         ->pluck('subDescription', 'subDescription');
-                                    // })
                                     ->searchable()
                                     ->required()
                                     ->columnSpanFull()
