@@ -94,7 +94,9 @@ class ParticipantForm
                                    ->options(function () {
 
                                         if (Auth::check() && Auth::user()->username === 'superadmin') {
-                                            return Subcategory::query();
+                                            return Subcategory::query()
+                                             ->distinct()
+                                             ->pluck('categoryDescription', 'categoryDescription');
                                         }
                                         return Subcategory::query()
                                             ->where('username', Auth::check()?Auth::user()->username:'OPEN')
