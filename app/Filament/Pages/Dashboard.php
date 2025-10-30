@@ -7,6 +7,7 @@ use App\Models\Subcategory;
 use Illuminate\Support\Facades\DB;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Tables\Concerns\InteractsWithTable;
 
@@ -28,6 +29,26 @@ class Dashboard extends BaseDashboard implements HasTable
                                                 WHERE participants.categoryDescription = subcategories.categoryDescription 
                                                 AND participants.subDescription = subcategories.subDescription 
                                                 AND participants.year = '2025') AS registered"),
+                                                DB::raw("(SELECT COUNT(*) 
+                                                FROM participants 
+                                                WHERE participants.categoryDescription = subcategories.categoryDescription 
+                                                    AND participants.subDescription = subcategories.subDescription 
+                                                    AND participants.year = '2025'
+                                                    AND participants.distanceCategory = '3km') AS count_3k"),
+
+                                                DB::raw("(SELECT COUNT(*) 
+                                                        FROM participants 
+                                                        WHERE participants.categoryDescription = subcategories.categoryDescription 
+                                                            AND participants.subDescription = subcategories.subDescription 
+                                                            AND participants.year = '2025'
+                                                            AND participants.distanceCategory = '5km') AS count_5k"),
+
+                                                DB::raw("(SELECT COUNT(*) 
+                                                        FROM participants 
+                                                        WHERE participants.categoryDescription = subcategories.categoryDescription 
+                                                            AND participants.subDescription = subcategories.subDescription 
+                                                            AND participants.year = '2025'
+                                                            AND participants.distanceCategory = '10km') AS count_10k"),
                                     ])
                                     ->orderBy('subcategories.categoryDescription', 'asc')
             )
@@ -43,8 +64,23 @@ class Dashboard extends BaseDashboard implements HasTable
                     ->sortable(),
                 TextColumn::make('registered')
                     ->label('No. Registered')
-                    ->sortable(),
+                    ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
+                    ->summarize(Sum::make()->label('Total')),
+                    
+                TextColumn::make('count_3k')
+                    ->label('3 KM')
+                    ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
+                    ->summarize(Sum::make()->label('Total')),
+                TextColumn::make('count_5k')
+                    ->label('5 KM')
+                    ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
+                    ->summarize(Sum::make()->label('Total')),
+                TextColumn::make('count_10k')
+                    ->label('10 KM')
+                    ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
+                    ->summarize(Sum::make()->label('Total')),
             ])
+            
             ->defaultSort('created_at', 'desc');
     }
 }
