@@ -90,7 +90,7 @@ class ParticipantForm
                         Fieldset::make('Funrun Information')
                             ->schema([
                                 Select::make('categoryDescription')
-                                    ->required()
+                                   ->required()
                                    ->options(function () {
 
                                         if (Auth::check() && Auth::user()->username === 'superadmin') {
