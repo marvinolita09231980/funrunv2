@@ -11,13 +11,14 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Tables\Concerns\InteractsWithTable;
+use BackedEnum;
 
 class ShirtSizes extends Page implements HasTable
 {
-   
+    
     use InteractsWithTable;
 
-    //protected static ?string $navigationIcon = 'heroicon-o-tshirt';
+    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-archive-box';
     protected string $view = 'filament.pages.shirt-sizes';
 
     public function table(Table $table): Table

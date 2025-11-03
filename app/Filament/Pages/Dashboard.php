@@ -15,7 +15,7 @@ class Dashboard extends BaseDashboard implements HasTable
 {
     use InteractsWithTable;
 
-    // protected static ?string $navigationIcon = 'heroicon-o-home';
+    // protected static $navigationIcon = 'heroicon-o-home';
     protected string $view = 'filament.pages.dashboard';
 
     public function table(Table $table): Table
