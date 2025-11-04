@@ -64,7 +64,7 @@
         
         <p>
             Purpose of Data Collection (in accordance with RA 10173): The Provincial Government of Davao de Oro requires your personal information to verify your 
-            participation in the "KONTRUN SA DROGA" event organized by the Provincial Anti-Drug Abuse Council (PADAC). 
+            participation in the <b>"Kalamboan: Dagan Kontra Droga 2025"</b> event organized by the Provincial Anti-Drug Abuse Council (PADAC). 
         </p>
        
         <p>
