@@ -27,8 +27,14 @@ class ParticipantsTable
         return $table
             ->modifyQueryUsing(function ($query) {
                 // Only show records created by the logged-in user
-                if (Auth::check() && Auth::user()->username !== 'superadmin') {
-                    $query->where('created_by', Auth::user()->username);
+                if (Auth::check() && Auth::user()->username !== 'superadmin' && Auth::user()->username !== 'phrmdo') {
+                    $query->where('created_by', Auth::user()->username)
+                          ->where('year',date('Y'));
+                }
+                else if (Auth::check() && Auth::user()->username === 'phrmdo')
+                {
+                   $query->where('categoryDescription', 'PLGU')
+                         ->where('year',date('Y'));
                 }
             })
             ->columns([
