@@ -7,6 +7,7 @@ use App\Models\Subcategory;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
+use Illuminate\Support\Facades\Auth;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\Select;
 use Filament\Actions\DeleteBulkAction;
@@ -24,7 +25,12 @@ class ParticipantsTable
     {
         
         return $table
-            
+            ->modifyQueryUsing(function ($query) {
+                // Only show records created by the logged-in user
+                if (Auth::check() && Auth::user()->username !== 'superadmin') {
+                    $query->where('created_by', Auth::user()->username);
+                }
+            })
             ->columns([
                 TextColumn::make('firstName')->label('First Name')
                 ->searchable(),
