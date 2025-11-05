@@ -8,8 +8,10 @@ use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
 use Illuminate\Support\Facades\Auth;
+use Maatwebsite\Excel\Facades\Excel;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\Select;
+use App\Exports\AttendanceSheetExport;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\QueryBuilder;
@@ -84,53 +86,53 @@ class ParticipantsTable
                 BulkActionGroup::make([
                 DeleteBulkAction::make(),
                     ]),
-                ExportAction::make('attendance_export')
-                ->label('Attendance Export')
-                ->exporter(ParticipantExporter::class)
-                ->columnMapping(false)
-                ->schema([
-                    Select::make('subcategory')
-                        ->label('Subcategory')
-                        ->options(Subcategory::pluck('subDescription', 'subDescription'))
-                        ->searchable()
-                        ->required(),
-                     Select::make('distanceCategory')
-                        ->label('Distance')
-                        ->options([
-                                            '3km' =>    '3KM',
-                                            '5km' =>    '5KM',
-                                            '10km' =>   '10KM',
-                                        ])
-                        ->searchable()
+                // ExportAction::make('attendance_export')
+                // ->label('Attendance Export')
+                // ->action(fn() => Excel::download(new AttendanceSheetExport, 'attendance_sheet.xlsx'))
+                // ->columnMapping(false)
+                // ->schema([
+                //     Select::make('subcategory')
+                //         ->label('Subcategory')
+                //         ->options(Subcategory::pluck('subDescription', 'subDescription'))
+                //         ->searchable()
+                //         ->required(),
                         
-                ])
-                ->modifyQueryUsing(function(Builder $query,array $data){
+                // ])
+                // ->modifyQueryUsing(function(Builder $query,array $data){
                     
-                    $category = $data['subcategory']; // get selected category
-                    $distance = $data['distanceCategory'];
-                     
-                    if (!$category) {
-                        return []; 
-                    }
-                    if(!$distance)
-                    {
-                        $queryResult = $query 
-                        ->where('subDescription', $category);
-                        return $queryResult;
-                    }
-                    else{
-                        $queryResult = $query 
-                        ->where('subDescription', $category)
-                        ->Where('distanceCategory', $distance);
-                        return $queryResult;
-                    }
-
-                })
-                ->fileName(fn (array $data): string =>
-                    'participants-' . str($data['subcategory'])->slug()
-                ),
-                
+                //     $category = $data['subcategory']; // get selected category
+                //     if (!$category) {
+                //         return []; 
+                //     }
                    
+                //     $queryResult = $query 
+                //     ->where('year', date('Y'))
+                //     ->where('subDescription', $category);
+                   
+                //     return $queryResult;
+                   
+
+                // })
+                // ->fileName(fn (array $data): string =>
+                //     'participants-' . str($data['subcategory'])->slug()
+                // ),
+                Action::make('attendance_export')
+                    ->label('Attendance Export')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->action(function (array $data) {
+                        return Excel::download(
+                            new AttendanceSheetExport($data['subcategory']),
+                            'attendance_sheet.xlsx'
+                        );
+                    })
+                    ->form([
+                        Select::make('subcategory')
+                            ->label('Subcategory')
+                            ->options(Subcategory::pluck('subDescription', 'subDescription'))
+                            ->searchable()
+                            ->required(),
+                    ]),
+                                
                 
                      
                             

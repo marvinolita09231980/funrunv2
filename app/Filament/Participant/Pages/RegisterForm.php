@@ -112,6 +112,24 @@ class RegisterForm extends Page implements HasSchemas
                                 JS))
                             ->stripCharacters(' ')
                             ->columnSpan(2),
+                    Radio::make('pwd')
+                            ->label('PWD')
+                            ->required()
+                            ->options([
+                                    false =>    'NO',
+                                    true =>    'YES',
+                                ])
+                            ->inline()
+                            ->reactive(),
+                    Radio::make('rpwuds')
+                        ->label('RPWUDS')
+                        ->required()
+                        ->options([
+                                false =>    'NO',
+                                true =>    'YES',
+                            ])
+                        ->inline()
+                        ->reactive(),
                 
                 ])
                 ->columns(5),

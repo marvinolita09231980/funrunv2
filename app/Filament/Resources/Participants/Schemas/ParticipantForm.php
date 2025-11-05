@@ -79,12 +79,32 @@ class ParticipantForm
                             ->required(),
 
                         TextInput::make('contactNumber')
-                                ->minLength(11)
-                                ->mask(RawJs::make(<<<'JS'
-                                        '9999 999 9999'
-                                    JS))
-                                ->stripCharacters(' ')
-                                ->columnSpan(2),
+                            ->minLength(11)
+                            ->mask(RawJs::make(<<<'JS'
+                                    '9999 999 9999'
+                                JS))
+                            ->stripCharacters(' ')
+                            ->columnSpan(2),
+                        Radio::make('pwd')
+                            ->label('PWD')
+                            ->required()
+                            ->options([
+                                    false =>    'NO',
+                                    true =>    'YES',
+                                   
+                                ])
+                            ->inline()
+                            ->reactive(),
+                        Radio::make('rpwuds')
+                            ->label('RPWUDS')
+                            ->required()
+                            ->options([
+                                    false =>    'NO',
+                                    true =>    'YES',
+                                   
+                                ])
+                            ->inline()
+                            ->reactive(),
                         ])
                         ->columns(5),
                         Fieldset::make('Funrun Information')
