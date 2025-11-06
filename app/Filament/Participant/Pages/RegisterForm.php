@@ -130,6 +130,7 @@ class RegisterForm extends Page implements HasSchemas
                             ])
                         ->inline()
                         ->reactive(),
+                    
                 
                 ])
                 ->columns(5),
@@ -203,6 +204,16 @@ class RegisterForm extends Page implements HasSchemas
                                     '3km' =>    '3KM',
                                     '5km' =>    '5KM',
                                     '10km' =>   '10KM',
+                                ])
+                            ->inline()
+                            ->reactive(),
+
+                        Radio::make('couple')
+                            ->label('Couple Runner')
+                            ->required()
+                            ->options([
+                                   false =>    'NO',
+                                   true =>    'YES',
                                 ])
                             ->inline()
                             ->reactive(),
