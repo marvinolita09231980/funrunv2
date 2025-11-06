@@ -1,6 +1,7 @@
 <x-filament-panels::page>
 <div  x-data="{
-        agreed: @entangle('data.waiver')
+        agreed: @entangle('data.waiver'),
+        participantExists: @entangle('participantExists')
     }">
     <form class="p-3 border-3 border-orange-300/50 shadow-2xl rounded-2xl" wire:submit="create">
        
@@ -38,7 +39,7 @@
                 <button 
                     class="bg-orange-300 px-8 py-3 rounded-lg text-center font-large whitespace-nowrap"
                     :class="{'!bg-gray-300/60 !text-gray-600/80': !agreed}" 
-                    :disabled="!agreed">
+                    :disabled="!agreed && participantExists">
                     Submit Registration
                 </button>
 

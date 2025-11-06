@@ -38,6 +38,7 @@ class RegisterForm extends Page implements HasSchemas
   
     public array $data = [];
     public ?string $errorMessage = null;
+    public bool $participantExists = false;
     
     public function getHeading(): string
     {
@@ -51,6 +52,8 @@ class RegisterForm extends Page implements HasSchemas
          $this->form->fill([
               'waiver' => false
          ]);
+
+         $this->participantExists = false;
      }
 
 
@@ -66,7 +69,7 @@ class RegisterForm extends Page implements HasSchemas
                             ->columnSpan(2)
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                    $exists = self::checkAndFillParticipant($get, $set);
+                                    $this->participantExists = self::checkAndFillParticipant($get, $set);
                                     
                             }),
                     TextInput::make('lastName')
@@ -74,7 +77,7 @@ class RegisterForm extends Page implements HasSchemas
                             ->columnSpan(2)
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                    $exists =self::checkAndFillParticipant($get, $set);
+                                    $this->participantExists = self::checkAndFillParticipant($get, $set);
                                     
                             }),
                     TextInput::make('middleInitial')
@@ -84,7 +87,7 @@ class RegisterForm extends Page implements HasSchemas
                             ->required()
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                   $exists = self::checkAndFillParticipant($get, $set);
+                                   $this->participantExists = self::checkAndFillParticipant($get, $set);
                                   
                             }),
 
@@ -254,9 +257,13 @@ class RegisterForm extends Page implements HasSchemas
                 $set('shirtSize', $participant->shirtSize);
                 $set('distanceCategory', $participant->distanceCategory);
                 $set('referenceNumber', $participant->referenceNumber);
+
+               
                 return true;
             } 
         }
+
+     
         return false;
     }
     
