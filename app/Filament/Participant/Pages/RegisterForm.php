@@ -211,15 +211,15 @@ class RegisterForm extends Page implements HasSchemas
                             ->inline()
                             ->reactive(),
 
-                        Radio::make('couple')
-                            ->label('Couple Runner')
-                            ->required()
-                            ->options([
-                                   false =>    'NO',
-                                   true =>    'YES',
-                                ])
-                            ->inline()
-                            ->reactive(),
+                        // Radio::make('couple')
+                        //     ->label('Couple Runner')
+                        //     ->required()
+                        //     ->options([
+                        //            false =>    'NO',
+                        //            true =>    'YES',
+                        //         ])
+                        //     ->inline()
+                        //     ->reactive(),
                     ]),
                     Toggle::make('waiver')
                     ->label('Waiver?')
