@@ -38,13 +38,23 @@ class ParticipantsTable
                    $query->where('categoryDescription', 'PLGU')
                          ->where('year',date('Y'));
                 }
+                else if(Auth::check() && Auth::user()->username === 'superadmin')
+                {
+                      $query->where('year',date('Y'));
+                }
+                else if(Auth::check() && Auth::user()->username === 'superadmin')
+                {
+                      $query->where('year',date('Y'));
+                }
             })
             ->columns([
                 TextColumn::make('firstName')->label('First Name')
                 ->searchable(),
                 TextColumn::make('lastName')->label('Last Name')
                 ->searchable(),
-                TextColumn::make('subDescription')->label('Category')
+                TextColumn::make('categoryDescription')->label('Category')
+                ->searchable(),
+                TextColumn::make('subDescription')->label('Organization')
                 ->searchable(),
                 TextColumn::make('gender')->label('Gender')
                 ->searchable(),

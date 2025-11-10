@@ -292,6 +292,7 @@ class RegisterForm extends Page implements HasSchemas
 
             $this->data['waiver'] = true;
             $this->data['referenceNumber'] = '0';
+            $this->data['created_by'] = 'opencategory';
             
             $this->data['year'] = date('Y');
             $exists = Participant::where('year', $this->data['year'])

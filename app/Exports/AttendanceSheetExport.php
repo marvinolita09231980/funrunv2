@@ -50,12 +50,24 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 $sheet = $event->sheet->getDelegate();
             
                 // === PARTICIPANT DATA ===
-                $participants = Participant::select('firstName', 'middleInitial', 'lastName', 'distanceCategory', 'shirtSize', 'gender','categoryDescription')
-                    ->where('subDescription', $this->subcategory)
-                    ->where('year', $this->datenow)
-                    ->orderBy('lastName')
-                    ->orderBy('firstName')
-                    ->get();
+                $participants = Participant::select(
+                    'firstName', 
+                    'middleInitial', 
+                    'lastName', 
+                    'distanceCategory', 
+                    'shirtSize', 
+                    'gender',
+                    'categoryDescription'
+                )
+                ->when($this->subcategory === 'OPEN CATEGORY', function ($query) {
+                    $query->where('categoryDescription', $this->subcategory);
+                }, function ($query) {
+                    $query->where('subDescription', $this->subcategory);
+                })
+                ->where('year', $this->datenow)
+                ->orderBy('lastName')
+                ->orderBy('firstName')
+                ->get();
 
 
 
