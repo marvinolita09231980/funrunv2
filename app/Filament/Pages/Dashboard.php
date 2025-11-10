@@ -69,7 +69,7 @@ class Dashboard extends BaseDashboard implements HasTable
                     ->orderBy('subcategories.categoryDescription', 'asc')
             )
 
-            
+
             ->columns([
                  TextColumn::make('categoryDescription')
                      ->label('Category')
@@ -79,7 +79,9 @@ class Dashboard extends BaseDashboard implements HasTable
                      ->searchable(),
                 TextColumn::make('nop')
                     ->label('Allot.')
-                    ->sortable(),
+                    ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
+                    ->summarize(Sum::make()->label('Total')),
+                    
                 TextColumn::make('registered')
                     ->label('Registered')
                     ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
@@ -97,6 +99,16 @@ class Dashboard extends BaseDashboard implements HasTable
                     ->label('10 KM')
                     ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
                     ->summarize(Sum::make()->label('Total')),
+                // TextColumn::make('nop') // ← NEW TOTAL COLUMN
+                //     ->label('Total')
+                //     ->getStateUsing(function ($record) {
+                //         return ($record->registered ?? 0) 
+                //             + ($record->count_3k ?? 0) 
+                //             + ($record->count_5k ?? 0) 
+                //             + ($record->count_10k ?? 0);
+                //     })
+                //     ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
+                //     ->summarize(Sum::make()->label('Grand Total')),
             ])
             
             ->defaultSort('created_at', 'desc');
