@@ -48,6 +48,14 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
+            
+                // === PARTICIPANT DATA ===
+                $participants = Participant::select('firstName', 'middleInitial', 'lastName', 'distanceCategory', 'shirtSize', 'gender','categoryDescription')
+                    ->where('subDescription', $this->subcategory)
+                    ->where('year', $this->datenow)
+                    ->orderBy('lastName')
+                    ->orderBy('firstName')
+                    ->get();
 
 
 
@@ -67,7 +75,7 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 $rightLogoPath = public_path('images/BP LOGO.png');
 
                 // Helper to attach drawing safely
-                $attachImage = function(string $path, string $cell, int $height = 80, int $offsetX = 20, int $offsetY = 5) use ($sheet) {
+                $attachImage = function(string $path, string $cell, int $height = 80, int $offsetX = 60, int $offsetY = 5) use ($sheet) {
                     if (! file_exists($path)) {
                         throw new \RuntimeException("Logo file not found: {$path}");
                     }
@@ -125,7 +133,7 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 $sheet->getStyle('B2')->getAlignment()->setHorizontal('center');
 
                 $sheet->mergeCells('B3:J3');
-                $sheet->setCellValue('B3', 'PROVINCIAL INFORMATION AND COMMUNICATIONS TECHNOLOGY OFFICE');
+                $sheet->setCellValue('B3', $participants->first()->categoryDescription);
                 $sheet->getStyle('B3')->getFont()->setBold(true);
                 $sheet->getStyle('B3')->getAlignment()->setHorizontal('center');
 
@@ -189,14 +197,7 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 $sheet->mergeCells('J12:J13'); // Signature
 
 
-                // === PARTICIPANT DATA ===
-                $participants = Participant::select('firstName', 'middleInitial', 'lastName', 'distanceCategory', 'shirtSize', 'gender')
-                    ->where('subDescription', $this->subcategory)
-                    ->where('year', $this->datenow)
-                    ->orderBy('lastName')
-                    ->orderBy('firstName')
-                    ->get();
-
+                
                 $data = [];
                 $ctr = 1;
                 foreach ($participants as $p) {

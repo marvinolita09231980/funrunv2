@@ -183,6 +183,7 @@ class RegisterForm extends Page implements HasSchemas
                             ->reactive(),
                         TextInput::make('subDescription')
                             ->label('Description')
+                            ->hint('Name of your organization (e.g., Individual, Family/Group, Couple, Team, or Company)')
                             ->required()
                             ->columnSpanFull(),
                             
