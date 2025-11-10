@@ -21,37 +21,53 @@ class Dashboard extends BaseDashboard implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(Subcategory::query()
-                            ->select([
-                                        'subcategories.*',
-                                        DB::raw("(SELECT COUNT(*) 
-                                                FROM participants 
-                                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                                AND participants.subDescription = subcategories.subDescription 
-                                                AND participants.year = '2025') AS registered"),
-                                                DB::raw("(SELECT COUNT(*) 
-                                                FROM participants 
-                                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                                    AND participants.subDescription = subcategories.subDescription 
-                                                    AND participants.year = '2025'
-                                                    AND participants.distanceCategory = '3km') AS count_3k"),
-
-                                                DB::raw("(SELECT COUNT(*) 
-                                                        FROM participants 
-                                                        WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                                            AND participants.subDescription = subcategories.subDescription 
-                                                            AND participants.year = '2025'
-                                                            AND participants.distanceCategory = '5km') AS count_5k"),
-
-                                                DB::raw("(SELECT COUNT(*) 
-                                                        FROM participants 
-                                                        WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                                            AND participants.subDescription = subcategories.subDescription 
-                                                            AND participants.year = '2025'
-                                                            AND participants.distanceCategory = '10km') AS count_10k"),
-                                    ])
-                                    ->orderBy('subcategories.categoryDescription', 'asc')
+            ->query(
+                Subcategory::query()
+                    ->select([
+                        'subcategories.*',
+                        DB::raw("(SELECT COUNT(*) 
+                                    FROM participants 
+                                    WHERE participants.categoryDescription = subcategories.categoryDescription 
+                                    " . "AND (" . 
+                                        "subcategories.categoryDescription <> 'OPEN CATEGORY' AND participants.subDescription = subcategories.subDescription OR 
+                                        subcategories.categoryDescription = 'OPEN CATEGORY'" . 
+                                    ") 
+                                    AND participants.year = '2025'
+                                ) AS registered"),
+                        DB::raw("(SELECT COUNT(*) 
+                                    FROM participants 
+                                    WHERE participants.categoryDescription = subcategories.categoryDescription 
+                                    " . "AND (" . 
+                                        "subcategories.categoryDescription <> 'OPEN CATEGORY' AND participants.subDescription = subcategories.subDescription OR 
+                                        subcategories.categoryDescription = 'OPEN CATEGORY'" . 
+                                    ") 
+                                    AND participants.year = '2025'
+                                    AND participants.distanceCategory = '3km'
+                                ) AS count_3k"),
+                        DB::raw("(SELECT COUNT(*) 
+                                    FROM participants 
+                                    WHERE participants.categoryDescription = subcategories.categoryDescription 
+                                    " . "AND (" . 
+                                        "subcategories.categoryDescription <> 'OPEN CATEGORY' AND participants.subDescription = subcategories.subDescription OR 
+                                        subcategories.categoryDescription = 'OPEN CATEGORY'" . 
+                                    ") 
+                                    AND participants.year = '2025'
+                                    AND participants.distanceCategory = '5km'
+                                ) AS count_5k"),
+                        DB::raw("(SELECT COUNT(*) 
+                                    FROM participants 
+                                    WHERE participants.categoryDescription = subcategories.categoryDescription 
+                                    " . "AND (" . 
+                                        "subcategories.categoryDescription <> 'OPEN CATEGORY' AND participants.subDescription = subcategories.subDescription OR 
+                                        subcategories.categoryDescription = 'OPEN CATEGORY'" . 
+                                    ") 
+                                    AND participants.year = '2025'
+                                    AND participants.distanceCategory = '10km'
+                                ) AS count_10k"),
+                    ])
+                    ->orderBy('subcategories.categoryDescription', 'asc')
             )
+
             ->columns([
                  TextColumn::make('categoryDescription')
                      ->label('Category')
