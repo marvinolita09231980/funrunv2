@@ -174,9 +174,19 @@ class RegisterForm extends Page implements HasSchemas
                                     ->first();
 
                                 if ($cat) {
-                                    return $cat->registered_count >= $cat->nop
-                                        ? '⚠️ Participant slots already full.'
-                                        : null;
+                                    
+                                    if($cat->registered_count >= $cat->nop)
+                                    {
+                                        return '⚠️ Participant slots already full.';
+                                    }
+                                    else{
+                                        null;
+                                    }
+                                    
+                                    // //  dd($cat->registered_count);
+                                    // return $cat->registered_count >= $cat->nop
+                                    //     ? '⚠️ Participant slots already full.'
+                                    //     : null;
                                 }
 
                                 return null;
