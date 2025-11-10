@@ -65,9 +65,11 @@ class Dashboard extends BaseDashboard implements HasTable
                                     AND participants.distanceCategory = '10km'
                                 ) AS count_10k"),
                     ])
+
                     ->orderBy('subcategories.categoryDescription', 'asc')
             )
 
+            
             ->columns([
                  TextColumn::make('categoryDescription')
                      ->label('Category')
