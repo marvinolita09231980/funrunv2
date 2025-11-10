@@ -34,11 +34,16 @@ use App\Filament\Resources\Participants\Schemas\ParticipantForm;
 class RegisterForm extends Page implements HasSchemas
 {
     use InteractsWithSchemas;
+    
+    protected static ?string $slug = 'kalamboan/run-register';
+    protected static ?string $title = 'Kalamboan Fun Run Registration';
     protected string $view = 'filament.participant.pages.register-form';
   
     public array $data = [];
     public ?string $errorMessage = null;
     public bool $participantExists = false;
+
+   
     
     public function getHeading(): string
     {
