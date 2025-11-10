@@ -177,7 +177,7 @@ class ParticipantForm
                                             ->first();
 
                                         if ($cat) {
-                                            dd($cat->registered_count);
+                                           
                                             return $cat->registered_count >= $cat->nop
                                                 ? '⚠️ Participant slots already full.'
                                                 : null;
