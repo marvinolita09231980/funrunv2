@@ -28,54 +28,83 @@ class ShirtSizes extends Page implements HasTable
                 Subcategory::query()
                     ->select([
                         'subcategories.*',
-                        DB::raw("(SELECT COUNT(*) FROM participants 
-                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                  AND participants.subDescription = subcategories.subDescription 
-                                  AND participants.shirtSize = 'XS' 
-                                  AND participants.year = '2025') AS xs"),
-                        DB::raw("(SELECT COUNT(*) FROM participants 
-                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                  AND participants.subDescription = subcategories.subDescription 
-                                  AND participants.shirtSize = 'Small' 
-                                  AND participants.year = '2025') AS small"),
-                        DB::raw("(SELECT COUNT(*) FROM participants 
-                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                  AND participants.subDescription = subcategories.subDescription 
-                                  AND participants.shirtSize = 'Medium' 
-                                  AND participants.year = '2025') AS medium"),
-                        DB::raw("(SELECT COUNT(*) FROM participants 
-                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                  AND participants.subDescription = subcategories.subDescription 
-                                  AND participants.shirtSize = 'Large' 
-                                  AND participants.year = '2025') AS large"),
-                        DB::raw("(SELECT COUNT(*) FROM participants 
-                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                  AND participants.subDescription = subcategories.subDescription 
-                                  AND participants.shirtSize = 'XL' 
-                                  AND participants.year = '2025') AS xl"),
-                        DB::raw("(SELECT COUNT(*) FROM participants 
-                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                  AND participants.subDescription = subcategories.subDescription 
-                                  AND participants.shirtSize = '2XL' 
-                                  AND participants.year = '2025') AS 2xl"),
-                        DB::raw("(SELECT COUNT(*) FROM participants 
-                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                  AND participants.subDescription = subcategories.subDescription 
-                                  AND participants.shirtSize = '3XL' 
-                                  AND participants.year = '2025') AS 3xl"),
-                        DB::raw("(SELECT COUNT(*) FROM participants 
-                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                  AND participants.subDescription = subcategories.subDescription 
-                                  AND participants.shirtSize = '4XL' 
-                                  AND participants.year = '2025') AS 4xl"),
-                        DB::raw("(SELECT COUNT(*) FROM participants 
-                                WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                  AND participants.subDescription = subcategories.subDescription 
-                                  AND participants.shirtSize = '5XL' 
-                                  AND participants.year = '2025') AS 5xl"),
+
+                        // XS
+                        DB::raw("(SELECT COUNT(*) 
+                                  FROM participants 
+                                  WHERE participants.categoryDescription = subcategories.categoryDescription
+                                    AND (subcategories.categoryDescription = 'OPEN CATEGORY' OR participants.subDescription = subcategories.subDescription)
+                                    AND participants.shirtSize = 'XS'
+                                    AND participants.year = '2025') AS xs"),
+
+                        // Small
+                        DB::raw("(SELECT COUNT(*) 
+                                  FROM participants 
+                                  WHERE participants.categoryDescription = subcategories.categoryDescription
+                                    AND (subcategories.categoryDescription = 'OPEN CATEGORY' OR participants.subDescription = subcategories.subDescription)
+                                    AND participants.shirtSize = 'Small'
+                                    AND participants.year = '2025') AS small"),
+
+                        // Medium
+                        DB::raw("(SELECT COUNT(*) 
+                                  FROM participants 
+                                  WHERE participants.categoryDescription = subcategories.categoryDescription
+                                    AND (subcategories.categoryDescription = 'OPEN CATEGORY' OR participants.subDescription = subcategories.subDescription)
+                                    AND participants.shirtSize = 'Medium'
+                                    AND participants.year = '2025') AS medium"),
+
+                        // Large
+                        DB::raw("(SELECT COUNT(*) 
+                                  FROM participants 
+                                  WHERE participants.categoryDescription = subcategories.categoryDescription
+                                    AND (subcategories.categoryDescription = 'OPEN CATEGORY' OR participants.subDescription = subcategories.subDescription)
+                                    AND participants.shirtSize = 'Large'
+                                    AND participants.year = '2025') AS large"),
+
+                        // XL
+                        DB::raw("(SELECT COUNT(*) 
+                                  FROM participants 
+                                  WHERE participants.categoryDescription = subcategories.categoryDescription
+                                    AND (subcategories.categoryDescription = 'OPEN CATEGORY' OR participants.subDescription = subcategories.subDescription)
+                                    AND participants.shirtSize = 'XL'
+                                    AND participants.year = '2025') AS xl"),
+
+                        // 2XL
+                        DB::raw("(SELECT COUNT(*) 
+                                  FROM participants 
+                                  WHERE participants.categoryDescription = subcategories.categoryDescription
+                                    AND (subcategories.categoryDescription = 'OPEN CATEGORY' OR participants.subDescription = subcategories.subDescription)
+                                    AND participants.shirtSize = '2XL'
+                                    AND participants.year = '2025') AS 2xl"),
+
+                        // 3XL
+                        DB::raw("(SELECT COUNT(*) 
+                                  FROM participants 
+                                  WHERE participants.categoryDescription = subcategories.categoryDescription
+                                    AND (subcategories.categoryDescription = 'OPEN CATEGORY' OR participants.subDescription = subcategories.subDescription)
+                                    AND participants.shirtSize = '3XL'
+                                    AND participants.year = '2025') AS 3xl"),
+
+                        // 4XL
+                        DB::raw("(SELECT COUNT(*) 
+                                  FROM participants 
+                                  WHERE participants.categoryDescription = subcategories.categoryDescription
+                                    AND (subcategories.categoryDescription = 'OPEN CATEGORY' OR participants.subDescription = subcategories.subDescription)
+                                    AND participants.shirtSize = '4XL'
+                                    AND participants.year = '2025') AS 4xl"),
+
+                        // 5XL
+                        DB::raw("(SELECT COUNT(*) 
+                                  FROM participants 
+                                  WHERE participants.categoryDescription = subcategories.categoryDescription
+                                    AND (subcategories.categoryDescription = 'OPEN CATEGORY' OR participants.subDescription = subcategories.subDescription)
+                                    AND participants.shirtSize = '5XL'
+                                    AND participants.year = '2025') AS 5xl"),
                     ])
                     ->orderBy('categoryDescription')
             )
+
+
             ->columns([
                 TextColumn::make('categoryDescription')
                     ->label('Category')
