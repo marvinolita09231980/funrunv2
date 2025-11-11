@@ -84,7 +84,9 @@ class ParticipantForm
                                     '9999 999 9999'
                                 JS))
                             ->stripCharacters(' ')
-                            ->columnSpan(2),
+                            ->columnSpan(2)
+                            ->required(),
+                            
                         Radio::make('pwd')
                             ->label('PWD')
                             ->required()

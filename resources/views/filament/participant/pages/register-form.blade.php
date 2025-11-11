@@ -53,6 +53,66 @@
         </div>
     </form>
 
+    <x-filament::modal id="registration-success" alignment="center" width="md">
+        <div class="flex flex-col items-center justify-center space-y-6 p-8">
+            <!-- Success Icon -->
+            <div class="flex items-center justify-center w-16 h-16 rounded-full bg-green-100 text-green-600">
+                <x-heroicon-o-check-circle class="w-10 h-10" />
+            </div>
+
+            <!-- Title -->
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 text-center">
+                Registration Successful!
+            </h2>
+
+            <!-- Message -->
+            <p class="text-center text-gray-600 dark:text-gray-300 text-base leading-relaxed">
+                Thank you for registering for the <strong>Kalamboan Fun Run</strong>!  
+                Your information has been successfully recorded.  
+                
+            </p>
+
+            <!-- Action Button -->
+            <div class="pt-4">
+                <x-filament::button color="success" x-on:click="$dispatch('close-modal', { id: 'registration-success' })">
+                    Got it!
+                </x-filament::button>
+            </div>
+        </div>
+    </x-filament::modal>
+
+    <x-filament::modal id="already-exists" alignment="center" width="md">
+        <div class="flex flex-col items-center justify-center space-y-6 p-8">
+           
+            <div class="flex items-center justify-center w-20 h-20 rounded-full bg-red-600/10 border-4 border-red-500 shadow-lg">
+                <x-heroicon-o-x-circle class="w-12 h-12 text-red-600" />
+            </div>
+
+            
+            <h2 class="text-3xl font-extrabold text-red-700 dark:text-red-400 text-center tracking-tight">
+                {{ $errorTitle ?? 'Registration Failed' }}
+            </h2>
+
+           
+            <p class="text-center text-gray-700 dark:text-gray-300 text-lg leading-relaxed">
+                {{ $errorMessage ?? 'Something went wrong. Please try again.' }}
+            </p>
+
+          
+            <div class="w-full border-t border-red-300 dark:border-red-700 my-2"></div>
+
+            
+            <div class="pt-2">
+                <x-filament::button color="danger" size="lg"
+                    x-on:click="$dispatch('close-modal', { id: 'already-exists' })"
+                    icon="heroicon-o-x-mark">
+                    Close
+                </x-filament::button>
+            </div>
+        </div>
+    </x-filament::modal>
+
+
     <x-filament::modal width="2xl"
     :close-by-escaping="false"
     :close-by-clicking-away="false"

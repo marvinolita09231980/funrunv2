@@ -74,7 +74,7 @@ class RegisterForm extends Page implements HasSchemas
                             ->columnSpan(2)
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                    $this->participantExists = self::checkAndFillParticipant($get, $set);
+                                    
                                     
                             }),
                     TextInput::make('lastName')
@@ -82,7 +82,7 @@ class RegisterForm extends Page implements HasSchemas
                             ->columnSpan(2)
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                    $this->participantExists = self::checkAndFillParticipant($get, $set);
+                                   
                                     
                             }),
                     TextInput::make('middleInitial')
@@ -90,10 +90,9 @@ class RegisterForm extends Page implements HasSchemas
                     DatePicker::make('birthDate')
                             ->columnSpan(2)
                             ->required()
-                            ->reactive()
+                            ->live(debounce:500)
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                   $this->participantExists = self::checkAndFillParticipant($get, $set);
-                                  
+                                   
                             }),
 
                     Select::make('gender')
@@ -119,7 +118,8 @@ class RegisterForm extends Page implements HasSchemas
                                     '9999 999 9999'
                                 JS))
                             ->stripCharacters(' ')
-                            ->columnSpan(2),
+                            ->columnSpan(2)
+                            ->required(),
                     Radio::make('pwd')
                             ->label('PWD')
                             // ->hint('Persons with Disability')
@@ -249,42 +249,44 @@ class RegisterForm extends Page implements HasSchemas
             ->statePath('data');
     }
 
-    private static function checkAndFillParticipant(callable $get, callable $set): bool
-    {
-        $firstName = $get('firstName');
-        $lastName = $get('lastName');
-        $birthDate = $get('birthDate');
-        $yearNow =  date('Y');
+    // private static function checkAndFillParticipant(callable $get, callable $set): bool
+    // {
+    //     $firstName = $get('firstName');
+    //     $lastName = $get('lastName');
+    //     $birthDate = $get('birthDate');
+    //     $yearNow =  date('Y');
        
         
         
-        if ($firstName && $lastName && $birthDate) {
-            $participant = Participant::where('year', $yearNow)
-                ->where('firstName', $firstName)
-                ->where('lastName', $lastName)
-                ->whereDate('birthDate', $birthDate)
-                ->first();
+    //     if ($firstName && $lastName && $birthDate) {
+    //         $participant = Participant::where('year', $yearNow)
+    //             ->where('firstName', $firstName)
+    //             ->where('lastName', $lastName)
+    //             ->whereDate('birthDate', $birthDate)
+    //             ->first();
 
-            if ($participant) {
+    //         if ($participant) {
+
+                
               
-                $set('middleInitial', $participant->middleInitial);
-                $set('gender', $participant->gender);
-                $set('address', $participant->address);
-                $set('contactNumber', $participant->contactNumber);
-                $set('categoryDescription', $participant->categoryDescription);
-                $set('subDescription', $participant->subDescription);
-                $set('shirtSize', $participant->shirtSize);
-                $set('distanceCategory', $participant->distanceCategory);
-                $set('referenceNumber', $participant->referenceNumber);
+    //              $set('middleInitial', $participant->middleInitial);
+    //              $set('gender', $participant->gender);
+    //              $set('address', $participant->address);
+    //              $set('contactNumber', $participant->contactNumber);
+    //              $set('categoryDescription', $participant->categoryDescription);
+    //              $set('subDescription', $participant->subDescription);
+    //              $set('shirtSize', $participant->shirtSize);
+    //              $set('distanceCategory', $participant->distanceCategory);
+    //              $set('referenceNumber', $participant->referenceNumber);
 
                
-                return true;
-            } 
-        }
+    //             return true;
+    //         } 
+    //     }
 
      
-        return false;
-    }
+    //     return false;
+    // }
     
    
 
@@ -335,25 +337,28 @@ class RegisterForm extends Page implements HasSchemas
             
             Participant::create($this->data);
 
-            Notification::make()
-                ->success()
-                ->title('Successfully Registered')
-                ->send();
+            // Notification::make()
+            //     ->success()
+            //     ->title('Successfully Registered')
+            //     ->send();
+
+             
+            $this->dispatch('open-modal', id: 'registration-success');
             
             $this->data = [];
 
             $this->errorMessage = null; 
+        
 
-            } catch (\Throwable $th) {
-
-                $this->errorMessage = $th->getMessage();
-
-                Notification::make()
-                    ->danger()
-                    ->title('Failed to register')
-                    ->body($th->getMessage())
-                    ->persistent()
-                    ->send();
+        } catch (\Throwable $th) {
+            $this->errorMessage = $th->getMessage();
+            if (str_contains($this->errorMessage, 'Duplicate record! Participant is already registered for this year.')) {
+                $this->dispatch('open-modal', id: 'already-exists', errorMessage: $this->errorMessage);
+            } elseif (str_contains($this->errorMessage, 'Participant slots are already full')) {
+                $this->dispatch('open-modal', id: 'already-exists', errorMessage: 'Slots for this category are already full.');
+            } else {
+                $this->dispatch('open-modal', id: 'already-exists', errorMessage: 'An unexpected error occurred. Please try again.');
             }
+        }
     }
 }
