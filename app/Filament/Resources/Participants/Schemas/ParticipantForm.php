@@ -121,13 +121,20 @@ class ParticipantForm
                                              ->pluck('categoryDescription', 'categoryDescription');
                                         }
                                         return Subcategory::query()
-                                            ->where('username', Auth::check()?Auth::user()->username:'OPEN')
+                                            ->where('username', Auth::check()?Auth::user()->username:'opencategory')
                                             ->pluck('categoryDescription', 'categoryDescription');
 
                                     })
                                     ->searchable()
                                     ->reactive()
                                     ->columnSpanFull(),
+                                TextInput::make('subDescription')
+                                    ->label('Description')
+                                    ->hint('Name of your organization (e.g., Individual, Family/Group, Couple, Team, or Company)')
+                                    ->required()
+                                    ->columnSpanFull()
+                                    ->visible(fn ($get) => $get('categoryDescription') === 'OPEN CATEGORY') // ✅ Only show when Open Category
+                                    ->reactive(),
 
                                 Select::make('subDescription')
                                     ->options(function (callable $get) {
@@ -151,6 +158,7 @@ class ParticipantForm
                                     ->searchable()
                                     ->required()
                                     ->columnSpanFull()
+                                    ->visible(fn ($get) => $get('categoryDescription') !== 'OPEN CATEGORY') // ✅ Hide if Open Category
                                     ->hint(function ($get) {
                                         $year = now()->year;
                                         $category = $get('categoryDescription');
