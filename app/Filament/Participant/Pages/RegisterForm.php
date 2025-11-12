@@ -82,8 +82,6 @@ class RegisterForm extends Page implements HasSchemas
                             ->columnSpan(2)
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                   
-                                    
                             }),
                     TextInput::make('middleInitial')
                             ->maxLength(1),
@@ -92,7 +90,6 @@ class RegisterForm extends Page implements HasSchemas
                             ->required()
                             ->live(debounce:500)
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                   
                             }),
 
                     Select::make('gender')
@@ -163,7 +160,6 @@ class RegisterForm extends Page implements HasSchemas
                                 if (! $category) {
                                     return null;
                                 }
-
                                 $cat = DB::table('subcategories as s')
                                     ->leftJoin('participants as p', function ($join) use ($year) {
                                         $join->on('p.categoryDescription', '=', 's.categoryDescription')

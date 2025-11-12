@@ -20,7 +20,7 @@ class CreateParticipant extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data):array
     {
 
-           
+            $cat = null;
             $year = now()->year;
             $this->validate();
             $this->data['year'] = $year;
@@ -47,24 +47,43 @@ class CreateParticipant extends CreateRecord
                 ]);
             }
 
-            $cat = DB::table('subcategories as s')
-                    ->leftJoin('participants as p',function($join) use ($year) {
-                          $join->on('p.categoryDescription','=','s.categoryDescription')    
-                               ->on('p.subDescription','=','s.subDescription')   
-                               ->where('p.year','=',$year);             
-                    })
-                    ->select(
-                        's.nop',
-                        's.categoryDescription',
-                        's.subDescription',
-                        DB::raw('COUNT(p.id) as registered_count')
-                    )
-                    ->where('s.categoryDescription',$this->data['categoryDescription']) 
-                    ->where('s.subDescription',$this->data['subDescription']) 
-                    ->groupBy('s.nop', 's.categoryDescription', 's.subDescription')
-                    ->first();
+            if($this->data['categoryDescription'] ='OPEN CATEGORY')
+            {
+                $cat = DB::table('subcategories as s')
+                                        ->leftJoin('participants as p',function($join) use ($year) {
+                                            $join->on('p.categoryDescription','=','s.categoryDescription')    
+                                                ->where('p.year','=',$year);             
+                                        })
+                                        ->select(
+                                            's.nop',
+                                            's.categoryDescription',
+                                            DB::raw('COUNT(p.id) as registered_count')
+                                        )
+                                        ->where('s.categoryDescription',$this->data['categoryDescription']) 
+                                        ->groupBy('s.nop', 's.categoryDescription')
+                                        ->first();
+            }
+            else{
+                $cat = DB::table('subcategories as s')
+                        ->leftJoin('participants as p',function($join) use ($year) {
+                            $join->on('p.categoryDescription','=','s.categoryDescription')    
+                                ->on('p.subDescription','=','s.subDescription')   
+                                ->where('p.year','=',$year);             
+                        })
+                        ->select(
+                            's.nop',
+                            's.categoryDescription',
+                            's.subDescription',
+                            DB::raw('COUNT(p.id) as registered_count')
+                        )
+                        ->where('s.categoryDescription',$this->data['categoryDescription']) 
+                        ->where('s.subDescription',$this->data['subDescription']) 
+                        ->groupBy('s.nop', 's.categoryDescription', 's.subDescription')
+                        ->first();
+            }
+
+           
                     
-    
 
             if($cat->registered_count >= $cat->nop)
             {
