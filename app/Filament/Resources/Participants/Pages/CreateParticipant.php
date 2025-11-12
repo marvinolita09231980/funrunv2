@@ -47,7 +47,7 @@ class CreateParticipant extends CreateRecord
                 ]);
             }
 
-            if($this->data['categoryDescription'] ='OPEN CATEGORY')
+            if($this->data['categoryDescription'] ==='OPEN CATEGORY')
             {
                 $cat = DB::table('subcategories as s')
                                         ->leftJoin('participants as p',function($join) use ($year) {
@@ -63,7 +63,8 @@ class CreateParticipant extends CreateRecord
                                         ->groupBy('s.nop', 's.categoryDescription')
                                         ->first();
             }
-            else{
+            else
+            {
                 $cat = DB::table('subcategories as s')
                         ->leftJoin('participants as p',function($join) use ($year) {
                             $join->on('p.categoryDescription','=','s.categoryDescription')    

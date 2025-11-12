@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Participants\Tables;
 
 use Filament\Tables\Table;
+use App\Models\Participant;
 use App\Models\Subcategory;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -130,12 +131,38 @@ class ParticipantsTable
                     ->label('Attendance Export')
                     ->icon('heroicon-o-document-arrow-down')
                     ->action(function (array $data) {
-                        return Excel::download(
-                            new AttendanceSheetExport($data['subcategory']),
-                            'attendance_sheet.xlsx'
-                        );
+                            $year = date('Y');
+                            
+                            $participants = Participant::select(
+                            'firstName', 
+                            'middleInitial', 
+                            'lastName', 
+                            'distanceCategory', 
+                            'shirtSize', 
+                            'gender',
+                            'categoryDescription'
+                            )
+                            ->when($data['subcategory'] === 'OPEN CATEGORY', function ($query,$data) {
+                                $query->where('categoryDescription', $data['subcategory']);
+                            }, function ($query,$data) {
+                                $query->where('subDescription', $data['subcategory']);
+                            })
+                            ->where('year', $year)
+                            ->orderBy('lastName')
+                            ->orderBy('firstName')
+                            ->get();
+
+                            // if ($participants->isEmpty()) {
+                            //     $this->dispatchBrowserEvent('no-participants-found');
+                            //     return;
+                            // }
+
+                            return Excel::download(
+                                new AttendanceSheetExport($data['subcategory'],$participants),
+                                'attendance_sheet.xlsx'
+                            );
                     })
-                    ->form([
+                    ->schema([
                         Select::make('subcategory')
                             ->label('Subcategory')
                             ->options(Subcategory::pluck('subDescription', 'subDescription'))
