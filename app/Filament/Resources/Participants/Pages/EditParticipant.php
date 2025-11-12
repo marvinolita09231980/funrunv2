@@ -34,8 +34,7 @@ class EditParticipant extends EditRecord
     {
         
         $year = now()->year;
-        $exists = Participant::where('year', $this->data['year'])
-            ->where('firstName', $this->data['firstName'])
+        $exists = Participant::where('firstName', $this->data['firstName'])
             ->where('lastName', $this->data['lastName'])
             ->whereDate('birthDate', $this->data['birthDate'])
             ->where('year',$year)

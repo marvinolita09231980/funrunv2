@@ -35,7 +35,7 @@ class RegisterForm extends Page implements HasSchemas
 {
     use InteractsWithSchemas;
     
-    protected static ?string $slug = 'kalamboan/run-register';
+    protected static ?string $slug = 'kalamboan/funrun-register2';
     protected static ?string $title = 'Kalamboan Fun Run Registration';
     protected string $view = 'filament.participant.pages.register-form';
   
