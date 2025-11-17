@@ -10,7 +10,7 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Tables\Concerns\InteractsWithTable;
-
+use Filament\Facades\Filament;
 class Dashboard extends BaseDashboard implements HasTable
 {
     use InteractsWithTable;
@@ -18,8 +18,44 @@ class Dashboard extends BaseDashboard implements HasTable
     // protected static $navigationIcon = 'heroicon-o-home';
     protected string $view = 'filament.pages.dashboard';
 
+    public function mount(): void
+    {
+        $user = Filament::auth()->user();
+
+        if ($user && str_contains($user->username, 'marshal')) {
+            // Redirect to Finishers page
+             $this->redirectRoute('filament.admin.resources.finishers.index');
+        }
+    }
+
+
+    public static function shouldRegisterNavigation(): bool
+    {
+            $user = Filament::auth()->user();
+
+            if (! $user) {
+                return false; 
+            }
+
+            return ! str_contains($user->username, 'marshal');
+    }
+
+    public static function canView(): bool
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false; 
+        }
+
+        return ! str_contains($user->username, 'marshal');
+    }
+
     public function table(Table $table): Table
     {
+        
+
+
         return $table
             ->query(
                 Subcategory::query()

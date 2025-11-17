@@ -2,18 +2,19 @@
 
 namespace App\Filament\Pages;
 
+use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Tables\Table;
 use App\Models\Subcategory;
-use Illuminate\Support\Facades\DB;
 
+use Filament\Facades\Filament;
+use Illuminate\Support\Facades\DB;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\Summarizers\Summarizer;
-use BackedEnum;
 
 class ShirtSizes extends Page implements HasTable
 {
@@ -22,6 +23,28 @@ class ShirtSizes extends Page implements HasTable
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-archive-box';
     protected string $view = 'filament.pages.shirt-sizes';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+              $user = Filament::auth()->user();
+
+              if (! $user) {
+                  return false; 
+              }
+
+              return ! str_contains($user->username, 'marshal');
+    }
+
+    public static function canView(): bool
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false; 
+        }
+
+        return ! str_contains($user->username, 'marshal');
+    }
 
     public function table(Table $table): Table
     {

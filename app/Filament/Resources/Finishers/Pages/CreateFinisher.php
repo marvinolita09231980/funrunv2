@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\Finishers\Pages;
 
+use Carbon\Carbon;
 use App\Models\Participant;
+use Illuminate\Support\Facades\Auth;
 use Filament\Resources\Pages\CreateRecord;
 use App\Filament\Resources\Finishers\FinisherResource;
 
@@ -12,27 +14,33 @@ class CreateFinisher extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $id = $data['fullname'];
-        $participants = Participant::where('id', $id)
-                        ->first();
+        $participantId = $data['fullname'];
+       
+        $time = $data['finish_time'];
+        $currentDatePH = Carbon::now('Asia/Manila')->format('Y-m-d');
+        $data['finish_time'] = $currentDatePH . ' ' . $time;
+    
+        if ($participantId) {
+            $participant = Participant::where('id', $participantId)->first();
+            
+            if ($participant) {
+                $data['participants_id']       = $participant->id;
+                $data['firstName']             = $participant->firstName;
+                $data['lastName']              = $participant->lastName;
+                $data['middleInitial']         = $participant->middleInitial;
+                $data['categoryDescription']   = $participant->categoryDescription;
+                $data['subDescription']        = $participant->subDescription;
+                $data['gender']                = $participant->gender;
+                $data['birthDate']             = $participant->birthDate;
+                $data['distanceCategory']      = $participant->distanceCategory;
+                $data['created_by']            = Auth::user()->username;
+                $data['finisher_rank']         = '';
+            }
+        }
+       
+      
+        unset($data['fullname']);
 
-                    
-        $data['participant_number']     = 
-        $data['first_name']             =
-        $data['last_name']              =
-        $data['middle_initial']         =
-        $data['category']               =
-        $data['subcategory']            =
-        $data['gender']                 =
-        $data['distance_category']      =
-        $data['racebib']                =
-        $data['guntime']                =
-        $data['finisher_rank']          =
-        $data['created_at']             =
-        $data['updated_at']             =
-
-        dd($data);
-                       
-        return $this->data;
+        return $data;
     }
 }

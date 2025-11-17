@@ -8,6 +8,7 @@
     "require": {
         "php": "^8.2",
         "bezhansalleh/filament-shield": "^4.0",
+        "doctrine/dbal": "^4.3",
         "filament/filament": "^4.0",
         "javarex/ddo-login": "^1.0",
         "laravel/framework": "^12.0",

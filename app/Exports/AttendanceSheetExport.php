@@ -182,12 +182,12 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 $sheet->getStyle('B2')->getAlignment()->setHorizontal('center');
 
                 $sheet->mergeCells('B3:J3');
-                $sheet->setCellValue('B3', $participants->first()->categoryDescription);
+                $sheet->setCellValue('B3', 'OFFICE OF THE GOVERNOR');
                 $sheet->getStyle('B3')->getFont()->setBold(true);
                 $sheet->getStyle('B3')->getAlignment()->setHorizontal('center');
 
                 $sheet->mergeCells('B4:J4');
-                $sheet->setCellValue('B4', '3rd Floor, Capitol Bldg., Provincial Capitol, Cabidianan, Nabunturan, Davao de Oro Province');
+                $sheet->setCellValue('B4', '4th Floor, Executive Bldg., Provincial Capitol Complex, Cabidianan, Nabunturan, Davao de Oro Province');
                 $sheet->getStyle('B4')->getAlignment()->setHorizontal('center');
 
                 $sheet->mergeCells('B5:J5');

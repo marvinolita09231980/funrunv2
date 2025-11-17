@@ -1,18 +1,21 @@
 <?php
 
 namespace App\Filament\Resources\Finishers;
+use BackedEnum;
+use App\Models\Finisher;
 
-use App\Filament\Resources\Finishers\Pages\CreateFinisher;
+use Filament\Tables\Table;
+use Filament\Schemas\Schema;
+use Filament\Facades\Filament;
+use Filament\Resources\Resource;
+use Illuminate\Support\Facades\DB;
+use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\Finishers\Pages\EditFinisher;
 use App\Filament\Resources\Finishers\Pages\ListFinishers;
+use App\Filament\Resources\Finishers\Pages\CreateFinisher;
 use App\Filament\Resources\Finishers\Schemas\FinisherForm;
 use App\Filament\Resources\Finishers\Tables\FinishersTable;
-use App\Models\Finisher;
-use BackedEnum;
-use Filament\Resources\Resource;
-use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Table;
 
 class FinisherResource extends Resource
 {
@@ -47,4 +50,8 @@ class FinisherResource extends Resource
             'edit' => EditFinisher::route('/{record}/edit'),
         ];
     }
+     public static function getEloquentQuery(): Builder
+     {
+         return parent::getEloquentQuery();
+     }
 }
