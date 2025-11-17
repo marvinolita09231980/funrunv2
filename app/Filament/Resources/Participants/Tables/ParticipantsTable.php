@@ -2,21 +2,29 @@
 
 namespace App\Filament\Resources\Participants\Tables;
 
+use livewire;
 use Filament\Tables\Table;
 use App\Models\Participant;
 use App\Models\Subcategory;
 use Filament\Actions\Action;
+use Filament\Facades\Filament;
 use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\Select;
+use Filament\Schemas\Components\Grid;
 use App\Exports\AttendanceSheetExport;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Fieldset;
 use Filament\Tables\Filters\QueryBuilder;
 use Illuminate\Database\Eloquent\Builder;
+
+use Filament\Infolists\Components\TextEntry;
 use App\Filament\Exports\ParticipantExporter;
 use Filament\Tables\Filters\QueryBuilder\Constraints\TextConstraint;
 use Filament\Tables\Filters\QueryBuilder\Constraints\SelectConstraint;
@@ -95,44 +103,21 @@ class ParticipantsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                DeleteBulkAction::make(),
-                    ]),
-                // ExportAction::make('attendance_export')
-                // ->label('Attendance Export')
-                // ->action(fn() => Excel::download(new AttendanceSheetExport, 'attendance_sheet.xlsx'))
-                // ->columnMapping(false)
-                // ->schema([
-                //     Select::make('subcategory')
-                //         ->label('Subcategory')
-                //         ->options(Subcategory::pluck('subDescription', 'subDescription'))
-                //         ->searchable()
-                //         ->required(),
-                        
-                // ])
-                // ->modifyQueryUsing(function(Builder $query,array $data){
-                    
-                //     $category = $data['subcategory']; // get selected category
-                //     if (!$category) {
-                //         return []; 
-                //     }
-                   
-                //     $queryResult = $query 
-                //     ->where('year', date('Y'))
-                //     ->where('subDescription', $category);
-                   
-                //     return $queryResult;
-                   
-
-                // })
-                // ->fileName(fn (array $data): string =>
-                //     'participants-' . str($data['subcategory'])->slug()
-                // ),
+                    DeleteBulkAction::make(),
+                ]),
+                
                 Action::make('attendance_export')
                     ->label('Attendance Export')
                     ->icon('heroicon-o-document-arrow-down')
                     ->action(function (array $data) {
                             $year = date('Y');
-                            
+                            $letterStart = strtoupper($data['letterStart']);
+                            $letterEnd = strtoupper($data['letterEnd']);
+
+                            if ($letterStart > $letterEnd) {
+                                [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
+                            }
+
                             $participants = Participant::select(
                             'firstName', 
                             'middleInitial', 
@@ -142,32 +127,91 @@ class ParticipantsTable
                             'gender',
                             'categoryDescription'
                             )
-                            ->when($data['subcategory'] === 'OPEN CATEGORY', function ($query,$data) {
+                            ->when($data['subcategory'] === 'OPEN CATEGORY', function ($query) use($data) {
                                 $query->where('categoryDescription', $data['subcategory']);
-                            }, function ($query,$data) {
+                            }, function ($query) use($data) {
                                 $query->where('subDescription', $data['subcategory']);
                             })
                             ->where('year', $year)
+                            ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
                             ->orderBy('lastName')
                             ->orderBy('firstName')
                             ->get();
 
-                            // if ($participants->isEmpty()) {
-                            //     $this->dispatchBrowserEvent('no-participants-found');
-                            //     return;
-                            // }
+                        //    $participants = self::updateParticipantCount($set, $get);
+                            
+                            
+
+                            if ($participants->isEmpty()) {
+                                Notification::make()
+                                    ->danger()
+                                    ->title('No data found!')
+                                    ->body('No participants were found in this category')
+                                    ->send();
+                                return;
+                            }
 
                             return Excel::download(
-                                new AttendanceSheetExport($data['subcategory'],$participants),
+                                new AttendanceSheetExport($data['subcategory'],$letterStart,$letterEnd),
                                 'attendance_sheet.xlsx'
                             );
                     })
-                    ->schema([
-                        Select::make('subcategory')
-                            ->label('Subcategory')
-                            ->options(Subcategory::pluck('subDescription', 'subDescription'))
-                            ->searchable()
-                            ->required(),
+                   ->schema([
+                        Grid::make()
+                            ->columns(2)
+                            ->schema([
+                                Select::make('subcategory')
+                                    ->label('Subcategory')
+                                    ->options(Subcategory::pluck('subDescription', 'subDescription'))
+                                    ->reactive()
+                                    ->afterStateUpdated(function(callable $set,callable $get){
+                                        
+                                        self::updateParticipantCount($set, $get);
+                                    
+                                    })
+                                    ->searchable()
+                                    ->required()
+                                    ->columnSpanFull(),
+
+                                Select::make('letterStart')
+                                    ->label('List from')
+                                    ->options(
+                                        collect(range('A', 'Z'))
+                                            ->mapWithKeys(fn ($letter) => [$letter => $letter])
+                                            ->toArray()
+                                    )
+                                    ->reactive()
+                                    ->afterStateUpdated(function(callable $set,callable $get){
+                                        
+                                        self::updateParticipantCount($set, $get);
+                                    
+                                    })
+                                    ->searchable()
+                                    ->required()
+                                    ->columns(1),
+                                Select::make("letterEnd")
+                                    ->label('List to')
+                                    ->options(
+                                        collect(range('A', 'Z'))
+                                            ->mapWithKeys(fn ($letter) => [$letter => $letter])
+                                            ->toArray()
+                                    )
+                                    ->reactive()
+                                    ->afterStateUpdated(function(callable $set,callable $get){
+                                        
+                                        self::updateParticipantCount($set, $get);
+                                    
+                                    })
+                                    ->searchable()
+                                    ->required()
+                                    ->columns(1),
+                                TextEntry ::make('participantCount')
+                                    ->label('Participants Found')
+                                    ->columnSpanFull()
+                                    ->disabled(),
+
+                                
+                            ]),
                     ]),
                                 
                 
@@ -176,5 +220,50 @@ class ParticipantsTable
             
             ]);
             
+    }
+
+    private static function updateParticipantCount(callable $set, callable $get): int
+    {
+        
+        $year = date('Y');
+        $letterStart = strtoupper($get('letterStart'));
+        $letterEnd   = strtoupper($get('letterEnd'));
+        $subcategory = $get('subcategory');
+
+      
+
+        if (! $subcategory || ! $letterStart || ! $letterEnd) {
+            $set('participantCount', 0);
+            return 0;
+        }
+
+        if ($letterStart > $letterEnd) {
+            [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
+        }
+
+        $count = Participant::select(
+                            'firstName', 
+                            'middleInitial', 
+                            'lastName', 
+                            'distanceCategory', 
+                            'shirtSize', 
+                            'gender',
+                            'categoryDescription'
+                            )
+                            ->when($subcategory === 'OPEN CATEGORY', function ($query) use($subcategory) {
+                                $query->where('categoryDescription', $subcategory);
+                            }, function ($query) use($subcategory) {
+                                $query->where('subDescription', $subcategory);
+                            })
+                            ->where('year', $year)
+                            ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
+                            ->orderBy('lastName')
+                            ->orderBy('firstName')
+                            ->get()
+                            ->count();
+        
+         
+        $set('participantCount', $count);
+        return  $count;
     }
 }

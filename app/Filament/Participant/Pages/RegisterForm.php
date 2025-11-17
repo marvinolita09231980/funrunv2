@@ -74,14 +74,14 @@ class RegisterForm extends Page implements HasSchemas
                             ->columnSpan(2)
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                    
-                                    
+
                             }),
                     TextInput::make('lastName')
                             ->required()
                             ->columnSpan(2)
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set, $get,$component) {
+                                
                             }),
                     TextInput::make('middleInitial')
                             ->maxLength(1),

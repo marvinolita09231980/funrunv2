@@ -20,12 +20,20 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
 {
     protected string $subcategory; 
-    protected string $datenow; 
+    protected string $letterStart; 
+    protected string $letterEnd; 
+    protected string $year; 
+    
 
-    public function __construct(string $subcategory)
+    public function __construct(string $subcategory,string $letterStart,string $letterEnd)
     {
         $this->subcategory = $subcategory;
-        $this->datenow = date('Y');
+
+        $this->letterStart = $letterStart;
+
+        $this->letterEnd = $letterEnd;
+
+        $this->year = date('Y');
     }
     public function headings(): array
     {
@@ -50,24 +58,54 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 $sheet = $event->sheet->getDelegate();
             
                 // === PARTICIPANT DATA ===
+
+                $category = $this->subcategory;
+
+                if ($this->letterStart > $this->letterEnd) {
+                    [$this->letterStart, $this->letterEnd] = [$this->letterEnd, $this->letterStart];
+                }
+                
+
                 $participants = Participant::select(
-                    'firstName', 
-                    'middleInitial', 
-                    'lastName', 
-                    'distanceCategory', 
-                    'shirtSize', 
-                    'gender',
-                    'categoryDescription'
+                'firstName', 
+                'middleInitial', 
+                'lastName', 
+                'distanceCategory', 
+                'shirtSize', 
+                'gender',
+                'categoryDescription'
                 )
-                ->when($this->subcategory === 'OPEN CATEGORY', function ($query) {
-                    $query->where('categoryDescription', $this->subcategory);
-                }, function ($query) {
-                    $query->where('subDescription', $this->subcategory);
+                ->when($this->subcategory === 'OPEN CATEGORY', function ($query) use($category) {
+                    $query->where('categoryDescription', $category);
+                }, function ($query) use($category) {
+                    $query->where('subDescription', $category);
                 })
-                ->where('year', $this->datenow)
+                ->where('year', $this->year)
+                ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
                 ->orderBy('lastName')
                 ->orderBy('firstName')
                 ->get();
+
+              
+
+                // $participants = Participant::select(
+                //     'firstName', 
+                //     'middleInitial', 
+                //     'lastName', 
+                //     'distanceCategory', 
+                //     'shirtSize', 
+                //     'gender',
+                //     'categoryDescription'
+                // )
+                // ->when($this->subcategory === 'OPEN CATEGORY', function ($query) {
+                //     $query->where('categoryDescription', $this->subcategory);
+                // }, function ($query) {
+                //     $query->where('subDescription', $this->subcategory);
+                // })
+                // ->where('year', $this->datenow)
+                // ->orderBy('lastName')
+                // ->orderBy('firstName')
+                // ->get();
 
 
 
@@ -111,7 +149,6 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 try {
                     
                     $attachImage($leftLogoPath, 'B1', 90, 60, 4);
-
                     $attachImage($rightLogoPath, 'J1', 90, 8, 4);
 
                 } catch (\Throwable $e) {
@@ -233,8 +270,6 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
 
                 // Insert participant rows starting from row 12, column B
                 $sheet->fromArray($data, null, 'B14');
-
-                
 
                 // Add border to all rows
                 $lastRow = 12 + count($data) + 1;

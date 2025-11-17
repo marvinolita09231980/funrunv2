@@ -20,7 +20,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Forms\Components\DatePicker;
 use Filament\Schemas\Components\Fieldset;
-use Filament\Forms\Components\Placeholder;
 use Filament\Infolists\Components\TextEntry;
 use Illuminate\Validation\ValidationException;
 
@@ -244,10 +243,10 @@ class ParticipantForm
 
     private static function checkAndFillParticipant(callable $get, callable $set): bool
     {
-        $firstName = $get('firstName');
-        $lastName = $get('lastName');
-        $birthDate = $get('birthDate');
-        $yearNow =  date('Y');
+        $firstName  = $get('firstName');
+        $lastName   = $get('lastName');
+        $birthDate  = $get('birthDate');
+        $yearNow    =  date('Y');
        
         
         
