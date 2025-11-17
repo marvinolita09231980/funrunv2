@@ -43,8 +43,11 @@ class FinisherForm
 
                         })
                         ->getOptionLabelUsing(function ($value) {
+                            if (!$value) {
+                                return '';
+                            }
                              $year = date('Y');
-                            $p = DB::table('participants')
+                             $p = DB::table('participants')
                                 ->where('year', $year)
                                 ->where('id', $value)
                                 ->select(
@@ -52,7 +55,7 @@ class FinisherForm
                                 )
                                 ->first();
 
-                            return $p?->full_name;
+                            return $p?->full_name ?? '';
                         })
                         ->afterStateUpdated(function ($state, callable $set, $get) {
                             $exists = self::queryParticipants($get, $set);
