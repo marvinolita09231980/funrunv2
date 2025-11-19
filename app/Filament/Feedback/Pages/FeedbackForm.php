@@ -4,8 +4,10 @@ namespace App\Filament\Feedback\Pages;
 
 use App\Models\Feedback;
 use Filament\Pages\Page;
+use App\Models\Participant;
 use Filament\Schemas\Schema;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -14,6 +16,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Components\Utilities\Get;
+use Illuminate\Validation\ValidationException;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 
 class FeedbackForm extends Page implements HasSchemas
@@ -21,6 +24,7 @@ class FeedbackForm extends Page implements HasSchemas
     use InteractsWithSchemas;
 
     public ?array $data = [];
+    
 
     protected string $view = 'filament.feedback.pages.feedback-form';
 
@@ -31,6 +35,10 @@ class FeedbackForm extends Page implements HasSchemas
 
     public function mount(): void
     {
+        $this->form->fill([
+              'feedback_exists' => false
+         ]);
+
         $this->form->fill();
     }
     
@@ -39,14 +47,27 @@ class FeedbackForm extends Page implements HasSchemas
     {
            return $schema
            ->components([
+                Hidden::make('feedback_exists')->default(false),
                 Fieldset::make('Your Info')
                     ->schema([
                         TextInput::make('firstName')
-                            ->required(),
+                            ->required()
+                            ->reactive()
+                            ->afterStateUpdated(function (callable $get, $set) {
+                                  self::findParticipant($get, $set);
+                            }),
                         TextInput::make('lastName')
-                            ->required(),
+                            ->required()
+                            ->reactive()
+                            ->afterStateUpdated(function (callable $get, $set) {
+                                  self::findParticipant($get, $set);
+                            }),
                         DatePicker::make('birthDate')
-                            ->required(),
+                            ->required()
+                            ->reactive()
+                            ->afterStateUpdated(function (callable $get, $set) {
+                                  self::findParticipant($get, $set);
+                            }),
                     ]),
                    
                 Fieldset::make('Your Feedback')
@@ -70,8 +91,8 @@ class FeedbackForm extends Page implements HasSchemas
                                 'Word of Mouth' => 'Word of Mouth',
                                 'Other' => 'Other',
                             ])
-                            ->required()
-                            ->live(),
+                            ->required(),
+                            
                         TextInput::make('aware_of_funrun_other')
                             ->label('Please Specify')
                             ->visible(fn (Get $get): string => $get('aware_of_funrun') === 'Other')
@@ -87,7 +108,7 @@ class FeedbackForm extends Page implements HasSchemas
                                 'Other' => 'Other',
                             ])
                             ->required()
-                            ->live(),
+                            ->reactive(),
                         TextInput::make('inspired_other')
                             ->label('Please Specify')
                             ->visible(fn (Get $get): string => $get('inspired') === 'Other')
@@ -101,7 +122,7 @@ class FeedbackForm extends Page implements HasSchemas
                                 'No' => 'No',
                             ])
                             ->required()
-                            ->live(),
+                            ->reactive(),
                         Textarea::make('contribute_to_your_understanding')
                                 ->label('If yes, how did the event contribute to your understanding of drug abuse?')
                                 ->visible(fn (Get $get): string => $get('raise_awareness') === 'Yes')
@@ -122,6 +143,11 @@ class FeedbackForm extends Page implements HasSchemas
                                 ->label('What changes would you recommend to improve the Fun Run?')
                                 ->required(),   
                     ])
+                   
+                    ->visible(function(callable $get, $set){
+                        
+                           return !self::findParticipant($get, $set);
+                    })
                     ->columns(1),
            ])
            ->statePath('data');
@@ -129,41 +155,106 @@ class FeedbackForm extends Page implements HasSchemas
     public function create()
     {
         $this->validate();
-        
+       
         $notifmessage = "";
         try {
             $this->data['year'] = date('Y');
 
            $this->data['full_name'] = $this->data['firstName'] . ' ' . $this->data['lastName'];
            
+            $participant = Participant::where('year', $this->data['year'])
+                ->where('firstName', $this->data['firstName'])
+                ->where('lastName', $this->data['lastName'])
+                ->whereDate('birthDate', $this->data['birthDate'])
+                ->first();
+
+            if(!$participant)
+            {
+                 throw ValidationException::withMessages([
+                'Not found!' => 'No participant matches the details you entered.',
+                ]);
+            }
+            
             $feedback = Feedback::where('year', $this->data['year'])
                 ->where('firstName', $this->data['firstName'])
                 ->where('lastName', $this->data['lastName'])
                 ->whereDate('birthDate', $this->data['birthDate'])
                 ->first();
-            if ($feedback) {
                
+            
+
+            if ($feedback) {
                 $feedback->update($this->data);
                 $notifmessage = "Record updated successfully.";
             } else {
                 Feedback::create($this->data);
                 $notifmessage =  "Record created successfully.";
             }
+
             Notification::make()
                 ->success()
                 ->title('Success Message')
                 ->body($notifmessage)
                 ->send();
 
+            $participant = Participant::where('year', $this->data['year'])
+                ->where('firstName', $this->data['firstName'])
+                ->where('lastName', $this->data['lastName'])
+                ->whereDate('birthDate', $this->data['birthDate'])
+                ->first();
+
         } catch (\Throwable $th) {
-            
-                Notification::make()
-                    ->danger()
-                    ->title('Failed to register')
-                    ->body($th->getMessage())
-                    ->persistent()
-                    ->send();
+            $this->dispatch('open-modal', id: 'not-found', errorMessage: $this->errorMessage);
         }
     }
+
+    public static function findParticipant(Callable $get, Callable $set):bool
+    {
+        $year = date('Y');
+        $first = $get('firstName');
+        $last = $get('lastName');
+        $birth = $get('birthDate');
+
+        if (! $first || ! $last || ! $birth) {
+            return false;
+        }
+
+       
+        $feedback = Feedback::where('year', $year)
+            ->where('firstName', $first)
+            ->where('lastName', $last)
+            ->where('birthDate', $birth)
+            ->first();
+
+        if ($feedback) {
+            $set('rate', $feedback->rate);
+            $set('aware_of_funrun', $feedback->aware_of_funrun);
+            $set('aware_of_funrun_other', $feedback->aware_of_funrun_other);
+            $set('inspired', $feedback->inspired);
+            $set('inspired_other', $feedback->inspired_other);
+            $set('raise_awareness', $feedback->raise_awareness);
+            $set('contribute_to_your_understanding', $feedback->contribute_to_your_understanding);
+            $set('encouraged_healthy_lifestyle', $feedback->encouraged_healthy_lifestyle);
+            $set('which_part_enjoy', $feedback->which_part_enjoy);
+            $set('recommendation', $feedback->recommendation);
+            $set('feedback_exists', true);
+        }
+        // else{
+        //     $set('rate', null);
+        //     $set('aware_of_funrun', null);
+        //     $set('aware_of_funrun_other', null);
+        //     $set('inspired', null);
+        //     $set('inspired_other', null);
+        //     $set('raise_awareness', null);
+        //     $set('contribute_to_your_understanding', null);
+        //     $set('encouraged_healthy_lifestyle', null);
+        //     $set('which_part_enjoy', null);
+        //     $set('recommendation', null);
+        //     $set('feedback_exists', false);
+        // }
+
+        return (bool) $feedback; 
+    }
+
 
 }
