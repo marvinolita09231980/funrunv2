@@ -81,7 +81,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                     $query->where('categoryDescription', $category);
                 }, function ($query) use($category) {
                     $query->where('subDescription', $category)
-                          ->where('categoryDescription', '!==', 'OPEN CATEGORY');
+                          ->where('categoryDescription', '!=', 'OPEN CATEGORY');
                 })
                 ->where('year', $this->year)
                 ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
