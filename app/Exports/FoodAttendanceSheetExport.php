@@ -285,11 +285,11 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 $sheet->fromArray($data, null, 'B15');
 
                 // Add border to all rows
-                $lastRow = 12 + count($data) + 1;
+                $lastRow = 12 + count($data) + 2;
                 $sheet->getStyle("B12:K{$lastRow}")
                     ->getBorders()->getAllBorders()->setBorderStyle('thin');
 
-                $certRow = 12 + $ctr + 2;
+                $certRow = 12 + $ctr + 3;
                 $sheet->setCellValue("B{$certRow}", 'Certified Correct:');
                 $sheet->setCellValue("C" . ($certRow + 2), '_________________________');
                 $sheet->setCellValue("C" . ($certRow + 3), 'Signature over Printed Name');
