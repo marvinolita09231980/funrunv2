@@ -91,6 +91,7 @@ class FeedbackForm extends Page implements HasSchemas
                                 'Word of Mouth' => 'Word of Mouth',
                                 'Other' => 'Other',
                             ])
+                            ->reactive()
                             ->required(),
                             
                         TextInput::make('aware_of_funrun_other')
