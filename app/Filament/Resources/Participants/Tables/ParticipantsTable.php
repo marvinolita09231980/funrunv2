@@ -362,10 +362,11 @@ class ParticipantsTable
                             ->when($subcategory === 'OPEN CATEGORY', function ($query) use($subcategory) {
                                 $query->where('categoryDescription', $subcategory);
                             }, function ($query) use($subcategory) {
-                                $query->where('subDescription', $subcategory);
+                                $query->where('subDescription', $subcategory)
+                                            ->where('categoryDescription', '!=', 'OPEN CATEGORY');
                             })
                             ->where('year', $year)
-                            ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
+                            ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
                             ->orderBy('lastName')
                             ->orderBy('firstName')
                             ->get()
