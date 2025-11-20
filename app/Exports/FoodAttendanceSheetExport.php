@@ -75,10 +75,11 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                             'distanceCategory', 
                             'shirtSize', 
                             'gender',
-                            'categoryDescription'
+                            'categoryDescription',
+                            'subDescription'
                             )
                             ->where('categoryDescription', 'OPEN CATEGORY') ->where('year', $this->year)
-                            ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
+                            ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
                             ->orderBy('lastName')
                             ->orderBy('firstName')
                             ->get();
@@ -92,11 +93,12 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                         'distanceCategory', 
                         'shirtSize', 
                         'gender',
-                        'categoryDescription'
+                        'categoryDescription',
+                        'subDescription'
                         )
                         ->where('subDescription', $this->subcategory)
                         ->where('categoryDescription', '!=', 'OPEN CATEGORY')->where('year', $this->year)
-                        ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
+                        ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
                         ->orderBy('lastName')
                         ->orderBy('firstName')
                         ->get();
@@ -296,7 +298,9 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                             explode(' ', $p->subDescription ?? ''),
                             fn($w) => strtolower($w) !== 'and'
                         );
-                        $agency = strtoupper(implode('', array_map(fn($w) => $w[0], $words)));
+                        $agency = strtoupper(
+                                implode('', array_map(fn($w) => $w[0] ?? '', $words))
+                         );
                     } else {
                         $agency = $p->subDescription ?? '';
                     }

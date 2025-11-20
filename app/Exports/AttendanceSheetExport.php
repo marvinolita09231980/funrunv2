@@ -77,7 +77,7 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                             'categoryDescription'
                             )
                             ->where('categoryDescription', 'OPEN CATEGORY') ->where('year', $this->year)
-                            ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
+                            ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
                             ->orderBy('lastName')
                             ->orderBy('firstName')
                             ->get();
@@ -95,7 +95,7 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                         )
                         ->where('subDescription', $this->subcategory)
                         ->where('categoryDescription', '!=', 'OPEN CATEGORY')->where('year', $this->year)
-                        ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
+                        ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
                         ->orderBy('lastName')
                         ->orderBy('firstName')
                         ->get();

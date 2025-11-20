@@ -131,10 +131,11 @@ class ParticipantsTable
                             ->when($data['subcategory'] === 'OPEN CATEGORY', function ($query) use($data) {
                                 $query->where('categoryDescription', $data['subcategory']);
                             }, function ($query) use($data) {
-                                $query->where('subDescription', $data['subcategory']);
+                                $query->where('subDescription', $data['subcategory'])
+                                            ->where('categoryDescription', '!=', 'OPEN CATEGORY');
                             })
                             ->where('year', $year)
-                            ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
+                            ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
                             ->orderBy('lastName')
                             ->orderBy('firstName')
                             ->get();
@@ -239,10 +240,11 @@ class ParticipantsTable
                             ->when($data['subcategory'] === 'OPEN CATEGORY', function ($query) use($data) {
                                 $query->where('categoryDescription', $data['subcategory']);
                             }, function ($query) use($data) {
-                                $query->where('subDescription', $data['subcategory']);
+                                 $query->where('subDescription', $data['subcategory'])
+                                            ->where('categoryDescription', '!=', 'OPEN CATEGORY');
                             })
                             ->where('year', $year)
-                            ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
+                            ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
                             ->orderBy('lastName')
                             ->orderBy('firstName')
                             ->get();
