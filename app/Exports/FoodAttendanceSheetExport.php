@@ -17,7 +17,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 
-class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
+class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
 {
     protected string $subcategory; 
     protected string $letterStart; 
@@ -40,13 +40,14 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
         // Main column headings (row 12)
         return [
             'No.',
-            'Race Bib',
             'Name',
-            'Distance',
-            'Shirt Size',
+            'Position',
+            'Agency',
             'Ethnicity', // Parent heading (merged for IP / Non-IP)
             '',          // placeholder for Ethnicity subheader
             'Gender',
+            '',
+            '',
             'Signature',
         ];
     }
@@ -73,7 +74,8 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 'distanceCategory', 
                 'shirtSize', 
                 'gender',
-                'categoryDescription'
+                'categoryDescription',
+                'subDescription'
                 )
                 ->when($this->subcategory === 'OPEN CATEGORY', function ($query) use($category) {
                     $query->where('categoryDescription', $category);
@@ -128,7 +130,7 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 try {
                     
                     $attachImage($leftLogoPath, 'B1', 90, 60, 4);
-                    $attachImage($rightLogoPath, 'J1', 90, 8, 4);
+                    $attachImage($rightLogoPath, 'J1', 90, 100, 4);
 
                 } catch (\Throwable $e) {
                    
@@ -140,37 +142,38 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 // === SET FIXED COLUMN WIDTHS ===
                 $sheet->getColumnDimension('A')->setWidth(4);   // No.
                 $sheet->getColumnDimension('B')->setWidth(4);   // No.
-                $sheet->getColumnDimension('C')->setWidth(18);  // Race Bib
-                $sheet->getColumnDimension('D')->setWidth(32);  // Name
-                $sheet->getColumnDimension('E')->setWidth(15);  // Distance
-                $sheet->getColumnDimension('F')->setWidth(15);  // shirsize
-                $sheet->getColumnDimension('G')->setWidth(8);   // Ethnicity (IP) 
-                $sheet->getColumnDimension('H')->setWidth(8);   // Ethnicity (Non-IP)
-                $sheet->getColumnDimension('I')->setWidth(10);  // Gender (single column)
-                $sheet->getColumnDimension('J')->setWidth(25);  // Signature
+                $sheet->getColumnDimension('C')->setWidth(25);  // name
+                $sheet->getColumnDimension('D')->setWidth(15);  // Position
+                $sheet->getColumnDimension('E')->setWidth(20);  // Agency
+                $sheet->getColumnDimension('F')->setWidth(8);  // Ethnicity (IP)
+                $sheet->getColumnDimension('G')->setWidth(8);   // Ethnicity (Non-IP)
+                $sheet->getColumnDimension('H')->setWidth(8);   // Gender (male)
+                $sheet->getColumnDimension('I')->setWidth(8);  // Gender (female)
+                $sheet->getColumnDimension('J')->setWidth(8);  // Gender (others)
+                $sheet->getColumnDimension('K')->setWidth(20);  // Signature
 
 
                 // === HEADER TEXT ===
-                $sheet->mergeCells('B1:J1');
+                $sheet->mergeCells('B1:K1');
                 $sheet->setCellValue('B1', 'Republic of the Philippines');
                 $sheet->getStyle('B1')->getFont()->setBold(true)->setSize(12);
                 $sheet->getStyle('B1')->getAlignment()->setHorizontal('center');
 
-                $sheet->mergeCells('B2:J2');
+                $sheet->mergeCells('B2:K2');
                 $sheet->setCellValue('B2', 'Province of Davao de Oro');
                 $sheet->getStyle('B2')->getAlignment()->setHorizontal('center');
 
-                $sheet->mergeCells('B3:J3');
+                $sheet->mergeCells('B3:K3');
                 $sheet->setCellValue('B3', 'OFFICE OF THE GOVERNOR');
                 $sheet->getStyle('B3')->getFont()->setBold(true);
                 $sheet->getStyle('B3')->getAlignment()->setHorizontal('center');
 
-                $sheet->mergeCells('B4:J4');
+                $sheet->mergeCells('B4:K4');
                 $sheet->setCellValue('B4', '4th Floor, Executive Bldg., Provincial Capitol Complex, Cabidianan, Nabunturan, Davao de Oro Province');
                 $sheet->getStyle('B4')->getAlignment()->setHorizontal('center');
 
-                $sheet->mergeCells('B5:J5');
-                $sheet->setCellValue('B5', 'SINGLET ATTENDANCE SHEET');
+                $sheet->mergeCells('B5:K5');
+                $sheet->setCellValue('B5', 'FOOD ATTENDANCE SHEET');
                 $sheet->getStyle('B5')->getFont()->setBold(true)->setSize(14);
                 $sheet->getStyle('B5')->getAlignment()->setHorizontal('center');
 
@@ -183,67 +186,94 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                     'Data and information in this form are intended exclusively for the purpose of this activity. This will be kept by the process owner for the purpose of verifying and authenticating identity of the participants. Serving other purposes not intended by the process owner is a violation of Data Privacy Act of 2012. Data subjects voluntarily provided these data and information explicitly consenting the process owner to serve its purpose. Affixing your signature to this attendance sheet signifies your consent to the recording of statements, photographs, and/or audio or video and that these materials may be used by the process owner on internal and external channels/platforms.'
                 );
 
-                $sheet->mergeCells('B6:J8');
+                $sheet->mergeCells('B6:K8');
                 $sheet->setCellValue('B6', $richText);
 
                 // Formatting: font size 9, wrap text, and vertical alignment
-                $sheet->getStyle('B6:J8')->getFont()->setSize(9);
-                $sheet->getStyle('B6:J8')->getAlignment()->setWrapText(true);
-                $sheet->getStyle('B6:J8')->getAlignment()->setVertical('top');
+                $sheet->getStyle('B6:K8')->getFont()->setSize(9);
+                $sheet->getStyle('B6:K8')->getAlignment()->setWrapText(true);
+                $sheet->getStyle('B6:K8')->getAlignment()->setVertical('top');
 
                 // === ACTIVITY & DATE FIELDS ===
                 $sheet->setCellValue('B9', 'Activity:');
                 $sheet->mergeCells('B9:C9');
-                $sheet->mergeCells('D9:J9');
+                $sheet->mergeCells('D9:K9');
                 $sheet->setCellValue('B10', 'Date:');
                 $sheet->mergeCells('B10:C10');
-                $sheet->mergeCells('D10:J10');
+                $sheet->mergeCells('D10:K10');
 
                 // === TABLE HEADER ROW ===
                 $sheet->fromArray($this->headings(), null, 'B12');
-                $sheet->getStyle('B12:J12')->getFont()->setBold(true);
-                $sheet->getStyle('B12:J12')->getAlignment()->setHorizontal('center');
-                $sheet->getStyle('B12:J12')->getBorders()->getAllBorders()->setBorderStyle('thin');
+                $sheet->getStyle('B12:K14')->getFont()->setBold(true);
+                $sheet->getStyle('B12:K14')->getAlignment()->setHorizontal('center');
+                $sheet->getStyle('B12:K14')->getBorders()->getAllBorders()->setBorderStyle('thin');
 
+
+                // === MERGE MAIN HEADERS ===
+                $sheet->mergeCells('B12:B14'); // No.
+                $sheet->mergeCells('C12:C14'); // Name
+                $sheet->mergeCells('D12:D14'); // position
+                $sheet->mergeCells('E12:E14'); // Agency
+                $sheet->mergeCells('F12:G13'); // Ethnicity (IP / Non-IP)
+                $sheet->mergeCells('H12:J12'); // Gender 
+                $sheet->mergeCells('H13:H14'); // Gender(male) 
+                $sheet->mergeCells('I13:I14'); // Gender(female) 
+                $sheet->mergeCells('J13:J14'); // Gender(female) 
+                $sheet->mergeCells('K12:K14'); // Signature
                 
                 // SUBHEADINGS ROW (row 13) — only for Ethnicity
-                $sheet->setCellValue('G13', 'IP');
-                $sheet->setCellValue('H13', 'Non-IP');
+                $sheet->setCellValue('F14', 'IP');
+                $sheet->setCellValue('G14', 'Non-IP');
+
+                $sheet->setCellValue('H13', 'Male');
+                $sheet->setCellValue('I13', 'Female');
+                $sheet->setCellValue('J13', 'Others(Specify)');
+                $sheet->getStyle('J13')->getAlignment()->setWrapText(true);
+                // Set font size 8 for these cells
+                $sheet->getStyle('I13')->getFont()->setSize(11);
+                $sheet->getStyle('J13')->getFont()->setSize(11);
+                $sheet->getStyle('K13')->getFont()->setSize(11);
 
                 $sheet->getStyle('F13:G13')->getAlignment()->setHorizontal('center');
                 $sheet->getStyle('F13:G13')->getFont()->setBold(true);
                 $sheet->getStyle('B12:J13')->getBorders()->getAllBorders()->setBorderStyle('thin');
 
-                // === MERGE MAIN HEADERS ===
-                $sheet->mergeCells('B12:B13'); // No.
-                $sheet->mergeCells('C12:C13'); // Race Bib
-                $sheet->mergeCells('D12:D13'); // Name
-                $sheet->mergeCells('E12:E13'); // Distance
-                $sheet->mergeCells('F12:F13'); // shirsize
-                $sheet->mergeCells('G12:H12'); // Ethnicity (IP / Non-IP)
-                $sheet->mergeCells('I12:I13'); // Gender (single column)
-                $sheet->mergeCells('J12:J13'); // Signature
-
-
-                
                 $data = [];
                 $ctr = 1;
-                foreach ($participants as $p) {
-                    
+               foreach ($participants as $p) {
                     $middle = $p->middleInitial ? "{$p->middleInitial}." : '';
                     $fullName = trim("{$p->lastName}, {$p->firstName} {$middle}");
                     $fullName = Str::title(strtolower($fullName));
 
+                    $check = '✓';
+
+                    // Split gender into separate columns
+                    $male   = ($p->gender ?? '') === 'male' ? $check : '';
+                    $female = ($p->gender ?? '') === 'female' ? $check : '';
+                    $other  = ($p->gender ?? '') !== 'male' && ($p->gender ?? '') !== 'female' ? ($p->gender ?? '') : '';
+                     
+                    if (($p->categoryDescription ?? '') === 'PLGU') {
+                        $words = array_filter(
+                            explode(' ', $p->subDescription ?? ''),
+                            fn($w) => strtolower($w) !== 'and'
+                        );
+                        $agency = strtoupper(implode('', array_map(fn($w) => $w[0], $words)));
+                    } else {
+                        $agency = $p->subDescription ?? '';
+                    }
+
+
                     $data[] = [
                         $ctr++, 
-                        $p->singlet ?? '',          // Racebib No.
-                        $fullName,                  // Name
-                        $p->distanceCategory ?? '',
-                        $p->shirtSize ?? '',
-                        '',                         // IP
-                        '',                         // Non-IP
-                        $p->gender ?? '',                         // Gender
-                        '',                         // Signature
+                        $fullName,                   // Name
+                        '',                           // Position
+                        $agency,     // Agency
+                        '',                           // IP
+                        '',                           // Non-IP
+                        $male,                        // Male column
+                        $female,                      // Female column
+                        $other,                       // Others(Specify)
+                        '',                           // Signature
                     ];
                 }
 
@@ -252,7 +282,7 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
 
                 // Add border to all rows
                 $lastRow = 12 + count($data) + 1;
-                $sheet->getStyle("B12:J{$lastRow}")
+                $sheet->getStyle("B12:K{$lastRow}")
                     ->getBorders()->getAllBorders()->setBorderStyle('thin');
 
                 $certRow = 12 + $ctr + 2;

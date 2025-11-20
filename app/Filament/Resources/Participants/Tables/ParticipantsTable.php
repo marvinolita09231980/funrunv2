@@ -24,6 +24,7 @@ use Filament\Schemas\Components\Fieldset;
 use Filament\Tables\Filters\QueryBuilder;
 use Illuminate\Database\Eloquent\Builder;
 
+use App\Exports\FoodAttendanceSheetExport;
 use Filament\Infolists\Components\TextEntry;
 use App\Filament\Exports\ParticipantExporter;
 use Filament\Tables\Filters\QueryBuilder\Constraints\TextConstraint;
@@ -214,7 +215,113 @@ class ParticipantsTable
                             ]),
                     ]),
                                 
-                
+                Action::make('foood_attendance_export')
+                    ->label('Food Attendance Export')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->action(function (array $data) {
+                            $year = date('Y');
+                            $letterStart = strtoupper($data['letterStart']);
+                            $letterEnd = strtoupper($data['letterEnd']);
+
+                            if ($letterStart > $letterEnd) {
+                                [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
+                            }
+
+                            $participants = Participant::select(
+                            'firstName', 
+                            'middleInitial', 
+                            'lastName', 
+                            'distanceCategory', 
+                            'shirtSize', 
+                            'gender',
+                            'categoryDescription'
+                            )
+                            ->when($data['subcategory'] === 'OPEN CATEGORY', function ($query) use($data) {
+                                $query->where('categoryDescription', $data['subcategory']);
+                            }, function ($query) use($data) {
+                                $query->where('subDescription', $data['subcategory']);
+                            })
+                            ->where('year', $year)
+                            ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
+                            ->orderBy('lastName')
+                            ->orderBy('firstName')
+                            ->get();
+
+                        //    $participants = self::updateParticipantCount($set, $get);
+                            
+                            
+
+                            if ($participants->isEmpty()) {
+                                Notification::make()
+                                    ->danger()
+                                    ->title('No data found!')
+                                    ->body('No participants were found in this category')
+                                    ->send();
+                                return;
+                            }
+
+                            return Excel::download(
+                                new FoodAttendanceSheetExport($data['subcategory'],$letterStart,$letterEnd),
+                                'attendance_sheet.xlsx'
+                            );
+                    })
+                   ->schema([
+                        Grid::make()
+                            ->columns(2)
+                            ->schema([
+                                Select::make('subcategory')
+                                    ->label('Subcategory')
+                                    ->options(Subcategory::pluck('subDescription', 'subDescription'))
+                                    ->reactive()
+                                    ->afterStateUpdated(function(callable $set,callable $get){
+                                        
+                                        self::updateParticipantCount($set, $get);
+                                    
+                                    })
+                                    ->searchable()
+                                    ->required()
+                                    ->columnSpanFull(),
+
+                                Select::make('letterStart')
+                                    ->label('List from')
+                                    ->options(
+                                        collect(range('A', 'Z'))
+                                            ->mapWithKeys(fn ($letter) => [$letter => $letter])
+                                            ->toArray()
+                                    )
+                                    ->reactive()
+                                    ->afterStateUpdated(function(callable $set,callable $get){
+                                        
+                                        self::updateParticipantCount($set, $get);
+                                    
+                                    })
+                                    ->searchable()
+                                    ->required()
+                                    ->columns(1),
+                                Select::make("letterEnd")
+                                    ->label('List to')
+                                    ->options(
+                                        collect(range('A', 'Z'))
+                                            ->mapWithKeys(fn ($letter) => [$letter => $letter])
+                                            ->toArray()
+                                    )
+                                    ->reactive()
+                                    ->afterStateUpdated(function(callable $set,callable $get){
+                                        
+                                        self::updateParticipantCount($set, $get);
+                                    
+                                    })
+                                    ->searchable()
+                                    ->required()
+                                    ->columns(1),
+                                TextEntry ::make('participantCount')
+                                    ->label('Participants Found')
+                                    ->columnSpanFull()
+                                    ->disabled(),
+
+                                
+                            ]),
+                    ]),
                      
                             
             

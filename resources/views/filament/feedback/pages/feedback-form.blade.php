@@ -13,7 +13,11 @@
                     @endif
                     @if ($data['feedback_exists'])
                         @php
-                            $fullname = $this->data['firstName'] . ' ' . $this->data['lastName'];
+                            
+                            $middleInitial = trim($this->data['middleInitial'] ?? '');
+                            $middle = $middleInitial ? $middleInitial . '. ' : '';
+                            $fullname = $this->data['firstName'] . ' ' . $middle . $this->data['lastName'];
+                           
                             $jasperUrl = 'https://paps.davaodeoro.gov.ph/jasperserver/flow.html?';
                             $jasperParams = http_build_query([
                                 'pp' => 'u=Jamshasadid|r=Manager|o=EMEA,Sales|pa1=Sweden',
@@ -22,18 +26,19 @@
                                 'reportUnit' => '/reports/marvin_reports/kontrun_certificate',
                                 'standAlone' => 'true',
                                 'output' => 'pdf',
-                                'name' => 'Marvin M. Olita',
+                                'name' => $fullname,
                             ]);
+                           
                         @endphp
                         <div class="flex flex-col items-center gap-2 mt-4 p-4 border border-green-200 rounded-2xl bg-green-50 shadow-sm">
                             <p class="text-green-800 font-semibold text-center">
                                 You have already submitted your feedback
                             </p>
                              <a href="{{ $jasperUrl . $jasperParams }}"
+                                class="bg-orange-300 px-3 py-1 rounded-lg inline-flex justify-center items-center"
                                 role="button"
-                                class="inline-flex justify-center items-center bg-green-500 hover:bg-green-600 text-black font-medium px-5 py-2 rounded-lg shadow-md transition-colors duration-200 text-center w-full sm:w-auto"
                                 target="_blank">
-                                Download Certificate
+                                    Download Certificate
                             </a>
                         </div>
                     @endif
