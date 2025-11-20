@@ -282,7 +282,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 }
 
                 // Insert participant rows starting from row 12, column B
-                $sheet->fromArray($data, null, 'B14');
+                $sheet->fromArray($data, null, 'B15');
 
                 // Add border to all rows
                 $lastRow = 12 + count($data) + 1;
