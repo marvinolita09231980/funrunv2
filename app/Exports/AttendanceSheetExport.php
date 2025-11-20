@@ -65,27 +65,61 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                     [$this->letterStart, $this->letterEnd] = [$this->letterEnd, $this->letterStart];
                 }
                 
+                if($this->subcategory === 'OPEN CATEGORY')
+                {
+                            $participants = Participant::select(
+                            'firstName', 
+                            'middleInitial', 
+                            'lastName', 
+                            'distanceCategory', 
+                            'shirtSize', 
+                            'gender',
+                            'categoryDescription'
+                            )
+                            ->where('categoryDescription', 'OPEN CATEGORY') ->where('year', $this->year)
+                            ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
+                            ->orderBy('lastName')
+                            ->orderBy('firstName')
+                            ->get();
 
-                $participants = Participant::select(
-                'firstName', 
-                'middleInitial', 
-                'lastName', 
-                'distanceCategory', 
-                'shirtSize', 
-                'gender',
-                'categoryDescription'
-                )
-                ->when($this->subcategory === 'OPEN CATEGORY', function ($query) use($category) {
-                    $query->where('categoryDescription', $category);
-                }, function ($query) use($category) {
-                    $query->where('subDescription', $category)
-                          ->where('categoryDescription', '!=', 'OPEN CATEGORY');
-                })
-                ->where('year', $this->year)
-                ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
-                ->orderBy('lastName')
-                ->orderBy('firstName')
-                ->get();
+                }
+               else{
+                        $participants = Participant::select(
+                        'firstName', 
+                        'middleInitial', 
+                        'lastName', 
+                        'distanceCategory', 
+                        'shirtSize', 
+                        'gender',
+                        'categoryDescription'
+                        )
+                        ->where('subDescription', $this->subcategory)
+                        ->where('categoryDescription', '!=', 'OPEN CATEGORY')->where('year', $this->year)
+                        ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
+                        ->orderBy('lastName')
+                        ->orderBy('firstName')
+                        ->get();
+               }
+                // $participants = Participant::select(
+                //     'firstName', 
+                //     'middleInitial', 
+                //     'lastName', 
+                //     'distanceCategory', 
+                //     'shirtSize', 
+                //     'gender',
+                //     'categoryDescription'
+                // )
+                // ->when($this->subcategory === 'OPEN CATEGORY', function ($query) {
+                //     $query->where('categoryDescription', 'OPEN CATEGORY');
+                // }, function ($query) {
+                //     $query->where('subDescription', $this->subcategory)
+                //         ->where('categoryDescription', '!=', 'OPEN CATEGORY');
+                // })
+                // ->where('year', $this->year)
+                // ->whereRaw("LEFT(UPPER(lastName), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
+                // ->orderBy('lastName')
+                // ->orderBy('firstName')
+                // ->get();
 
 
                 $pageSetup = $sheet->getPageSetup();
