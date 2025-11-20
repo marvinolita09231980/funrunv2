@@ -146,7 +146,7 @@ class FeedbackForm extends Page implements HasSchemas
                     ])
                    
                     ->visible(function(callable $get, $set){
-                        
+                           
                            return !self::findParticipant($get, $set);
                     })
                     ->columns(1),
@@ -239,6 +239,9 @@ class FeedbackForm extends Page implements HasSchemas
             $set('which_part_enjoy', $feedback->which_part_enjoy);
             $set('recommendation', $feedback->recommendation);
             $set('feedback_exists', true);
+        }
+        else{
+             $set('feedback_exists', false);
         }
         // else{
         //     $set('rate', null);
