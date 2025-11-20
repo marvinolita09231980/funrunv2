@@ -41,7 +41,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
         return [
             'No.',
             'Name',
-            'Position',
+            'Category',
             'Agency',
             'Ethnicity', // Parent heading (merged for IP / Non-IP)
             '',          // placeholder for Ethnicity subheader
@@ -143,7 +143,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 $sheet->getColumnDimension('A')->setWidth(4);   // No.
                 $sheet->getColumnDimension('B')->setWidth(4);   // No.
                 $sheet->getColumnDimension('C')->setWidth(25);  // name
-                $sheet->getColumnDimension('D')->setWidth(15);  // Position
+                $sheet->getColumnDimension('D')->setWidth(10);  // Position
                 $sheet->getColumnDimension('E')->setWidth(20);  // Agency
                 $sheet->getColumnDimension('F')->setWidth(8);  // Ethnicity (IP)
                 $sheet->getColumnDimension('G')->setWidth(8);   // Ethnicity (Non-IP)
@@ -151,6 +151,8 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 $sheet->getColumnDimension('I')->setWidth(8);  // Gender (female)
                 $sheet->getColumnDimension('J')->setWidth(8);  // Gender (others)
                 $sheet->getColumnDimension('K')->setWidth(20);  // Signature
+
+                $defaultHeight = $sheet->getRowDimension(4)->getRowHeight();
 
 
                 // === HEADER TEXT ===
@@ -169,6 +171,8 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 $sheet->getStyle('B3')->getAlignment()->setHorizontal('center');
 
                 $sheet->mergeCells('B4:K4');
+                $sheet->getStyle('B4:K4')->getAlignment()->setWrapText(true);
+                $sheet->getRowDimension(4)->setRowHeight(30);
                 $sheet->setCellValue('B4', '4th Floor, Executive Bldg., Provincial Capitol Complex, Cabidianan, Nabunturan, Davao de Oro Province');
                 $sheet->getStyle('B4')->getAlignment()->setHorizontal('center');
 
@@ -266,7 +270,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                     $data[] = [
                         $ctr++, 
                         $fullName,                   // Name
-                        '',                           // Position
+                        $p->distanceCategory,                           // Position
                         $agency,     // Agency
                         '',                           // IP
                         '',                           // Non-IP
