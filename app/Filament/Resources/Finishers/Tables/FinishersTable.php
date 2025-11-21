@@ -43,7 +43,14 @@ class FinishersTable
             ])
             ->recordActions([
                 EditAction::make()
-                ->visible(fn ($record) => $record->created_by === Filament::auth()->user()->username),
+                ->visible(function ($record) {
+                    $user = Filament::auth()->user();
+
+                    return 
+                        $record->created_by === $user->username
+                        || $user->username === 'superadmin';
+                }),
+                // ->visible(fn ($record) => $record->created_by === Filament::auth()->user()->username),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

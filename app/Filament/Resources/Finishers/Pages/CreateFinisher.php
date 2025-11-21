@@ -18,8 +18,9 @@ class CreateFinisher extends CreateRecord
        
         $time = $data['finish_time'];
         $currentDatePH = Carbon::now('Asia/Manila')->format('Y-m-d');
+        
         $data['finish_time'] = $currentDatePH . ' ' . $time;
-    
+       
         if ($participantId) {
             $participant = Participant::where('id', $participantId)->first();
             
@@ -34,7 +35,7 @@ class CreateFinisher extends CreateRecord
                 $data['birthDate']             = $participant->birthDate;
                 $data['distanceCategory']      = $participant->distanceCategory;
                 $data['created_by']            = Auth::user()->username;
-                $data['finisher_rank']         = '';
+                
             }
         }
        

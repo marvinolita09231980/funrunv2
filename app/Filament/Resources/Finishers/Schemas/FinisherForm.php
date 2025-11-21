@@ -132,9 +132,15 @@ class FinisherForm
                         }),
                         TimePicker::make('finish_time')
                         ->label('Finish Time')
-                        ->seconds(true)        
-                       
-                        ->required(),
+                        ->seconds(true)
+                        ->default(
+                            now('Asia/Manila')->format('h:i A')
+                        ),
+                        TextInput::make('finisher_rank')
+                        ->label('Rank')
+                        ->numeric()          
+                        ->minValue(1)        
+                        ->maxValue(99999),
                  ])->columns(3),   
                  Fieldset::make('Runner Info')
                   ->schema([
