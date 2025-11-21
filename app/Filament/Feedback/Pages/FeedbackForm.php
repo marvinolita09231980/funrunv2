@@ -192,10 +192,8 @@ class FeedbackForm extends Page implements HasSchemas
             if ($feedback) {
                 $feedback->update($dataToSave);
                 $notifmessage = "Record updated successfully.";
-                dd('feedback');
             } else {
-                dd('no feedback');
-                Feedback::create($this->data);
+                Feedback::create($dataToSave);
                 $notifmessage =  "Record created successfully.";
             }
 
