@@ -118,7 +118,7 @@ class RegisterForm extends Page implements HasSchemas
                             ->columnSpan(2)
                             ->required(),
                     Radio::make('pwd')
-                            ->label('PWD')
+                            ->label('Person With Disability')
                             // ->hint('Persons with Disability')
                             ->required()
                             ->options([
@@ -128,7 +128,7 @@ class RegisterForm extends Page implements HasSchemas
                             ->inline()
                             ->reactive(),
                     Radio::make('rpwuds')
-                        ->label('RPWUDS')
+                        ->label('Recovering Person Who Used Drugs')
                         // ->hint('Recovering Persons Who Used Drugs')
                         ->required()
                         ->options([
@@ -136,6 +136,7 @@ class RegisterForm extends Page implements HasSchemas
                                 true =>    'YES',
                             ])
                         ->inline()
+                        ->columnSpan(2)
                         ->reactive(),
                     
                 

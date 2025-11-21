@@ -11,6 +11,7 @@ use Filament\Facades\Filament;
 use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
 use Illuminate\Support\HtmlString;
+use App\Exports\FilteredSheetExport;
 use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 use Filament\Actions\BulkActionGroup;
@@ -22,8 +23,8 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Tables\Filters\QueryBuilder;
-use Illuminate\Database\Eloquent\Builder;
 
+use Illuminate\Database\Eloquent\Builder;
 use App\Exports\FoodAttendanceSheetExport;
 use Filament\Infolists\Components\TextEntry;
 use App\Filament\Exports\ParticipantExporter;
@@ -330,36 +331,38 @@ class ParticipantsTable
                     ->label('Filtered Export')
                     ->icon('heroicon-o-document-arrow-down')
                     ->action(function (array $data) {
-                            $year = date('Y');
-                            $letterStart = strtoupper($data['letterStart']);
-                            $letterEnd = strtoupper($data['letterEnd']);
+                        
+                          
+                    //    dd($data);
+                        $year                 = $data['year'] ?? date('Y');
+                        $distanceCategory     = $data['distanceCategory'] ?? null;
+                        $categoryDescription  = $data['categoryDescription'] ?? null;
+                        $subDescription       = $data['subDescription'] ?? null;
+                        $gender               = $data['gender'] ?? null;
+                        $pwd                  = $data['pwd'] ?? null;
+                        
 
-                            if ($letterStart > $letterEnd) {
-                                [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
-                            }
+                        $participants = Participant::select(
+                        'firstName', 
+                        'middleInitial', 
+                        'lastName', 
+                        'distanceCategory', 
+                        'shirtSize', 
+                        'gender',
+                        'categoryDescription',
+                        'subDescription'
+                        )
+                        ->when($year, fn($query, $year) => $query->where('year', $year))
+                        ->when($distanceCategory, fn($query, $distanceCategory) => $query->where('distanceCategory', $distanceCategory))
+                        ->when($categoryDescription, fn($query, $categoryDescription) => $query->where('categoryDescription', $categoryDescription))
+                        ->when($subDescription, fn($query, $subDescription) => $query->where('subDescription', $subDescription))
+                        ->when($gender, fn($query, $gender) => $query->where('gender', $gender))
+                        ->when($pwd !== null, fn($query, $pwd) => $query->where('pwd', $pwd)) // if you have pwd field
+                        // ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
+                        ->get();
+                    
 
-                            $participants = Participant::select(
-                            'firstName', 
-                            'middleInitial', 
-                            'lastName', 
-                            'distanceCategory', 
-                            'shirtSize', 
-                            'gender',
-                            'categoryDescription'
-                            )
-                            ->when($data['subcategory'] === 'OPEN CATEGORY', function ($query) use($data) {
-                                $query->where('categoryDescription', $data['subcategory']);
-                            }, function ($query) use($data) {
-                                 $query->where('subDescription', $data['subcategory'])
-                                            ->where('categoryDescription', '!=', 'OPEN CATEGORY');
-                            })
-                            ->where('year', $year)
-                            ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
-                            ->orderBy('lastName')
-                            ->orderBy('firstName')
-                            ->get();
-
-                        //    $participants = self::updateParticipantCount($set, $get);
+                       
                             
                             
 
@@ -373,26 +376,25 @@ class ParticipantsTable
                             }
 
                             return Excel::download(
-                                new FoodAttendanceSheetExport($data['subcategory'],$letterStart,$letterEnd),
-                                'attendance_sheet.xlsx'
+                                new FilteredSheetExport($data),
+                                'filtered_export_sheet.xlsx'
                             );
                     })
                    ->schema([
                         Grid::make()
                             ->columns(2)
                             ->schema([
-
-                                
-                                Select::make('distanceCategory')
-                                    ->label('Category')
+                                Select::make('year')
+                                    ->label('Year')
                                     ->options(
                                         collect(range(date('Y'), date('Y') - 5))
                                             ->mapWithKeys(fn($year) => [$year => $year])
                                             ->toArray()
                                     )
+                                    ->default(date('Y'))  
                                     ->searchable()
                                     ->required()
-                                    ->columnSpanFull(),
+                                    ->columnSpan(1),
 
                                 Select::make('distanceCategory')
                                     ->label('Category')
@@ -403,13 +405,39 @@ class ParticipantsTable
                                             '10km'=>'10km'
                                         ]
                                     )
-                                    ->reactive()
                                     ->searchable()
-                                    ->required()
-                                    ->columnSpanFull(),
+                                    ->columnSpan(1),
+                                Select::make('categoryDescription')
+                                    ->label('Description')
+                                    ->options(Subcategory::pluck('categoryDescription', 'categoryDescription'))
+                                    ->searchable()
+                                    ->columnSpan(1),
+                                Select::make('subDescription')
+                                    ->label('Agency')
+                                    ->options(function (callable $get) {
+                                        $category = $get('categoryDescription');
+
+                                        if (!$category) {
+                                            return []; 
+                                        }
+
+                                        $query = Subcategory::query()
+                                                    ->where('categoryDescription', $category);
+
+                                        if (Auth::check() && Auth::user()->username !== 'superadmin') {
+                                            $query->where('username', Auth::user()->username);
+                                        }
+
+                                        return $query->distinct()
+                                                    ->pluck('subDescription', 'subDescription');
+                                               
+                                    })
+                                    ->searchable()
+                                    ->columnSpan(1),
                                 Select::make('gender')
                                     ->label('Gender')
                                     ->options([
+                                        '' =>     'All',
                                         'male' =>     'Male',
                                         'female' => 'Female',
                                         'non-binary' => 'Non-binary',
@@ -418,26 +446,48 @@ class ParticipantsTable
                                         'agender' => 'Agender',
                                         'prefer not to say' => 'Prefer not to say'
                                     ])
-                                    ->reactive()
+                                    ->default('') 
                                     ->searchable()
-                                    ->required()
-                                    ->columnSpanFull(),
-                                Select::make('order_by')
-                                    ->label('Order By')
+                                    ->columnSpan(1),
+                                Select::make('pwd')
+                                    ->label('Person with Disability')
                                     ->options([
-                                        'male' =>     'Male',
-                                        'female' => 'Female',
-                                        'non-binary' => 'Non-binary',
-                                        'transgender' => 'Transgender',
-                                        'genderqueer' => 'Genderqueer',
-                                        'agender' => 'Agender',
-                                        'prefer not to say' => 'Prefer not to say'
+                                        true =>  'Yes',
+                                        false => 'No',
                                     ])
-                                    ->reactive()
+                                    ->columnSpan(1),
+                                Select::make('rpwuds')
+                                    ->label('Recovering Persons Who Used Drugs')
+                                    ->options([
+                                        true =>  'Yes',
+                                        false => 'No',
+                                    ])
+                                    ->columnSpan(1),
+                                Select::make('order_by_column')
+                                    ->label('Order By Column')
+                                    ->options([
+                                        'firstName'        => 'First Name',
+                                        'lastName'         => 'Last Name',
+                                        'categoryDescription' => 'Category Description',
+                                        'subDescription'   => 'Sub Description',
+                                        'shirtSize'        => 'Shirt Size',
+                                        'birthDate'        => 'Birth Date',
+                                        'address'          => 'Address',
+                                        'gender'           => 'Gender',
+                                        'distanceCategory' => 'Distance Category',
+                                    ])
                                     ->searchable()
-                                    ->required()
-                                    ->columnSpanFull(),
-                                
+                                    ->reactive()
+                                    ->columnSpan(1),
+                                Select::make('order_by_desc_asc')
+                                    ->label('Order By Desc/Asc')
+                                    ->options([
+                                        'DESC' =>  'DESC',
+                                        'ASC' => 'ASC',
+                                    ])
+                                    ->required(fn ($get) => !empty($get('order_by_column')))
+                                    ->visible(fn ($get) => !empty($get('order_by_column')))
+                                    ->columnSpan(1),
                                 TextEntry ::make('participantCount')
                                     ->label('Participants Found')
                                     ->columnSpanFull()

@@ -87,7 +87,7 @@ class ParticipantForm
                             ->required(),
                             
                         Radio::make('pwd')
-                            ->label('PWD')
+                            ->label('Person with Disability')
                             ->required()
                             ->options([
                                     false =>    'NO',
@@ -97,7 +97,7 @@ class ParticipantForm
                             ->inline()
                             ->reactive(),
                         Radio::make('rpwuds')
-                            ->label('RPWUDS')
+                            ->label('Recovering Person Who Used Drugs')
                             ->required()
                             ->options([
                                     false =>    'NO',
@@ -105,6 +105,7 @@ class ParticipantForm
                                    
                                 ])
                             ->inline()
+                            ->columnSpan(2)
                             ->reactive(),
                         ])
                         ->columns(5),
