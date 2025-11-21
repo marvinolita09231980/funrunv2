@@ -182,10 +182,12 @@ class FeedbackForm extends Page implements HasSchemas
                 ->whereDate('birthDate', $this->data['birthDate'])
                 ->first();
                
-            
+            $dataToSave = collect($this->data)
+            ->except(['feedback_exists']) // remove unwanted fields
+            ->toArray();
 
             if ($feedback) {
-                $feedback->update($this->data);
+                $feedback->update($dataToSave);
                 $notifmessage = "Record updated successfully.";
             } else {
                 Feedback::create($this->data);
