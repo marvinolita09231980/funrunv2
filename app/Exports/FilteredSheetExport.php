@@ -10,6 +10,7 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithHeadings;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use PhpOffice\PhpSpreadsheet\RichText\RichText;
@@ -51,6 +52,7 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
         // Main column headings (row 12)
         return [
             'No.',
+            'Race Bib',
             'Name',
             'Birth Date',
             'Age',
@@ -164,38 +166,39 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
                 }
 
                 // === SET FIXED COLUMN WIDTHS ===
-                $sheet->getColumnDimension('A')->setWidth(4);   // No.
-                $sheet->getColumnDimension('B')->setWidth(4);   // No.
-                $sheet->getColumnDimension('C')->setWidth(32);  // Race Bib
-                $sheet->getColumnDimension('D')->setWidth(15);  // Name
-                $sheet->getColumnDimension('E')->setWidth(6);  // Distance
-                $sheet->getColumnDimension('F')->setWidth(8);  // shirsize
-                $sheet->getColumnDimension('G')->setWidth(12);   // Ethnicity (IP) 
-                $sheet->getColumnDimension('H')->setWidth(30);   // Ethnicity (Non-IP)
-                $sheet->getColumnDimension('I')->setWidth(40);  // Gender (single column)
-                $sheet->getColumnDimension('J')->setWidth(15);  // Signature
+                $sheet->getColumnDimension('A')->setWidth(4);  
+                $sheet->getColumnDimension('B')->setWidth(4);  
+                $sheet->getColumnDimension('C')->setWidth(12); 
+                $sheet->getColumnDimension('D')->setWidth(32); 
+                $sheet->getColumnDimension('E')->setWidth(15); 
+                $sheet->getColumnDimension('F')->setWidth(6);  
+                $sheet->getColumnDimension('G')->setWidth(10); 
+                $sheet->getColumnDimension('H')->setWidth(12); 
+                $sheet->getColumnDimension('I')->setWidth(30); 
+                $sheet->getColumnDimension('J')->setWidth(40); 
+                $sheet->getColumnDimension('K')->setWidth(15); 
 
 
                 // === HEADER TEXT ===
-                $sheet->mergeCells('B1:J1');
+                $sheet->mergeCells('B1:K1');
                 $sheet->setCellValue('B1', 'Republic of the Philippines');
                 $sheet->getStyle('B1')->getFont()->setBold(true)->setSize(12);
                 $sheet->getStyle('B1')->getAlignment()->setHorizontal('center');
 
-                $sheet->mergeCells('B2:J2');
+                $sheet->mergeCells('B2:K2');
                 $sheet->setCellValue('B2', 'Province of Davao de Oro');
                 $sheet->getStyle('B2')->getAlignment()->setHorizontal('center');
 
-                $sheet->mergeCells('B3:J3');
+                $sheet->mergeCells('B3:K3');
                 $sheet->setCellValue('B3', 'OFFICE OF THE GOVERNOR');
                 $sheet->getStyle('B3')->getFont()->setBold(true);
                 $sheet->getStyle('B3')->getAlignment()->setHorizontal('center');
 
-                $sheet->mergeCells('B4:J4');
+                $sheet->mergeCells('B4:K4');
                 $sheet->setCellValue('B4', '4th Floor, Executive Bldg., Provincial Capitol Complex, Cabidianan, Nabunturan, Davao de Oro Province');
                 $sheet->getStyle('B4')->getAlignment()->setHorizontal('center');
 
-                $sheet->mergeCells('B5:J5');
+                $sheet->mergeCells('B5:K5');
                 $sheet->setCellValue('B5', 'SINGLET ATTENDANCE SHEET');
                 $sheet->getStyle('B5')->getFont()->setBold(true)->setSize(14);
                 $sheet->getStyle('B5')->getAlignment()->setHorizontal('center');
@@ -209,27 +212,27 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
                     'Data and information in this form are intended exclusively for the purpose of this activity. This will be kept by the process owner for the purpose of verifying and authenticating identity of the participants. Serving other purposes not intended by the process owner is a violation of Data Privacy Act of 2012. Data subjects voluntarily provided these data and information explicitly consenting the process owner to serve its purpose. Affixing your signature to this attendance sheet signifies your consent to the recording of statements, photographs, and/or audio or video and that these materials may be used by the process owner on internal and external channels/platforms.'
                 );
 
-                $sheet->mergeCells('B6:J8');
+                $sheet->mergeCells('B6:K8');
                 $sheet->setCellValue('B6', $richText);
 
                 // Formatting: font size 9, wrap text, and vertical alignment
-                $sheet->getStyle('B6:J8')->getFont()->setSize(9);
-                $sheet->getStyle('B6:J8')->getAlignment()->setWrapText(true);
-                $sheet->getStyle('B6:J8')->getAlignment()->setVertical('top');
+                $sheet->getStyle('B6:K8')->getFont()->setSize(9);
+                $sheet->getStyle('B6:K8')->getAlignment()->setWrapText(true);
+                $sheet->getStyle('B6:K8')->getAlignment()->setVertical('top');
 
                 // === ACTIVITY & DATE FIELDS ===
                 $sheet->setCellValue('B9', 'Activity:');
                 $sheet->mergeCells('B9:C9');
-                $sheet->mergeCells('D9:J9');
+                $sheet->mergeCells('D9:K9');
                 $sheet->setCellValue('B10', 'Date:');
                 $sheet->mergeCells('B10:C10');
-                $sheet->mergeCells('D10:J10');
+                $sheet->mergeCells('D10:K10');
 
                 // // === TABLE HEADER ROW ===
                  $sheet->fromArray($this->headings(), null, 'B12');
-                 $sheet->getStyle('B12:J12')->getFont()->setBold(true);
-                 $sheet->getStyle('B12:J12')->getAlignment()->setHorizontal('center');
-                 $sheet->getStyle('B12:J12')->getBorders()->getAllBorders()->setBorderStyle('thin');
+                 $sheet->getStyle('B12:K12')->getFont()->setBold(true);
+                 $sheet->getStyle('B12:K12')->getAlignment()->setHorizontal('center');
+                 $sheet->getStyle('B12:K12')->getBorders()->getAllBorders()->setBorderStyle('thin');
 
              
 
@@ -240,38 +243,101 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
                
 
 
+                $columnWidths = [
+                    'A' => 4,
+                    'B' => 4,
+                    'C' => 12,
+                    'D' => 32,
+                    'E' => 15,
+                    'F' => 6,
+                    'G' => 10,
+                    'H' => 12,
+                    'I' => 30,
+                    'J' => 40,
+                    'K' => 15,
+                ];
+
+                
+                $maxCharsPerCol = [];
+                foreach ($columnWidths as $col => $width) {
+                    
+                    $maxCharsPerCol[$col] = (int) floor($width * 1.1);
+                }
+
                 
                 $data = [];
-                $ctr = 1;
-                foreach ($participants as $p) {
-                    
+                foreach ($participants as $ctr => $p) {
                     $middle = $p->middleInitial ? "{$p->middleInitial}." : '';
                     $fullName = trim("{$p->lastName}, {$p->firstName} {$middle}");
                     $fullName = Str::title(strtolower($fullName));
                     $age = $p->birthDate ? Carbon::parse($p->birthDate)->age : '';
 
                     $data[] = [
-                        $ctr++, 
-                        $fullName, 
-                        $p->birthDate, 
-                        $age,               
+                        $ctr + 1,
+                        $p->singlet ?? '',
+                        $fullName,
+                        $p->birthDate,
+                        $age,
                         $p->distanceCategory ?? '',
                         $p->gender ?? '',
-                        $p->categoryDescription ?? '',                      
-                        $p->subDescription ?? '',                      
-                        $p->contactNumber ?? '',                        
+                        $p->categoryDescription ?? '',
+                        $p->subDescription ?? '',
+                        $p->contactNumber ?? '',
                     ];
                 }
 
-
-
-                // Insert participant rows starting from row 12, column B
+                
                 $sheet->fromArray($data, null, 'B13');
 
-                // Add border to all rows
                 $lastRow = 12 + count($data);
-                $sheet->getStyle("B12:J{$lastRow}")
+
+                
+                $sheet->getStyle("B12:K{$lastRow}")
                     ->getBorders()->getAllBorders()->setBorderStyle('thin');
+
+               
+                foreach ($columnWidths as $col => $width) {
+                    for ($row = 13; $row <= $lastRow; $row++) {
+                        $cellValue = $sheet->getCell("{$col}{$row}")->getValue();
+
+                       
+                        if ($cellValue !== null && strlen($cellValue) > $maxCharsPerCol[$col]) {
+                            $sheet->getStyle("{$col}{$row}")
+                                ->getAlignment()
+                                ->setWrapText(true);
+
+                            $sheet->getStyle("{$col}{$row}")
+                                ->getFont()
+                                ->setSize(9);
+                        }
+
+                        
+                        if ($col === 'I' && $cellValue !== null && strlen($cellValue) > 24) {
+                            $sheet->getStyle("{$col}{$row}")
+                                ->getAlignment()
+                                ->setWrapText(true);
+
+                            $sheet->getStyle("{$col}{$row}")
+                                ->getFont()
+                                ->setSize(9);
+                        }
+
+                        if ($col === 'J' && $cellValue !== null && strlen($cellValue) > 39) {
+                            $sheet->getStyle("{$col}{$row}")
+                                ->getAlignment()
+                                ->setWrapText(true);
+
+                            $sheet->getStyle("{$col}{$row}")
+                                ->getFont()
+                                ->setSize(9);
+                        }
+                    }
+                }
+
+               
+                $sheet->getStyle("D13:J{$lastRow}")
+                    ->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_TOP);
 
                 $certRow = 12 + $ctr + 2;
                 $sheet->setCellValue("B{$certRow}", 'Certified Correct:');
