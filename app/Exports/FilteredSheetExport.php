@@ -92,8 +92,22 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
                     ->when($this->gender, fn($query, $gender) => $query->where('gender', $gender))
                     ->when($this->pwd !== null, fn($query, $pwd) => $query->where('pwd', $pwd)) // if you have pwd field
                     // ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
-                    ->when($this->order_by_column, function($query) {
-                        $query->orderBy($this->order_by_column, $this->order_by_desc_asc ?? 'ASC');
+                    ->when($this->order_by_column, function ($query) {
+                        $allowed = [
+                            'firstName',
+                            'middleInitial',
+                            'lastName',
+                            'distanceCategory',
+                            'shirtSize',
+                            'gender',
+                            'categoryDescription',
+                            'subDescription',
+                            'birthDate',
+                            'contactNumber',
+                        ];
+                        if (in_array($this->order_by_column, $allowed)) {
+                            $query->orderByRaw("TRIM($this->order_by_column) " . ($this->order_by_desc_asc ?? 'ASC'));
+                        }
                     })
                     ->get();
                 
