@@ -169,6 +169,12 @@ class FeedbackForm extends Page implements HasSchemas
                 ->whereDate('birthDate', $this->data['birthDate'])
                 ->first();
 
+             $dataToSave = collect($this->data)
+                ->except(['feedback_exists']) // remove unwanted fields
+                ->toArray();
+
+            // dd($dataToSave);
+
             if(!$participant)
             {
                  throw ValidationException::withMessages([
@@ -182,10 +188,8 @@ class FeedbackForm extends Page implements HasSchemas
                 ->whereDate('birthDate', $this->data['birthDate'])
                 ->first();
                
-            $dataToSave = collect($this->data)
-            ->except(['feedback_exists']) // remove unwanted fields
-            ->toArray();
-
+           
+            
             if ($feedback) {
                 $feedback->update($dataToSave);
                 $notifmessage = "Record updated successfully.";

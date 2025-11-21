@@ -69,7 +69,7 @@
             
             <div class="pt-2">
                 <x-filament::button color="danger" size="lg"
-                    x-on:click="$dispatch('close-modal', { id: 'already-exists' })"
+                    x-on:click="$dispatch('close-modal', { id: 'not-found' })"
                     icon="heroicon-o-x-mark">
                     Close
                 </x-filament::button>
