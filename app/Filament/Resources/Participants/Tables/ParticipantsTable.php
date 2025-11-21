@@ -156,7 +156,7 @@ class ParticipantsTable
 
                             return Excel::download(
                                 new AttendanceSheetExport($data['subcategory'],$letterStart,$letterEnd),
-                                'attendance_sheet.xlsx'
+                                'singlet_attendance_sheet.xlsx'
                             );
                     })
                    ->schema([
@@ -265,7 +265,7 @@ class ParticipantsTable
 
                             return Excel::download(
                                 new FoodAttendanceSheetExport($data['subcategory'],$letterStart,$letterEnd),
-                                'attendance_sheet.xlsx'
+                                'food_attendance_sheet.xlsx'
                             );
                     })
                    ->schema([

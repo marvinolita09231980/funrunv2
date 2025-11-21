@@ -23,6 +23,28 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
     protected string $letterStart; 
     protected string $letterEnd; 
     protected string $year; 
+    protected array $agencyCodes = [
+    "PROVINCIAL GOVERNOR'S OFFICE" => 'PGO',
+    "PROVINCIAL ADMINISTRATOR'S OFFICE" => 'PAO',
+    "PROVINCIAL HUMAN RESOURCE MGT. AND DEVELOPMENT OFFICE" => 'PHRMDO',
+    "PROVINCIAL PLANNING & DEVELOPMENT OFFICE" => 'PPDO',
+    "PROVINCIAL GENERAL SERVICES OFFICE" => 'PGSO',
+    "PROVINCIAL BUDGET OFFICE" => 'PBO',
+    "PROVINCIAL ACCOUNTANT'S OFFICE" => 'PACCO',
+    "PROVINCIAL TREASURER'S OFFICE" => 'PTO',
+    "PROVINCIAL ASSESSOR'S OFFICE" => 'PASSO',
+    "PROVINCIAL LEGAL OFFICE" => 'PLO',
+    "PROVINCIAL HEALTH OFFICE" => 'PHO',
+    "PROVINCIAL SOCIAL WELFARE & DEV'T. OFFICE" => 'PSDWO',
+    "PROVINCIAL AGRICULTURIST'S OFFICE" => 'PAGRO',
+    "PROVINCIAL VETERINARY OFFICE" => 'PVO',
+    "PROVINCIAL ENVIRONMENT AND NATURAL RESOURCES OFFICE" => 'PENRO',
+    "PROVINCIAL ENGINEER'S OFFICE" => 'PEO',
+    "PROVINCIAL DISASTER RISK REDUCTION MANAGEMENT OFFICE" => 'PDRRMO',
+    "PROVINCIAL ECONOMIC ENTERPRISE & MGT OFFICE" => 'PEEMO',
+    "PROVINCIAL INTERNAL AUDIT OFFICE" => 'PIAO',
+    "PROVINCIAL INFORMATION AND COMMUNICATIONS TECHNOLOGY OFFICE" => 'PICTO',
+];
     
 
     public function __construct(string $subcategory,string $letterStart,string $letterEnd)
@@ -294,13 +316,23 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                     $other  = ($p->gender ?? '') !== 'male' && ($p->gender ?? '') !== 'female' ? ($p->gender ?? '') : '';
                      
                     if (($p->categoryDescription ?? '') === 'PLGU') {
-                        $words = array_filter(
-                            explode(' ', $p->subDescription ?? ''),
-                            fn($w) => strtolower($w) !== 'and'
-                        );
-                        $agency = strtoupper(
-                                implode('', array_map(fn($w) => $w[0] ?? '', $words))
-                         );
+
+                            $desc = $p->subDescription ?? '';
+
+                    
+                            if (isset($this->agencyCodes[$desc])) {
+                                $agency = $this->agencyCodes[$desc];
+                            } else {
+                                // fallback: generate acronym automatically
+                                $words = array_filter(
+                                    explode(' ', $desc),
+                                    fn($w) => strtolower($w) !== 'and'
+                                );
+                                $agency = strtoupper(
+                                    implode('', array_map(fn($w) => $w[0] ?? '', $words))
+                                );
+                            }
+
                     } else {
                         $agency = $p->subDescription ?? '';
                     }
