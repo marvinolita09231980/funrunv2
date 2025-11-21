@@ -24,7 +24,7 @@ class FeedbackForm extends Page implements HasSchemas
     use InteractsWithSchemas;
 
     public ?array $data = [];
-    
+    public ?string $errorMessage = null;
 
     protected string $view = 'filament.feedback.pages.feedback-form';
 
@@ -205,6 +205,8 @@ class FeedbackForm extends Page implements HasSchemas
                 ->first();
 
         } catch (\Throwable $th) {
+            
+            $this->errorMessage = $th->getMessage();
             $this->dispatch('open-modal', id: 'not-found', errorMessage: $this->errorMessage);
         }
     }
