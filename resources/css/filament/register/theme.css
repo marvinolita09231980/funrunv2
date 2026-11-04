@@ -2,3 +2,15 @@
 
 @source '../../../../app/Filament/Participant/**/*';
 @source '../../../../resources/views/filament/participant/**/*';
+
+.registration-form-page .fi-page-header-main-ctn .fi-header {
+    justify-content: center;
+}
+
+.registration-form-page .fi-page-header-main-ctn .fi-header > div {
+    width: 100%;
+}
+
+.registration-form-page .fi-header-heading {
+    text-align: center;
+}

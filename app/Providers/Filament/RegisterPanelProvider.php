@@ -26,7 +26,7 @@ class RegisterPanelProvider extends PanelProvider
     {
         return $panel
             ->id('register')
-            ->path('register')
+            ->path('kalamboan')
             ->colors([
                 'primary' => Color::Amber,
             ])

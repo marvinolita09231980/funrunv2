@@ -5,7 +5,10 @@ namespace App\Providers\Filament;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Pages\Dashboard;
+use App\Filament\Resources\Finishers\Pages\ListFinishers;
+use App\Filament\Resources\Participants\Pages\ListParticipants;
 use Filament\Support\Colors\Color;
+use Filament\Tables\View\TablesRenderHook;
 use Filament\Widgets\AccountWidget;
 use Javarex\DdoLogin\LoginDdoPlugin;
 use Filament\Widgets\FilamentInfoWidget;
@@ -31,12 +34,22 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->globalSearch(false)
-            ->brandName('Fun Run 2025') // ← Change this line
+            ->brandName('Fun Run ' . date('Y'))
             ->colors([
                 'primary' => Color::Amber,
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
+            ->renderHook(
+                TablesRenderHook::TOOLBAR_SEARCH_BEFORE,
+                fn () => view('filament.pages.partials.table-year-filter'),
+                scopes: ListParticipants::class,
+            )
+            ->renderHook(
+                TablesRenderHook::TOOLBAR_SEARCH_BEFORE,
+                fn () => view('filament.pages.partials.table-year-filter'),
+                scopes: ListFinishers::class,
+            )
             ->pages([
                 // Dashboard::class,
             ])

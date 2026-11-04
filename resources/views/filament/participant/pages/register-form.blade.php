@@ -35,20 +35,30 @@
                     </x-filament::link>
                 </span>
             </div>
-            <div class="flex justify-between items-center mt-4 w-full gap-x-2">
-                <button 
-                    class="bg-orange-300 px-8 py-3 rounded-lg text-center font-large whitespace-nowrap"
-                    :class="{'!bg-gray-300/60 !text-gray-600/80': !agreed}" 
-                    :disabled="!agreed && participantExists">
-                    Submit Registration
-                </button>
+            <div class="mt-6 flex flex-wrap items-center gap-3">
+                <x-filament::button
+                    type="submit"
+                    :color="$participantExists ? 'gray' : 'primary'"
+                    :disabled="$participantExists || ! ($data['waiver'] ?? false)"
+                    wire:loading.attr="disabled"
+                    wire:target="create, data"
+                >
+                    {{ $participantExists ? 'Already Exists' : 'Register' }}
+                </x-filament::button>
 
-                <button 
-                    class="bg-black-300 px-4 py-3 rounded-lg border-solid font-large" 
-                    :class="{'!bg-gray-300/60'}"
-                    @click="window.location.reload()">
-                    Clear
-                </button>
+                @if ($participantExists)
+                    <x-filament::button
+                        type="button"
+                        color="primary"
+                        outlined
+                        icon="heroicon-o-eye"
+                        wire:click="viewExistingParticipant"
+                        wire:loading.attr="disabled"
+                        wire:target="viewExistingParticipant, data"
+                    >
+                        View Info
+                    </x-filament::button>
+                @endif
             </div>
         </div>
     </form>
@@ -112,6 +122,166 @@
         </div>
     </x-filament::modal>
 
+    <x-filament::modal id="participant-existing" width="xl">
+        <x-slot name="heading">
+            Registration Already Exists
+        </x-slot>
+
+        <x-slot name="description">
+            This participant is already registered for the current year.
+        </x-slot>
+
+        @if ($existingParticipant)
+            <div class="space-y-6">
+                {{-- Participant summary --}}
+                <div class="rounded-xl bg-gray-50 p-5 ring-1 ring-gray-950/5
+                            dark:bg-white/5 dark:ring-white/10">
+                    <div class="flex items-start gap-4">
+                        <div class="flex h-12 w-12 shrink-0 items-center justify-center
+                                    rounded-full bg-amber-100 text-amber-600
+                                    dark:bg-amber-400/10 dark:text-amber-400">
+                            <x-filament::icon
+                                icon="heroicon-o-user"
+                                class="h-6 w-6"
+                            />
+                        </div>
+
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-medium uppercase tracking-wide
+                                    text-gray-500 dark:text-gray-400">
+                                Registered Participant
+                            </p>
+
+                            <h3 class="mt-1 break-words text-lg font-semibold
+                                    text-gray-950 dark:text-white">
+                                {{ $existingParticipant['name'] }}
+                            </h3>
+
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <x-filament::badge color="success">
+                                    Registered
+                                </x-filament::badge>
+
+                                <x-filament::badge color="gray">
+                                    Year {{ $existingParticipant['year'] }}
+                                </x-filament::badge>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Registration details --}}
+                <section aria-labelledby="existing-registration-details">
+                    <h4
+                        id="existing-registration-details"
+                        class="text-sm font-semibold text-gray-950 dark:text-white"
+                    >
+                        Registration Details
+                    </h4>
+
+                    <dl class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        @foreach ([
+                            'category' => 'Category',
+                            'distance' => 'Race Distance',
+                            'shirt_size' => 'Shirt Size',
+                        ] as $key => $label)
+                            <div class="rounded-lg border border-gray-200 p-4
+                                        dark:border-gray-700">
+                                <dt class="text-xs font-medium text-gray-500
+                                        dark:text-gray-400">
+                                    {{ $label }}
+                                </dt>
+
+                                <dd class="mt-1 break-words text-sm font-semibold
+                                        text-gray-950 dark:text-white">
+                                    {{ filled($existingParticipant[$key] ?? null)
+                                        ? $existingParticipant[$key]
+                                        : 'Not provided' }}
+                                </dd>
+                            </div>
+                        @endforeach
+
+                        <div class="rounded-lg border border-gray-200 p-4
+                                    dark:border-gray-700 sm:col-span-2">
+                            <dt class="text-xs font-medium text-gray-500
+                                    dark:text-gray-400">
+                                Organization / Description
+                            </dt>
+
+                            <dd class="mt-1 break-words text-sm font-semibold
+                                    text-gray-950 dark:text-white">
+                                {{ filled($existingParticipant['organization'] ?? null)
+                                    ? $existingParticipant['organization']
+                                    : 'Not provided' }}
+                            </dd>
+                        </div>
+                    </dl>
+                </section>
+
+                {{-- Registration history --}}
+                <section class="border-t border-gray-200 pt-5 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                        <x-filament::icon
+                            icon="heroicon-o-clock"
+                            class="h-4 w-4 text-gray-400"
+                        />
+
+                        <h4 class="text-sm font-semibold text-gray-950 dark:text-white">
+                            Registration History
+                        </h4>
+                    </div>
+
+                    <dl class="mt-3 space-y-3 text-sm">
+                        <div class="flex flex-col gap-1 sm:flex-row sm:justify-between sm:gap-4">
+                            <dt class="text-gray-500 dark:text-gray-400">
+                                Registered By
+                            </dt>
+
+                            <dd class="break-words font-medium text-gray-950
+                                    dark:text-white sm:text-right">
+                                {{ $existingParticipant['registered_by'] }}
+                            </dd>
+                        </div>
+
+                        <div class="flex flex-col gap-1 sm:flex-row sm:justify-between sm:gap-4">
+                            <dt class="text-gray-500 dark:text-gray-400">
+                                Date Registered
+                            </dt>
+
+                            <dd class="font-medium text-gray-950 dark:text-white
+                                    sm:text-right">
+                                {{ $existingParticipant['registered_at'] }}
+                            </dd>
+                        </div>
+                    </dl>
+                </section>
+
+                {{-- Guidance --}}
+                <div class="flex items-start gap-3 rounded-lg bg-amber-50 p-4
+                            text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">
+                    <x-filament::icon
+                        icon="heroicon-o-information-circle"
+                        class="h-5 w-5 shrink-0"
+                    />
+
+                    <p class="text-sm leading-relaxed">
+                        No additional registration is needed. If these details
+                        are incorrect, please contact the event organizers.
+                    </p>
+                </div>
+            </div>
+        @endif
+
+        <x-slot name="footerActions">
+            <x-filament::button
+                color="primary"
+                x-on:click="$dispatch('close-modal', { id: 'participant-existing' })"
+            >
+                Understood
+            </x-filament::button>
+        </x-slot>
+    </x-filament::modal>
+
 
     <x-filament::modal width="2xl"
     :close-by-escaping="false"
@@ -125,7 +295,7 @@
         
         <p>
             Purpose of Data Collection (in accordance with RA 10173): The Provincial Government of Davao de Oro requires your personal information to verify your 
-            participation in the <b>"Kalamboan: Dagan Kontra Droga 2025"</b> event organized by the Provincial Anti-Drug Abuse Council (PADAC). 
+            participation in the <b>"Kalamboan: Dagan Kontra Droga 2026"</b> event organized by the Provincial Anti-Drug Abuse Council (PADAC). 
         </p>
        
         <p>

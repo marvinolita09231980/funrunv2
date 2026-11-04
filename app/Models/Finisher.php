@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Finisher extends Model
 {
@@ -22,6 +23,11 @@ class Finisher extends Model
         'created_by',
         'finisher_rank',
     ];
+
+    public function participant(): BelongsTo
+    {
+        return $this->belongsTo(Participant::class, 'participants_id');
+    }
      
     public function getRankAttribute()
     {

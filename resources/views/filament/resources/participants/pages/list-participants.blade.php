@@ -1,6 +1,18 @@
 <x-filament-panels::page>
-    {{-- Default Filament Table --}}
-    {{ $this->table }}
+    <style>
+        .participants-table .fi-ta-header-toolbar > :nth-child(2) {
+            flex-wrap: wrap;
+        }
+
+        .participants-table .table-year-filter {
+            min-width: 8rem;
+            flex: 0 0 auto;
+        }
+    </style>
+
+    <div class="participants-table">
+        {{ $this->table }}
+    </div>
 
     {{-- Custom Modal --}}
     <x-filament::modal id="no-participants-found">

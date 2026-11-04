@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Participants\Tables;
 
 use livewire;
 use Filament\Tables\Table;
+use Filament\Tables\Enums\FiltersLayout;
 use App\Models\Participant;
 use App\Models\Subcategory;
 use Filament\Actions\Action;
@@ -22,14 +23,11 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Fieldset;
-use Filament\Tables\Filters\QueryBuilder;
+use Filament\Tables\Filters\SelectFilter;
 
-use Illuminate\Database\Eloquent\Builder;
 use App\Exports\FoodAttendanceSheetExport;
 use Filament\Infolists\Components\TextEntry;
 use App\Filament\Exports\ParticipantExporter;
-use Filament\Tables\Filters\QueryBuilder\Constraints\TextConstraint;
-use Filament\Tables\Filters\QueryBuilder\Constraints\SelectConstraint;
 
 
 class ParticipantsTable
@@ -38,69 +36,88 @@ class ParticipantsTable
     {
         
         return $table
-            ->modifyQueryUsing(function ($query) {
-                // Only show records created by the logged-in user
-                if (Auth::check() && Auth::user()->username !== 'superadmin' && Auth::user()->username !== 'phrmdo') {
-                    $query->where('created_by', Auth::user()->username)
-                          ->where('year',date('Y'));
+            ->modifyQueryUsing(function ($query, $livewire) {
+                $year = (int) ($livewire->getTableFilterState('year')['value'] ?? date('Y'));
+
+                $query->where('year', $year);
+
+                if (! Auth::check()) {
+                    return;
                 }
-                else if (Auth::check() && Auth::user()->username === 'phrmdo')
-                {
-                   $query->where('categoryDescription', 'PLGU')
-                         ->where('year',date('Y'));
+
+                $username = Auth::user()->username;
+
+                if ($username === 'phrmdo') {
+                    $query->where('categoryDescription', 'PLGU');
+
+                    return;
                 }
-                else if(Auth::check() && Auth::user()->username === 'superadmin')
-                {
-                      $query->where('year',date('Y'));
-                }
-                else if(Auth::check() && Auth::user()->username === 'superadmin')
-                {
-                      $query->where('year',date('Y'));
+
+                if ($username !== 'superadmin') {
+                    $query->where('created_by', $username);
                 }
             })
             ->columns([
-                TextColumn::make('firstName')->label('First Name')
-                ->searchable(),
-                TextColumn::make('lastName')->label('Last Name')
-                ->searchable(),
-                TextColumn::make('categoryDescription')->label('Category')
-                ->searchable(),
-                TextColumn::make('subDescription')->label('Organization')
-                ->searchable(),
-                TextColumn::make('gender')->label('Gender')
-                ->searchable(),
-                TextColumn::make('created_by')->label('Created By')
-                ->searchable(),
+                TextColumn::make('mobile_participant_summary')
+                    ->label('Participant')
+                    ->getStateUsing(function (Participant $record): string {
+                        $middleInitial = filled($record->middleInitial)
+                            ? ' ' . rtrim($record->middleInitial, '.') . '.'
+                            : '';
+
+                        return "{$record->lastName}, {$record->firstName}{$middleInitial}";
+                    })
+                    ->description(function (Participant $record): string {
+                        return collect([
+                            $record->categoryDescription,
+                            $record->subDescription,
+                            filled($record->gender) ? ucfirst($record->gender) : null,
+                            filled($record->created_by) ? "Added by {$record->created_by}" : null,
+                        ])->filter()->join(' • ');
+                    })
+                    ->weight('bold')
+                    ->wrap()
+                    ->hiddenFrom('md'),
+                TextColumn::make('firstName')
+                    ->label('First Name')
+                    ->searchable()
+                    ->visibleFrom('md'),
+                TextColumn::make('lastName')
+                    ->label('Last Name')
+                    ->searchable()
+                    ->visibleFrom('md'),
+                TextColumn::make('categoryDescription')
+                    ->label('Category')
+                    ->searchable()
+                    ->visibleFrom('md'),
+                TextColumn::make('subDescription')
+                    ->label('Organization')
+                    ->searchable()
+                    ->wrap()
+                    ->visibleFrom('md'),
+                TextColumn::make('gender')
+                    ->label('Gender')
+                    ->searchable()
+                    ->visibleFrom('md'),
+                TextColumn::make('created_by')
+                    ->label('Created By')
+                    ->searchable()
+                    ->visibleFrom('md'),
             ])
             ->recordUrl(null)
             ->filters([
-                QueryBuilder::make()
-                    ->constraints([
-                        SelectConstraint::make('year')
-                        ->options(
-                                collect(range(date('Y'), date('Y') - 5))
-                                    ->mapWithKeys(fn($year) => [$year => $year])
-                                    ->toArray()
-                            ),
-                            
-                        ])
-                        ->modifyQueryUsing(function(Builder $query, array $data){
-                            $year = date('Y');
-
-                            if (!empty($data['rules']) && is_array($data['rules'])) {
-                                foreach ($data['rules'] as $rule) {
-                                    if (($rule['type'] ?? null) === 'year') {
-                                        $year = $rule['data']['settings']['value'] ?? $year;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            return $query->where('year', $year);
-                        }),
-                
-                     
-            ])
+                SelectFilter::make('year')
+                    ->label('Year')
+                    ->options(
+                        collect(range((int) date('Y'), (int) date('Y') - 5))
+                            ->mapWithKeys(fn (int $year): array => [$year => $year])
+                            ->all()
+                    )
+                    ->default(date('Y'))
+                    ->selectablePlaceholder(false)
+                    ->query(fn ($query) => $query),
+            ], layout: FiltersLayout::Hidden)
+            ->deferFilters(false)
             ->recordActions([
                  EditAction::make(),
             ])

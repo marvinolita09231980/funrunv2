@@ -8,6 +8,8 @@ use App\Models\Subcategory;
 use Filament\Support\RawJs;
 use Filament\Schemas\Schema;
 use Livewire\Attributes\Computed;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\DB;
 use Filament\Forms\Components\Radio;
 use Illuminate\Support\Facades\Auth;
@@ -30,24 +32,37 @@ use Illuminate\Validation\ValidationException;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use App\Filament\Resources\Participants\Schemas\ParticipantForm;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RegisterForm extends Page implements HasSchemas
 {
     use InteractsWithSchemas;
     
-    protected static ?string $slug = 'kalamboan/funrun-register2';
-    protected static ?string $title = 'Kalamboan Fun Run Registration';
+    protected static ?string $slug = 'funrun-register';
+    protected static ?string $title = 'Kalamboan PADAC Dagan Kontra Droga 2026';
     protected string $view = 'filament.participant.pages.register-form';
   
     public array $data = [];
     public ?string $errorMessage = null;
     public bool $participantExists = false;
+    public ?array $existingParticipant = null;
 
    
     
-    public function getHeading(): string
+    public function getHeading(): string | Htmlable
     {
-        return __('Fun Run 2025');
+        return new HtmlString(
+            '<span style="display: block; text-align: center; line-height: 1.2;">'
+            . '<span style="display: block;">Kalamboan</span>'
+            . '<span style="display: block;">PADAC Dagan Kontra Droga 2026</span>'
+            . '</span>'
+        );
+    }
+
+    public function getExtraBodyAttributes(): array
+    {
+        return ['class' => 'registration-form-page'];
     }
      
     
@@ -70,27 +85,29 @@ class RegisterForm extends Page implements HasSchemas
             Fieldset::make('Personal Information')
                 ->schema([
                     TextInput::make('firstName')
-                            ->required()
-                            ->columnSpan(2)
-                            ->reactive()
-                            ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-
-                            }),
+                        ->required()
+                        ->columnSpan(2)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(function (): void {
+                            $this->checkParticipantExists();
+                        }),
                     TextInput::make('lastName')
-                            ->required()
-                            ->columnSpan(2)
-                            ->reactive()
-                            ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                
-                            }),
+                        ->required()
+                        ->columnSpan(2)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(function (): void {
+                            $this->checkParticipantExists();
+                        }),
                     TextInput::make('middleInitial')
-                            ->maxLength(1),
+                            ->maxLength(1)
+                            ->disabled(fn (): bool => $this->participantExists),
                     DatePicker::make('birthDate')
-                            ->columnSpan(2)
-                            ->required()
-                            ->live(debounce:500)
-                            ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                            }),
+                        ->required()
+                        ->columnSpan(2)
+                        ->live()
+                        ->afterStateUpdated(function (): void {
+                            $this->checkParticipantExists();
+                        }),
 
                     Select::make('gender')
                             ->required()
@@ -104,9 +121,11 @@ class RegisterForm extends Page implements HasSchemas
                                 'prefer not to say' => 'Prefer not to say'
                             ])
                             ->searchable()
+                            ->disabled(fn (): bool => $this->participantExists)
                             ->columnSpan(3),
                     TextInput::make('address')
                             ->columnSpan(5)
+                            ->disabled(fn (): bool => $this->participantExists)
                             ->required(),
 
                     TextInput::make('contactNumber')
@@ -116,6 +135,7 @@ class RegisterForm extends Page implements HasSchemas
                                 JS))
                             ->stripCharacters(' ')
                             ->columnSpan(2)
+                            ->disabled(fn (): bool => $this->participantExists)
                             ->required(),
                     Radio::make('pwd')
                             ->label('Person With Disability')
@@ -126,6 +146,7 @@ class RegisterForm extends Page implements HasSchemas
                                     true =>    'YES',
                                 ])
                             ->inline()
+                            ->disabled(fn (): bool => $this->participantExists)
                             ->reactive(),
                     Radio::make('rpwuds')
                         ->label('Recovering Person Who Used Drugs')
@@ -137,15 +158,18 @@ class RegisterForm extends Page implements HasSchemas
                             ])
                         ->inline()
                         ->columnSpan(2)
+                        ->disabled(fn (): bool => $this->participantExists)
                         ->reactive(),
                     
                 
                 ])
                 ->columns(5),
                 Fieldset::make('Funrun Information')
+                    ->disabled(fn (): bool => $this->participantExists)
                     ->schema([
                         Select::make('categoryDescription')
                             ->label('Category')
+                            
                             ->required()
                             ->options([
                                 'OPEN CATEGORY' => 'OPEN CATEGORY',
@@ -154,6 +178,9 @@ class RegisterForm extends Page implements HasSchemas
                             ->columnSpanFull() 
                             ->hint(function ($get) {
                                 $year = now()->year;
+                                if ($this->participantExists) {
+                                    return null;
+                                }
                                 $category = $get('categoryDescription');
                               
 
@@ -195,14 +222,17 @@ class RegisterForm extends Page implements HasSchemas
                                 return null;
                             })
                             ->hintColor('danger')
+                          
                             ->reactive(),
                         TextInput::make('subDescription')
                             ->label('Description')
+                           
                             ->hint('Name of your organization (e.g., Individual, Family/Group, Couple, Team, or Company)')
                             ->required()
                             ->columnSpanFull(),
                             
                         Select::make('shirtSize')
+                            
                             ->options([
                                 'xs' =>     'XS',
                                 'small' => 'Small',
@@ -218,6 +248,7 @@ class RegisterForm extends Page implements HasSchemas
                             ->required(),
                             
                         Radio::make('distanceCategory')
+                           
                             ->required()
                             ->options([
                                     '3km' =>    '3KM',
@@ -237,11 +268,9 @@ class RegisterForm extends Page implements HasSchemas
                         //     ->inline()
                         //     ->reactive(),
                     ]),
-                    Toggle::make('waiver')
-                    ->label('Waiver?')
+                    \Filament\Forms\Components\Hidden::make('waiver')
                     ->default(false)
-                    ->inline(false)
-                    ->hidden(),        
+                    ->rules(['accepted']),
              ])
             ->statePath('data');
     }
@@ -285,16 +314,36 @@ class RegisterForm extends Page implements HasSchemas
     //     return false;
     // }
     
-   
+     
 
    
 
     public function create()
     {
-        $this->validate();
+        if ($this->checkParticipantExists()) {
+            return;
+        }
+
+        $this->validate(
+            [
+                'data.waiver' => ['required', 'accepted'],
+            ],
+            [
+                'data.waiver.required' =>
+                    'Please read and agree to the terms and waiver before registering.',
+
+                'data.waiver.accepted' =>
+                    'You must agree to the terms and waiver before registering.',
+            ]
+        );
+
+        $this->data = $this->form->getState();
+
+        $this->data['firstName'] = trim($this->data['firstName']);
+        $this->data['lastName'] = trim($this->data['lastName']);
         try {
 
-            $this->data['waiver'] = true;
+           
             $this->data['referenceNumber'] = '0';
             $this->data['created_by'] = 'opencategory';
             
@@ -314,13 +363,11 @@ class RegisterForm extends Page implements HasSchemas
 
            
               $max_n =  Subcategory::query()
-                        ->select([
-                            'subcategories.*',
-                            DB::raw("(SELECT COUNT(*) 
-                                      FROM participants 
-                                      WHERE participants.categoryDescription = subcategories.categoryDescription 
-                                      AND participants.year = '2025') AS registered"),
-                        ])
+                        ->select('subcategories.*')
+                        ->selectRaw("(SELECT COUNT(*)
+                                      FROM participants
+                                      WHERE participants.categoryDescription = subcategories.categoryDescription
+                                      AND participants.year = ?) AS registered", [$this->data['year']])
                         ->where('categoryDescription',$this->data['categoryDescription'])
                         ->first();
 
@@ -342,7 +389,11 @@ class RegisterForm extends Page implements HasSchemas
              
             $this->dispatch('open-modal', id: 'registration-success');
             
-            $this->data = [];
+            $this->participantExists = false;
+            $this->existingParticipant = null;
+            $this->form->fill([
+                'waiver' => false,
+            ]);
 
             $this->errorMessage = null; 
         
@@ -357,5 +408,133 @@ class RegisterForm extends Page implements HasSchemas
                 $this->dispatch('open-modal', id: 'already-exists', errorMessage: 'An unexpected error occurred. Please try again.');
             }
         }
+    }
+
+
+    private function checkParticipantExists(): bool
+    {
+        $firstName = trim((string) ($this->data['firstName'] ?? ''));
+        $lastName = trim((string) ($this->data['lastName'] ?? ''));
+        $birthDate = $this->data['birthDate'] ?? null;
+
+        $wasDuplicate = $this->participantExists;
+
+        $this->participantExists = false;
+        $this->existingParticipant = null;
+
+        $fieldsToFill = [
+            'middleInitial',
+            'gender',
+            'address',
+            'contactNumber',
+            'pwd',
+            'rpwuds',
+            'categoryDescription',
+            'subDescription',
+            'shirtSize',
+            'distanceCategory',
+        ];
+
+        // Clear previously loaded information when the identity changes.
+        if ($wasDuplicate) {
+            foreach ($fieldsToFill as $field) {
+                $this->data[$field] = null;
+            }
+        }
+
+        if ($firstName === '' || $lastName === '' || blank($birthDate)) {
+            return false;
+        }
+
+        $participant = Participant::query()
+            ->where('year', now()->year)
+            ->where('firstName', $firstName)
+            ->where('lastName', $lastName)
+            ->whereDate('birthDate', $birthDate)
+            ->first();
+
+        if (! $participant) {
+            return false;
+        }
+
+        $this->participantExists = true;
+
+        // Fill the remaining fields without saving any changes.
+        foreach ($fieldsToFill as $field) {
+            $this->data[$field] = $participant->getAttribute($field);
+        }
+
+        $this->form->fill($this->data);
+
+        // Preserve the keys used by your existing professional modal.
+        $this->existingParticipant = [
+            'name' => trim(
+                $participant->firstName . ' ' .
+                ($participant->middleInitial
+                    ? $participant->middleInitial . '. '
+                    : '') .
+                $participant->lastName
+            ),
+            'year' => $participant->year,
+            'category' => $participant->categoryDescription,
+            'organization' => $participant->subDescription,
+            'distance' => strtoupper((string) $participant->distanceCategory),
+            'shirt_size' => strtoupper((string) $participant->shirtSize),
+            'registered_by' => $participant->created_by ?: 'Not recorded',
+            'registered_at' => $participant->created_at
+                ? $participant->created_at->format('F d, Y h:i A')
+                : 'Not recorded',
+        ];
+
+        $this->dispatch('open-modal', id: 'participant-existing');
+
+        return true;
+    }
+
+
+    public function viewExistingParticipant(): void
+    {
+        // Refresh the information from the database before opening.
+        $this->checkParticipantExists();
+    }
+    public function downloadRegistrationReceipt(): ?StreamedResponse
+    {
+        $identity = validator($this->data, [
+            'firstName' => ['required', 'string'],
+            'lastName' => ['required', 'string'],
+            'birthDate' => ['required', 'date'],
+        ])->validate();
+
+        $participant = Participant::query()
+            ->where('year', now()->year)
+            ->where('firstName', trim($identity['firstName']))
+            ->where('lastName', trim($identity['lastName']))
+            ->whereDate('birthDate', $identity['birthDate'])
+            ->first();
+
+        if (! $participant) {
+            Notification::make()
+                ->title('Registration not found')
+                ->body('Please check the participant details and try again.')
+                ->warning()
+                ->send();
+
+            return null;
+        }
+
+        $pdfContent = Pdf::loadView(
+            'pdf.registration-receipt',
+            ['participant' => $participant]
+        )
+            ->setPaper('a4')
+            ->output();
+
+        return response()->streamDownload(
+            static function () use ($pdfContent): void {
+                echo $pdfContent;
+            },
+            "registration-receipt-{$participant->year}-{$participant->id}.pdf",
+            ['Content-Type' => 'application/pdf']
+        );
     }
 }
