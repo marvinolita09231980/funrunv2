@@ -24,8 +24,7 @@ class EditParticipant extends EditRecord
         return [
             CreateAction::make()
                 ->label('Create New Participant'),
-            DeleteAction::make()
-            ->visible(fn ($record) => $record->created_by === Auth::user()->username),
+            DeleteAction::make(),
          
         ];
     }
@@ -33,27 +32,40 @@ class EditParticipant extends EditRecord
     protected function mutateFormDataBeforeSave(array $data):array
     {
         
-        $year = now()->year;
-        $exists = Participant::where('firstName', $this->data['firstName'])
-            ->where('lastName', $this->data['lastName'])
-            ->whereDate('birthDate', $this->data['birthDate'])
-            ->where('year',$year)
-            ->where('created_by',Auth::user()->username)
-            ->exists();
-         
-         if (!$exists) {
+        if (
+            Auth::user()->isAdministrativeOfficer()
+            && ! Auth::user()->administersCategory($data['categoryDescription'] ?? null)
+        ) {
                 Notification::make()
                     ->danger()
-                    ->title('Not Authorize')
-                    ->body('You are not the creator of this participant')
+                    ->title('Not Authorized')
+                    ->body('You may only edit participants in your administered category.')
                     ->send();
                
                 throw ValidationException::withMessages([
-                    'firstName' => 'Not Authorize! You are not the creator of this participant.',
+                    'categoryDescription' => 'You may only edit participants in your administered category.',
                 ]);
-            }
+        }
 
-        return $this->data;
+        if (
+            Auth::user()->hasRole('focal user')
+            && ! Auth::user()->canManageParticipantData(
+                $data['categoryDescription'] ?? null,
+                $data['subDescription'] ?? null,
+            )
+        ) {
+            Notification::make()
+                ->danger()
+                ->title('Not Authorized')
+                ->body('You may only edit participants in your assigned subcategory.')
+                ->send();
+
+            throw ValidationException::withMessages([
+                'subDescription' => 'You may only edit participants in your assigned subcategory.',
+            ]);
+        }
+
+        return $data;
     }
 
     // protected function getFormActions(): array

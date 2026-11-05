@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Subcategories\Pages;
 
+use App\Models\CategoryAllocation;
+use App\Models\User;
 use App\Filament\Resources\Subcategories\SubcategoriesResource;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
@@ -9,6 +11,41 @@ use Filament\Resources\Pages\EditRecord;
 class EditSubcategories extends EditRecord
 {
     protected static string $resource = SubcategoriesResource::class;
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $allocation = CategoryAllocation::query()
+            ->where('categoryDescription', $this->record->categoryDescription)
+            ->first();
+
+        if (! $allocation) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'data.nop' => 'Set the main-category allocation before changing subcategory capacity.',
+            ]);
+        }
+
+        if (! $allocation->accommodatesSubcategoryCapacity(
+            (int) $data['nop'],
+            $this->record->getKey(),
+        )) {
+            $available = $allocation->allocated_participants
+                - $allocation->distributedParticipants($this->record->getKey());
+
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'data.nop' => 'This capacity exceeds the available main-category allocation of ' . max(0, $available) . '.',
+            ]);
+        }
+
+        $focalUser = User::query()->where('username', $data['username'] ?? null)->first();
+
+        if (! $focalUser?->isFocalUserForCategory($this->record->categoryDescription)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'data.username' => 'Select a focal user assigned to this main category.',
+            ]);
+        }
+
+        return $data;
+    }
 
     protected function getHeaderActions(): array
     {

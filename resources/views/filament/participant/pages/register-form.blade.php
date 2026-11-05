@@ -1,9 +1,13 @@
 <x-filament-panels::page>
 <div  x-data="{
-        agreed: @entangle('data.waiver'),
-        participantExists: @entangle('participantExists')
+        agreed: @entangle('data.waiver').live,
+        participantExists: @entangle('participantExists'),
+        categoryFull: @entangle('categoryFull')
     }">
-    <form class="p-3 border-3 border-orange-300/50 shadow-2xl rounded-2xl" wire:submit="create">
+    <form
+        class="p-3 border-3 border-orange-300/50 shadow-2xl rounded-2xl"
+        wire:submit="create"
+    >
        
         @if ($errorMessage)
             <div 
@@ -21,12 +25,57 @@
             </div>
         @endif
         {{ $this->form }}
+
+        @if ($categoryFull && ! $participantExists)
+            <div
+                role="alert"
+                class="mt-4 flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-red-900
+                       dark:border-red-500/40 dark:bg-red-400/10 dark:text-red-200"
+            >
+                <x-filament::icon
+                    icon="heroicon-o-no-symbol"
+                    class="mt-0.5 h-5 w-5 shrink-0"
+                />
+
+                <div class="text-sm leading-6">
+                    <p class="font-semibold">Registration Closed for This Category</p>
+                    <p class="mt-1">
+                        Participant slots are already full. You cannot continue with this registration.
+                    </p>
+                </div>
+            </div>
+        @endif
         
         <div class="flex flex-col gap-4">
+            <div
+                role="note"
+                class="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900
+                       dark:border-amber-500/40 dark:bg-amber-400/10 dark:text-amber-200"
+            >
+                <x-filament::icon
+                    icon="heroicon-o-exclamation-triangle"
+                    class="mt-0.5 h-5 w-5 shrink-0"
+                />
+
+                <div class="text-sm leading-6">
+                    <p class="font-semibold">Important Registration Notice</p>
+                    <p class="mt-1">
+                        By registering, you certify that all information provided is complete,
+                        accurate, and truthful. You must present a valid ID when claiming your
+                        race kit. If any information provided is found to be false, inaccurate, or
+                        misleading, the runner may be disqualified from participating in or winning
+                        the event.
+                    </p>
+                </div>
+            </div>
+
             <div>
                 <span class="hover:cursor-default">
                     <label>
-                        <x-filament::input.checkbox wire:model="data.waiver"/>
+                        <x-filament::input.checkbox
+                            x-model="agreed"
+                            x-bind:disabled="categoryFull"
+                        />
                         I have read and agree to the  
             
                     </label>
@@ -38,12 +87,13 @@
             <div class="mt-6 flex flex-wrap items-center gap-3">
                 <x-filament::button
                     type="submit"
-                    :color="$participantExists ? 'gray' : 'primary'"
-                    :disabled="$participantExists || ! ($data['waiver'] ?? false)"
+                    :color="$participantExists || $categoryFull ? 'gray' : 'primary'"
+                    :disabled="$participantExists || $categoryFull"
+                    x-bind:disabled="participantExists || categoryFull || ! agreed"
                     wire:loading.attr="disabled"
                     wire:target="create, data"
                 >
-                    {{ $participantExists ? 'Already Exists' : 'Register' }}
+                    {{ $participantExists ? 'Already Exists' : ($categoryFull ? 'Slots Full' : 'Register') }}
                 </x-filament::button>
 
                 @if ($participantExists)
@@ -62,34 +112,6 @@
             </div>
         </div>
     </form>
-
-    <x-filament::modal id="registration-success" alignment="center" width="md">
-        <div class="flex flex-col items-center justify-center space-y-6 p-8">
-            <!-- Success Icon -->
-            <div class="flex items-center justify-center w-16 h-16 rounded-full bg-green-100 text-green-600">
-                <x-heroicon-o-check-circle class="w-10 h-10" />
-            </div>
-
-            <!-- Title -->
-            <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 text-center">
-                Registration Successful!
-            </h2>
-
-            <!-- Message -->
-            <p class="text-center text-gray-600 dark:text-gray-300 text-base leading-relaxed">
-                Thank you for registering for the <strong>Kalamboan Fun Run</strong>!  
-                Your information has been successfully recorded.  
-                
-            </p>
-
-            <!-- Action Button -->
-            <div class="pt-4">
-                <x-filament::button color="success" x-on:click="$dispatch('close-modal', { id: 'registration-success' })">
-                    Got it!
-                </x-filament::button>
-            </div>
-        </div>
-    </x-filament::modal>
 
     <x-filament::modal id="already-exists" alignment="center" width="md">
         <div class="flex flex-col items-center justify-center space-y-6 p-8">
@@ -122,13 +144,55 @@
         </div>
     </x-filament::modal>
 
+    <x-filament::modal id="registration-full" alignment="center" width="md">
+        <div class="flex flex-col items-center justify-center space-y-5 p-6 text-center">
+            <div class="flex h-20 w-20 items-center justify-center rounded-full border-4 border-red-500 bg-red-600/10 shadow-lg">
+                <x-heroicon-o-no-symbol class="h-12 w-12 text-red-600" />
+            </div>
+
+            <div>
+                <h2 class="text-3xl font-extrabold tracking-tight text-red-700 dark:text-red-400">
+                    Registration Is Full
+                </h2>
+
+                <p class="mt-3 text-base leading-relaxed text-gray-700 dark:text-gray-300">
+                    All participant slots for the Open Category have been filled.
+                    Registration cannot continue at this time.
+                </p>
+            </div>
+
+            <div class="w-full border-t border-red-200 pt-5 dark:border-red-800">
+                <x-filament::button
+                    color="danger"
+                    size="lg"
+                    icon="heroicon-o-x-mark"
+                    x-on:click="$dispatch('close-modal', { id: 'registration-full' })"
+                >
+                    Close
+                </x-filament::button>
+            </div>
+        </div>
+    </x-filament::modal>
+
+    @if ($categoryFull)
+        <span
+            class="hidden"
+            aria-hidden="true"
+            x-init="$nextTick(() => $dispatch('open-modal', { id: 'registration-full' }))"
+        ></span>
+    @endif
+
     <x-filament::modal id="participant-existing" width="xl">
         <x-slot name="heading">
-            Registration Already Exists
+            {{ $registrationSuccessful ? 'Registration Successful!' : 'Registration Already Exists' }}
         </x-slot>
 
         <x-slot name="description">
-            This participant is already registered for the current year.
+            {{ $registrationSuccessful
+                ? 'Your registration has been recorded. Review the information below and download your receipt.'
+                : (($existingParticipant['can_download_receipt'] ?? false)
+                    ? 'This participant is already registered for the current year.'
+                    : 'This participant is already registered under another category for the current year.') }}
         </x-slot>
 
         @if ($existingParticipant)
@@ -137,11 +201,13 @@
                 <div class="rounded-xl bg-gray-50 p-5 ring-1 ring-gray-950/5
                             dark:bg-white/5 dark:ring-white/10">
                     <div class="flex items-start gap-4">
-                        <div class="flex h-12 w-12 shrink-0 items-center justify-center
-                                    rounded-full bg-amber-100 text-amber-600
-                                    dark:bg-amber-400/10 dark:text-amber-400">
+                        <div @class([
+                            'flex h-12 w-12 shrink-0 items-center justify-center rounded-full',
+                            'bg-green-100 text-green-600 dark:bg-green-400/10 dark:text-green-400' => $registrationSuccessful,
+                            'bg-amber-100 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400' => ! $registrationSuccessful,
+                        ])>
                             <x-filament::icon
-                                icon="heroicon-o-user"
+                                :icon="$registrationSuccessful ? 'heroicon-o-check-circle' : 'heroicon-o-user'"
                                 class="h-6 w-6"
                             />
                         </div>
@@ -181,6 +247,8 @@
 
                     <dl class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
                         @foreach ([
+                            'participant_number' => 'Participant Number',
+                            'registration_count' => 'Participants in Registration',
                             'category' => 'Category',
                             'distance' => 'Race Distance',
                             'shirt_size' => 'Shirt Size',
@@ -218,6 +286,48 @@
                     </dl>
                 </section>
 
+                @if (filled($existingParticipant['additional_participants'] ?? []))
+                    <section class="border-t border-gray-200 pt-5 dark:border-gray-700">
+                        <div class="flex items-center gap-2">
+                            <x-filament::icon
+                                icon="heroicon-o-user-group"
+                                class="h-5 w-5 text-gray-400"
+                            />
+
+                            <h4 class="text-sm font-semibold text-gray-950 dark:text-white">
+                                Additional Participants
+                            </h4>
+                        </div>
+
+                        <ul class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            @foreach ($existingParticipant['additional_participants'] as $additionalParticipant)
+                                <li class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                                    <div class="min-w-0">
+                                        <p class="break-words text-sm font-semibold text-gray-950 dark:text-white">
+                                            <span class="text-primary-600 dark:text-primary-400">{{ $loop->iteration }}.&nbsp;</span>{{ $additionalParticipant['name'] }}
+                                        </p>
+
+                                        <dl class="mt-2 grid grid-cols-2 gap-2 text-xs">
+                                            <div>
+                                                <dt class="text-gray-500 dark:text-gray-400">Gender</dt>
+                                                <dd class="mt-0.5 font-medium text-gray-950 dark:text-white">
+                                                    {{ $additionalParticipant['gender'] }}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt class="text-gray-500 dark:text-gray-400">Shirt Size</dt>
+                                                <dd class="mt-0.5 font-medium text-gray-950 dark:text-white">
+                                                    {{ $additionalParticipant['shirt_size'] }}
+                                                </dd>
+                                            </div>
+                                        </dl>
+                                    </div>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </section>
+                @endif
+
                 {{-- Registration history --}}
                 <section class="border-t border-gray-200 pt-5 dark:border-gray-700">
                     <div class="flex items-center gap-2">
@@ -243,6 +353,23 @@
                             </dd>
                         </div>
 
+                        @if (filled($existingParticipant['registered_by_phone'] ?? null))
+                            <div class="flex flex-col gap-1 sm:flex-row sm:justify-between sm:gap-4">
+                                <dt class="text-gray-500 dark:text-gray-400">
+                                    Contact Number
+                                </dt>
+
+                                <dd class="font-medium text-gray-950 dark:text-white sm:text-right">
+                                    <a
+                                        class="text-primary-600 hover:underline dark:text-primary-400"
+                                        href="tel:{{ $existingParticipant['registered_by_phone'] }}"
+                                    >
+                                        {{ $existingParticipant['registered_by_phone'] }}
+                                    </a>
+                                </dd>
+                            </div>
+                        @endif
+
                         <div class="flex flex-col gap-1 sm:flex-row sm:justify-between sm:gap-4">
                             <dt class="text-gray-500 dark:text-gray-400">
                                 Date Registered
@@ -257,27 +384,62 @@
                 </section>
 
                 {{-- Guidance --}}
-                <div class="flex items-start gap-3 rounded-lg bg-amber-50 p-4
-                            text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">
+                <div @class([
+                    'flex items-start gap-3 rounded-lg p-4',
+                    'bg-green-50 text-green-800 dark:bg-green-400/10 dark:text-green-300' => $registrationSuccessful,
+                    'bg-amber-50 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300' => ! $registrationSuccessful,
+                ])>
                     <x-filament::icon
-                        icon="heroicon-o-information-circle"
+                        :icon="$registrationSuccessful ? 'heroicon-o-arrow-down-tray' : 'heroicon-o-information-circle'"
                         class="h-5 w-5 shrink-0"
                     />
 
                     <p class="text-sm leading-relaxed">
-                        No additional registration is needed. If these details
-                        are incorrect, please contact the event organizers.
+                        @if ($registrationSuccessful)
+                            Save your registration receipt and present it when requested by the event organizers.
+                        @elseif (! ($existingParticipant['can_download_receipt'] ?? false))
+                            This participant was added by {{ $existingParticipant['registered_by'] }}.
+                            Please contact this person if you need assistance with the existing registration.
+                            @if (filled($existingParticipant['registered_by_phone'] ?? null))
+                                You may call
+                                <a
+                                    class="font-semibold underline"
+                                    href="tel:{{ $existingParticipant['registered_by_phone'] }}"
+                                >{{ $existingParticipant['registered_by_phone'] }}</a>.
+                            @endif
+                        @else
+                            No additional registration is needed. If these details
+                            are incorrect, please contact the event organizers.
+                        @endif
                     </p>
                 </div>
             </div>
         @endif
 
         <x-slot name="footerActions">
+            @if ($existingParticipant && ($existingParticipant['can_download_receipt'] ?? false))
+                <x-filament::button
+                    color="success"
+                    icon="heroicon-o-arrow-down-tray"
+                    wire:click="downloadRegistrationReceipt"
+                    wire:loading.attr="disabled"
+                    wire:target="downloadRegistrationReceipt"
+                >
+                    <span wire:loading.remove wire:target="downloadRegistrationReceipt">
+                        Download Receipt
+                    </span>
+                    <span wire:loading wire:target="downloadRegistrationReceipt">
+                        Preparing Receipt...
+                    </span>
+                </x-filament::button>
+            @endif
+
             <x-filament::button
-                color="primary"
+                color="gray"
+                outlined
                 x-on:click="$dispatch('close-modal', { id: 'participant-existing' })"
             >
-                Understood
+                {{ $registrationSuccessful ? 'Done' : 'Close' }}
             </x-filament::button>
         </x-slot>
     </x-filament::modal>

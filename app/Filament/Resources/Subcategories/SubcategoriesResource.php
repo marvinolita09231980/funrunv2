@@ -14,6 +14,9 @@ use App\Filament\Resources\Subcategories\Pages\ListSubcategories;
 use App\Filament\Resources\Subcategories\Pages\CreateSubcategories;
 use App\Filament\Resources\Subcategories\Schemas\SubcategoriesForm;
 use App\Filament\Resources\Subcategories\Tables\SubcategoriesTable;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class SubcategoriesResource extends Resource
 {
@@ -31,6 +34,26 @@ class SubcategoriesResource extends Resource
     public static function table(Table $table): Table
     {
         return SubcategoriesTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return self::applyVisibilityForUser(
+            parent::getEloquentQuery()->with('focalUser'),
+            Auth::user(),
+        );
+    }
+
+    public static function applyVisibilityForUser(Builder $query, ?User $user): Builder
+    {
+        if (! $user?->isAdministrativeOfficer()) {
+            return $query;
+        }
+
+        return $query->whereIn(
+            'categoryDescription',
+            $user->administeredCategoryNames(),
+        );
     }
 
     public static function getRelations(): array

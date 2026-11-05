@@ -19,6 +19,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
 {
+    protected string $category;
     protected string $subcategory; 
     protected string $letterStart; 
     protected string $letterEnd; 
@@ -47,8 +48,15 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
 ];
     
 
-    public function __construct(string $subcategory,string $letterStart,string $letterEnd)
+    public function __construct(
+        string $category,
+        string $subcategory,
+        string $letterStart,
+        string $letterEnd,
+    )
     {
+        $this->category = $category;
+
         $this->subcategory = $subcategory;
 
         $this->letterStart = $letterStart;
@@ -82,13 +90,11 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
             
                 // === PARTICIPANT DATA ===
 
-                $category = $this->subcategory;
-
                 if ($this->letterStart > $this->letterEnd) {
                     [$this->letterStart, $this->letterEnd] = [$this->letterEnd, $this->letterStart];
                 }
                 
-                if($this->subcategory === 'OPEN CATEGORY')
+                if($this->category === 'OPEN CATEGORY')
                 {
                             $participants = Participant::select(
                             'firstName', 
@@ -100,7 +106,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                             'categoryDescription',
                             'subDescription'
                             )
-                            ->where('categoryDescription', 'OPEN CATEGORY') ->where('year', $this->year)
+                            ->where('categoryDescription', $this->category)->where('year', $this->year)
                             ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
                             ->orderBy('lastName')
                             ->orderBy('firstName')
@@ -118,8 +124,9 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                         'categoryDescription',
                         'subDescription'
                         )
+                        ->where('categoryDescription', $this->category)
                         ->where('subDescription', $this->subcategory)
-                        ->where('categoryDescription', '!=', 'OPEN CATEGORY')->where('year', $this->year)
+                        ->where('year', $this->year)
                         ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
                         ->orderBy('lastName')
                         ->orderBy('firstName')

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Participants\Schemas;
 use livewire;
 use App\Models\Participant;
 use App\Models\Subcategory;
+use App\Models\User;
 use Filament\Support\RawJs;
 use Illuminate\Support\Str;
 use Filament\Schemas\Schema;
@@ -36,16 +37,16 @@ class ParticipantForm
                             ->required()
                             ->columnSpan(2)
                             ->reactive()
-                            ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                    $exists = self::checkAndFillParticipant($get, $set);
+                            ->afterStateUpdated(function ($state, callable $set, $get, $component, $livewire) {
+                                    self::checkAndFillParticipant($get, $set, $livewire);
                                     
                             }),
                         TextInput::make('lastName')
                             ->required()
                             ->columnSpan(2)
                             ->reactive()
-                            ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                    $exists =self::checkAndFillParticipant($get, $set);
+                            ->afterStateUpdated(function ($state, callable $set, $get, $component, $livewire) {
+                                    self::checkAndFillParticipant($get, $set, $livewire);
                                     
                             }),
 
@@ -55,8 +56,8 @@ class ParticipantForm
                             ->columnSpan(2)
                             ->required()
                             ->reactive()
-                            ->afterStateUpdated(function ($state, callable $set, $get,$component) {
-                                   $exists = self::checkAndFillParticipant($get, $set);
+                            ->afterStateUpdated(function ($state, callable $set, $get, $component, $livewire) {
+                                   self::checkAndFillParticipant($get, $set, $livewire);
                                   
                             }),
 
@@ -113,18 +114,7 @@ class ParticipantForm
                             ->schema([
                                 Select::make('categoryDescription')
                                    ->required()
-                                   ->options(function () {
-
-                                        if (Auth::check() && Auth::user()->username === 'superadmin') {
-                                            return Subcategory::query()
-                                             ->distinct()
-                                             ->pluck('categoryDescription', 'categoryDescription');
-                                        }
-                                        return Subcategory::query()
-                                            ->where('username', Auth::check()?Auth::user()->username:'opencategory')
-                                            ->pluck('categoryDescription', 'categoryDescription');
-
-                                    })
+                                   ->options(fn (): array => self::categoryOptionsForUser(Auth::user()))
                                     ->searchable()
                                     ->reactive()
                                     ->columnSpanFull(),
@@ -144,15 +134,10 @@ class ParticipantForm
                                             return []; 
                                         }
 
-                                        $query = Subcategory::query()
-                                                    ->where('categoryDescription', $category);
-
-                                        if (Auth::check() && Auth::user()->username !== 'superadmin') {
-                                            $query->where('username', Auth::user()->username);
-                                        }
-
-                                        return $query->distinct()
-                                                    ->pluck('subDescription', 'subDescription');
+                                        return self::subcategoryOptionsForUser(
+                                            Auth::user(),
+                                            $category,
+                                        );
                                                
                                     })
                                     ->searchable()
@@ -242,7 +227,11 @@ class ParticipantForm
     
 
 
-    private static function checkAndFillParticipant(callable $get, callable $set): bool
+    private static function checkAndFillParticipant(
+        callable $get,
+        callable $set,
+        object $livewire,
+    ): bool
     {
         $firstName  = $get('firstName');
         $lastName   = $get('lastName');
@@ -259,6 +248,9 @@ class ParticipantForm
                 ->first();
 
             if ($participant) {
+                if (method_exists($livewire, 'showExistingParticipantModal')) {
+                    $livewire->showExistingParticipantModal($participant);
+                }
               
                 $set('middleInitial', $participant->middleInitial);
                 $set('gender', $participant->gender);
@@ -273,5 +265,51 @@ class ParticipantForm
             } 
         }
         return false;
+    }
+
+    public static function categoryOptionsForUser(?User $user): array
+    {
+        $query = Subcategory::query()->whereNotNull('categoryDescription');
+
+        if ($user?->isAdministrativeOfficer()) {
+            $query->whereIn('categoryDescription', $user->administeredCategoryNames());
+        } elseif (! $user?->hasAnyRole(['admin', 'superadmin', 'super_admin'])) {
+            $query->where('username', $user?->username ?? 'opencategory');
+        }
+
+        return $query
+            ->distinct()
+            ->orderBy('categoryDescription')
+            ->pluck('categoryDescription', 'categoryDescription')
+            ->all();
+    }
+
+    public static function subcategoryOptionsForUser(?User $user, ?string $category): array
+    {
+        if (blank($category)) {
+            return [];
+        }
+
+        if (
+            $user?->isAdministrativeOfficer()
+            && ! $user->administersCategory($category)
+        ) {
+            return [];
+        }
+
+        $query = Subcategory::query()->where('categoryDescription', $category);
+
+        if (
+            ! $user?->isAdministrativeOfficer()
+            && ! $user?->hasAnyRole(['admin', 'superadmin', 'super_admin'])
+        ) {
+            $query->where('username', $user?->username ?? 'opencategory');
+        }
+
+        return $query
+            ->distinct()
+            ->orderBy('subDescription')
+            ->pluck('subDescription', 'subDescription')
+            ->all();
     }
 }

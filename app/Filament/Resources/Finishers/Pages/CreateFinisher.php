@@ -30,6 +30,11 @@ class CreateFinisher extends Page implements HasTable
 
     protected string $view = 'filament.resources.finishers.pages.create-finisher';
 
+    public static function canAccess(array $parameters = []): bool
+    {
+        return static::getResource()::canCreate();
+    }
+
     public function getTitle(): string
     {
         return 'Record Finisher';

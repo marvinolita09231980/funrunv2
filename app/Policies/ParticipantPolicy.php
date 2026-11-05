@@ -4,67 +4,82 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Participant;
+use App\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class ParticipantPolicy
 {
     use HandlesAuthorization;
     
-    public function viewAny(AuthUser $authUser): bool
+    public function viewAny(User $authUser): bool
     {
         return $authUser->can('ViewAny:Participant');
     }
 
-    public function view(AuthUser $authUser, Participant $participant): bool
+    public function view(User $authUser, Participant $participant): bool
     {
-        return $authUser->can('View:Participant');
+        return $authUser->can('View:Participant')
+            && (
+                ! $authUser->hasRole('focal user')
+                || $authUser->canManageParticipant($participant)
+            );
     }
 
-    public function create(AuthUser $authUser): bool
+    public function create(User $authUser): bool
     {
         return $authUser->can('Create:Participant');
     }
 
-    public function update(AuthUser $authUser, Participant $participant): bool
+    public function update(User $authUser, Participant $participant): bool
     {
-        return $authUser->can('Update:Participant');
+        return $authUser->can('Update:Participant')
+            && $authUser->canManageParticipant($participant);
     }
 
-    public function delete(AuthUser $authUser, Participant $participant): bool
+    public function delete(User $authUser, Participant $participant): bool
     {
-        return $authUser->can('Delete:Participant');
+        return $authUser->can('Delete:Participant')
+            && $authUser->canManageParticipant($participant);
     }
 
-    public function restore(AuthUser $authUser, Participant $participant): bool
+    public function restore(User $authUser, Participant $participant): bool
     {
-        return $authUser->can('Restore:Participant');
+        return ! $authUser->hasRole('focal user')
+            && $authUser->can('Restore:Participant')
+            && $authUser->canManageParticipant($participant);
     }
 
-    public function forceDelete(AuthUser $authUser, Participant $participant): bool
+    public function forceDelete(User $authUser, Participant $participant): bool
     {
-        return $authUser->can('ForceDelete:Participant');
+        return ! $authUser->hasRole('focal user')
+            && $authUser->can('ForceDelete:Participant')
+            && $authUser->canManageParticipant($participant);
     }
 
-    public function forceDeleteAny(AuthUser $authUser): bool
+    public function forceDeleteAny(User $authUser): bool
     {
-        return $authUser->can('ForceDeleteAny:Participant');
+        return ! $authUser->hasRole('focal user')
+            && $authUser->can('ForceDeleteAny:Participant');
     }
 
-    public function restoreAny(AuthUser $authUser): bool
+    public function restoreAny(User $authUser): bool
     {
-        return $authUser->can('RestoreAny:Participant');
+        return ! $authUser->hasRole('focal user')
+            && $authUser->can('RestoreAny:Participant');
     }
 
-    public function replicate(AuthUser $authUser, Participant $participant): bool
+    public function replicate(User $authUser, Participant $participant): bool
     {
-        return $authUser->can('Replicate:Participant');
+        return ! $authUser->hasRole('focal user')
+            && $authUser->can('Replicate:Participant')
+            && $authUser->canManageParticipant($participant);
     }
 
-    public function reorder(AuthUser $authUser): bool
+    public function reorder(User $authUser): bool
     {
-        return $authUser->can('Reorder:Participant');
+        return ! $authUser->hasRole('focal user')
+            && $authUser->can('Reorder:Participant');
     }
 
 }
