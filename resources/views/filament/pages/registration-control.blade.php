@@ -235,6 +235,15 @@
             background: #f8fafc;
         }
 
+        .registration-link-action.is-messenger {
+            color: #ffffff;
+            background: #0866ff;
+        }
+
+        .registration-link-action.is-messenger:hover {
+            background: #075ce5;
+        }
+
         .registration-state-note {
             display: flex;
             align-items: flex-start;
@@ -450,6 +459,38 @@
                         <x-filament::icon icon="heroicon-o-clipboard-document" />
                         <span data-copy-label>Copy Registration Link</span>
                     </button>
+
+                    <a
+                        class="registration-link-action is-messenger"
+                        href="https://www.messenger.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-registration-url="{{ $publicRegistrationUrl }}"
+                        onclick="
+                            if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && navigator.share) {
+                                event.preventDefault();
+                                const messengerButton = this;
+
+                                navigator.share({
+                                    title: 'Kalamboan Fun Run Registration',
+                                    text: 'Register online for the Kalamboan Fun Run.',
+                                    url: messengerButton.dataset.registrationUrl,
+                                }).catch((error) => {
+                                    if (error.name !== 'AbortError') {
+                                        navigator.clipboard?.writeText(messengerButton.dataset.registrationUrl).catch(() => {});
+                                        window.open(messengerButton.href, '_blank', 'noopener,noreferrer');
+                                    }
+                                });
+                            } else {
+                                navigator.clipboard?.writeText(this.dataset.registrationUrl).catch(() => {});
+                            }
+                        "
+                    >
+                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12 2C6.5 2 2 6.1 2 11.2c0 2.9 1.4 5.5 3.7 7.2V22l3.4-1.9c.9.2 1.9.4 2.9.4 5.5 0 10-4.1 10-9.2S17.5 2 12 2Zm1 12.4-2.5-2.7-4.8 2.7 5.3-5.6 2.5 2.7 4.8-2.7-5.3 5.6Z" />
+                        </svg>
+                        Share on Messenger
+                    </a>
                 </div>
 
                 <div class="registration-state-note">
