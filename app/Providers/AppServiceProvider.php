@@ -6,6 +6,7 @@ use App\Services\AuditLogger;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 // use Illuminate\Support\ServiceProvider;
 use Filament\Panel;
+use Filament\Forms\Components\DateTimePicker;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Event;
 
@@ -24,6 +25,22 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        DateTimePicker::configureUsing(function (DateTimePicker $field): void {
+            if (! $field->hasDate()) {
+                return;
+            }
+
+            $field
+                ->view('filament.forms.components.typed-date-picker')
+                ->native(false)
+                ->displayFormat(fn (): string => $field->hasTime()
+                    ? ($field->hasSeconds() ? 'm/d/Y H:i:s' : 'm/d/Y H:i')
+                    : 'm/d/Y')
+                ->placeholder(fn (): string => $field->hasTime()
+                    ? ($field->hasSeconds() ? 'mm/dd/yyyy hh:mm:ss' : 'mm/dd/yyyy hh:mm')
+                    : 'mm/dd/yyyy');
+        });
+
         Event::listen(
             'eloquent.updated: *',
             fn (string $event, array $models) => AuditLogger::recordUpdated($models[0] ?? null),
