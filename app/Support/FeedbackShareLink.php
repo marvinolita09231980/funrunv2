@@ -70,12 +70,9 @@ class FeedbackShareLink
         imagefilledrectangle($canvas, 48, 48, 851, 1071, $white);
         imagerectangle($canvas, 48, 48, 851, 1071, $border);
 
-        $regularFont = base_path('vendor/dompdf/dompdf/lib/fonts/DejaVuSans.ttf');
-        $boldFont = base_path('vendor/dompdf/dompdf/lib/fonts/DejaVuSans-Bold.ttf');
-
-        self::drawCenteredText($canvas, 'PADAC FUN RUN 2026', $boldFont, 34, 115, $accent);
-        self::drawCenteredText($canvas, 'Feedback Form', $boldFont, 30, 165, $heading);
-        self::drawCenteredText($canvas, 'Scan the QR code or open the link below', $regularFont, 18, 205, $muted);
+        self::drawCenteredBitmapText($canvas, 'PADAC FUN RUN 2026', 3.2, 80, $accent);
+        self::drawCenteredBitmapText($canvas, 'FEEDBACK FORM', 2.6, 140, $heading);
+        self::drawCenteredBitmapText($canvas, 'Scan the QR code or open the link below', 1.5, 195, $muted);
 
         $qrImage = imagecreatefromstring(self::qrCodePng());
         $qrSize = 650;
@@ -95,9 +92,9 @@ class FeedbackShareLink
             imagesy($qrImage),
         );
 
-        self::drawCenteredText($canvas, 'Feedback form link', $boldFont, 17, 950, $heading);
-        self::drawCenteredFittedText($canvas, self::url(), $regularFont, 20, 995, 760, $accent);
-        self::drawCenteredText($canvas, 'Tap or type the link above to open the form', $regularFont, 15, 1035, $muted);
+        self::drawCenteredBitmapText($canvas, 'FEEDBACK FORM LINK', 1.5, 930, $heading);
+        self::drawCenteredFittedBitmapText($canvas, self::url(), 1.5, 975, 760, $accent);
+        self::drawCenteredBitmapText($canvas, 'Tap or type the link above to open the form', 1.2, 1025, $muted);
 
         ob_start();
         imagepng($canvas, null, 9);
@@ -109,39 +106,59 @@ class FeedbackShareLink
         return $png;
     }
 
-    private static function drawCenteredFittedText(
+    private static function drawCenteredFittedBitmapText(
         \GdImage $image,
         string $text,
-        string $font,
-        int $fontSize,
-        int $baseline,
+        float $preferredScale,
+        int $top,
         int $maximumWidth,
         int $color,
     ): void {
-        while (($fontSize > 11) && (self::textWidth($text, $font, $fontSize) > $maximumWidth)) {
-            $fontSize--;
-        }
+        $naturalWidth = imagefontwidth(5) * strlen($text);
+        $scale = min($preferredScale, $maximumWidth / max(1, $naturalWidth));
 
-        self::drawCenteredText($image, $text, $font, $fontSize, $baseline, $color);
+        self::drawCenteredBitmapText($image, $text, $scale, $top, $color);
     }
 
-    private static function drawCenteredText(
+    private static function drawCenteredBitmapText(
         \GdImage $image,
         string $text,
-        string $font,
-        int $fontSize,
-        int $baseline,
+        float $scale,
+        int $top,
         int $color,
     ): void {
-        $x = (int) ((self::DOWNLOAD_WIDTH - self::textWidth($text, $font, $fontSize)) / 2);
+        $font = 5;
+        $sourceWidth = max(1, imagefontwidth($font) * strlen($text));
+        $sourceHeight = imagefontheight($font);
+        $textImage = imagecreatetruecolor($sourceWidth, $sourceHeight);
+        $transparent = imagecolorallocatealpha($textImage, 0, 0, 0, 127);
+        $red = ($color >> 16) & 0xFF;
+        $green = ($color >> 8) & 0xFF;
+        $blue = $color & 0xFF;
+        $textColor = imagecolorallocate($textImage, $red, $green, $blue);
 
-        imagettftext($image, $fontSize, 0, $x, $baseline, $color, $font, $text);
-    }
+        imagealphablending($textImage, false);
+        imagesavealpha($textImage, true);
+        imagefill($textImage, 0, 0, $transparent);
+        imagestring($textImage, $font, 0, 0, $text, $textColor);
 
-    private static function textWidth(string $text, string $font, int $fontSize): int
-    {
-        $box = imagettfbbox($fontSize, 0, $font, $text);
+        $targetWidth = max(1, (int) round($sourceWidth * $scale));
+        $targetHeight = max(1, (int) round($sourceHeight * $scale));
+        $x = (int) ((self::DOWNLOAD_WIDTH - $targetWidth) / 2);
 
-        return (int) abs($box[2] - $box[0]);
+        imagecopyresampled(
+            $image,
+            $textImage,
+            $x,
+            $top,
+            0,
+            0,
+            $targetWidth,
+            $targetHeight,
+            $sourceWidth,
+            $sourceHeight,
+        );
+
+        imagedestroy($textImage);
     }
 }
