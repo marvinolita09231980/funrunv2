@@ -2,11 +2,12 @@
 
 namespace App\Providers;
 
-use Filament\Panel;
-// use Illuminate\Support\ServiceProvider;
+use App\Services\AuditLogger;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
-use Illuminate\Support\Facades\Route;
+// use Illuminate\Support\ServiceProvider;
+use Filament\Panel;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
+use Illuminate\Support\Facades\Event;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,7 +24,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-      //
+        Event::listen(
+            'eloquent.updated: *',
+            fn (string $event, array $models) => AuditLogger::recordUpdated($models[0] ?? null),
+        );
+
+        Event::listen(
+            'eloquent.deleted: *',
+            fn (string $event, array $models) => AuditLogger::recordDeleted($models[0] ?? null),
+        );
     }
 
     public function panel(Panel $panel): Panel
