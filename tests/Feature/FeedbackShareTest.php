@@ -30,9 +30,16 @@ class FeedbackShareTest extends TestCase
             ->assertSee('Scan to Open the Feedback Form')
             ->assertSee('http://localhost/feedback/feedback-form')
             ->assertDontSee('configured-host.example')
-            ->assertSee('Share on Messenger')
+            ->assertSee('Share QR on Messenger')
+            ->assertSee('Download QR')
             ->assertSee('https://www.messenger.com/')
+            ->assertSee('http://localhost/feedback/feedback-qr-code.png')
+            ->assertSee('http://localhost/feedback/share-feedback-form')
+            ->assertSee('download="padac-fun-run-2026-feedback-qr.png"', false)
             ->assertSee('navigator.share')
+            ->assertSee('url: shareButton.dataset.shareUrl', false)
+            ->assertDontSee('new File(', false)
+            ->assertDontSee('Please complete the PADAC Fun Run 2026 feedback form.')
             ->assertDontSee('fb-messenger://')
             ->assertDontSee('Share on Facebook')
             ->assertDontSee(':alignment="$alignment"', false)
@@ -40,13 +47,46 @@ class FeedbackShareTest extends TestCase
             ->assertDontSee('isSticky ? `width:', false);
 
         preg_match(
-            '/<img[^>]+src="(data:image\/svg\+xml;base64,[^"]+)"[^>]+alt="QR code for the PADAC Fun Run feedback form"/s',
+            '/<img[^>]+src="(data:image\/png;base64,[^"]+)"[^>]+alt="QR code for the PADAC Fun Run feedback form"/s',
             $response->getContent(),
             $matches,
         );
 
         $this->assertNotEmpty($matches[1] ?? null);
-        $this->assertStringStartsWith('data:image/svg+xml;base64,', $matches[1]);
+        $this->assertStringStartsWith('data:image/png;base64,', $matches[1]);
+    }
+
+    public function test_feedback_qr_code_can_be_downloaded_as_a_png(): void
+    {
+        $response = $this->get('/feedback/feedback-qr-code.png')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png')
+            ->assertDownload('padac-fun-run-2026-feedback-qr.png');
+
+        $this->assertStringStartsWith("\x89PNG\r\n\x1a\n", $response->getContent());
+
+        $imageSize = getimagesizefromstring($response->getContent());
+
+        $this->assertSame(900, $imageSize[0]);
+        $this->assertSame(1120, $imageSize[1]);
+    }
+
+    public function test_clickable_share_page_uses_the_qr_as_its_social_preview(): void
+    {
+        $this->get('/feedback/share-feedback-form')
+            ->assertOk()
+            ->assertSee('<meta property="og:url" content="http://localhost/feedback/share-feedback-form" />', false)
+            ->assertSee('<meta property="og:image" content="http://localhost/feedback/feedback-qr-code-preview.png" />', false)
+            ->assertSee('<meta property="og:image:type" content="image/png" />', false)
+            ->assertSee('window.location.replace', false)
+            ->assertSee('http://localhost/feedback/feedback-form');
+
+        $preview = $this->get('/feedback/feedback-qr-code-preview.png')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png')
+            ->assertHeader('Content-Disposition', 'inline; filename="padac-fun-run-2026-feedback-qr.png"');
+
+        $this->assertStringStartsWith("\x89PNG\r\n\x1a\n", $preview->getContent());
     }
 
     public function test_feedback_page_has_social_preview_metadata(): void
