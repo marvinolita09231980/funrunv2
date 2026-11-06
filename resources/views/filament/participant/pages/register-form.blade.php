@@ -1,4 +1,30 @@
 <x-filament-panels::page>
+@if (! $registrationEnabled)
+    <section class="mx-auto w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+        <div class="h-2 bg-gradient-to-r from-amber-400 via-orange-500 to-red-500"></div>
+
+        <div class="px-6 py-12 text-center sm:px-12 sm:py-16">
+            <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-50 text-amber-600 ring-8 ring-amber-50/60 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/5">
+                <x-filament::icon icon="heroicon-o-lock-closed" class="h-10 w-10" />
+            </div>
+
+            <p class="mt-8 text-xs font-semibold uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">
+                Registration Notice
+            </p>
+            <h2 class="mt-3 text-3xl font-bold tracking-tight text-gray-950 dark:text-white sm:text-4xl">
+                Registration Temporarily Closed
+            </h2>
+            <p class="mx-auto mt-5 max-w-xl text-base leading-7 text-gray-600 dark:text-gray-300">
+                Online registration for the Kalamboan PADAC Dagan Kontra Droga 2026 is not accepting submissions at this time.
+                Please check this page again for updates.
+            </p>
+
+            <div class="mx-auto mt-8 max-w-lg rounded-2xl bg-gray-50 px-5 py-4 text-sm leading-6 text-gray-600 ring-1 ring-inset ring-gray-950/5 dark:bg-white/5 dark:text-gray-300 dark:ring-white/10">
+                Existing registrations remain recorded. No participant information has been removed.
+            </div>
+        </div>
+    </section>
+@else
 <div  x-data="{
         agreed: @entangle('data.waiver').live,
         participantExists: @entangle('participantExists'),
@@ -534,5 +560,5 @@
    
     </x-filament::modal>
 </div>
-
+@endif
 </x-filament-panels::page>
