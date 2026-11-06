@@ -313,7 +313,7 @@
             <article class="dashboard-stat-card dashboard-tone-slate">
                 <div class="dashboard-stat-top">
                     <div>
-                        <p class="dashboard-stat-label">Total Allotment</p>
+                        <p class="dashboard-stat-label">Total Distributed Allotment</p>
                         <p class="dashboard-stat-value">{{ number_format($stats['allocated']) }}</p>
                     </div>
                     <span class="dashboard-stat-icon-wrap">

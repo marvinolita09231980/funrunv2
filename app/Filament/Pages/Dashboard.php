@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\CategoryAllocation;
 use App\Models\Participant;
 use App\Models\Subcategory;
 use Filament\Facades\Filament;
@@ -174,7 +175,14 @@ class Dashboard extends BaseDashboard implements HasTable
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(distanceCategory)) = '10km' THEN 1 ELSE 0 END) AS total_10k")
             ->first();
 
-        $allocated = (int) Subcategory::query()->sum('nop');
+        $subcategoryAllocation = (int) Subcategory::query()->sum('nop');
+        $openCategoryAllocation = (int) CategoryAllocation::query()
+            ->whereIn(
+                DB::raw('LOWER(TRIM(categoryDescription))'),
+                ['open', 'open category'],
+            )
+            ->sum('allocated_participants');
+        $allocated = $subcategoryAllocation + $openCategoryAllocation;
         $registered = (int) ($counts->total ?? 0);
         $capacityPercentage = $allocated > 0
             ? min(100, (int) round(($registered / $allocated) * 100))

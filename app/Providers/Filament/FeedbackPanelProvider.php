@@ -27,6 +27,7 @@ class FeedbackPanelProvider extends PanelProvider
         return $panel
             ->id('feedback')
             ->path('feedback')
+            ->brandName('PADAC Furn Run 2026')
             ->colors([
                 'primary' => Color::Amber,
             ])
