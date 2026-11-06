@@ -59,6 +59,11 @@ class RegistrationControlTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(RegistrationControl::class)
+            ->assertSee('Official Online Registration')
+            ->assertSee('Open Online Registration')
+            ->assertSee('Copy Registration Link')
+            ->assertDontSee('Quick guide')
+            ->assertDontSee('How it works')
             ->assertSee('http://localhost/kalamboan/funrun-register')
             ->assertDontSee('configured-host.example');
     }
