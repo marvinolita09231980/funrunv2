@@ -49,7 +49,10 @@ class UserPolicy
 
     public function delete(User $authUser, User $user): bool
     {
-        if ($this->isProtectedSuperAdmin($authUser, $user)) {
+        if (
+            $this->isProtectedSuperAdmin($authUser, $user)
+            || $user->hasActiveCategoryAssignments()
+        ) {
             return false;
         }
 
@@ -72,7 +75,10 @@ class UserPolicy
 
     public function forceDelete(User $authUser, User $user): bool
     {
-        if ($this->isProtectedSuperAdmin($authUser, $user)) {
+        if (
+            $this->isProtectedSuperAdmin($authUser, $user)
+            || $user->hasActiveCategoryAssignments()
+        ) {
             return false;
         }
 

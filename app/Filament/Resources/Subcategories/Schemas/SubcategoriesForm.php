@@ -25,6 +25,7 @@ class SubcategoriesForm
                 TextInput::make('nop')
                     ->label('Maximum Participants')
                     ->numeric()
+                    ->live()
                     ->minValue(fn (?Subcategory $record): int => $record?->minimumCapacity() ?? 0)
                     ->helperText(function (Get $get, ?Subcategory $record): ?string {
                         $allocation = CategoryAllocation::query()
@@ -49,7 +50,8 @@ class SubcategoriesForm
                     ->required()
                     ->disabled(fn (): bool => Auth::user()?->isAdministrativeOfficer() ?? false),
                 Select::make('username')
-                    ->label('Assigned Focal User')
+                    ->label('Assigned Focal User or AO')
+                    ->helperText('Optional when the allocation is 0. Administrative Officers assigned to this main category may also be selected.')
                     ->options(function (Get $get): array {
                         $category = $get('categoryDescription');
 
@@ -61,7 +63,7 @@ class SubcategoriesForm
                     })
                     ->searchable()
                     ->reactive()
-                    ->required(),
+                    ->required(fn (Get $get): bool => (int) ($get('nop') ?? 0) > 0),
                    
             ]);
     }
@@ -72,8 +74,35 @@ class SubcategoriesForm
             return [];
         }
 
-        return User::role('focal user')
-            ->where('assigned_category', $category)
+        return User::query()
+            ->where(function ($query) use ($category): void {
+                $query
+                    ->where(function ($query) use ($category): void {
+                        $query
+                            ->where('assigned_category', $category)
+                            ->whereHas(
+                                'roles',
+                                fn ($query) => $query->where('name', 'focal user'),
+                            );
+                    })
+                    ->orWhere(function ($query) use ($category): void {
+                        $query
+                            ->whereHas(
+                                'roles',
+                                fn ($query) => $query->whereIn(
+                                    'name',
+                                    ['administrative officer', 'ao'],
+                                ),
+                            )
+                            ->whereHas(
+                                'administeredCategoryAllocations',
+                                fn ($query) => $query->where(
+                                    'categoryDescription',
+                                    $category,
+                                ),
+                            );
+                    });
+            })
             ->orderBy('name')
             ->pluck('name', 'username')
             ->all();

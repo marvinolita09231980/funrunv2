@@ -47,9 +47,12 @@ class EditSubcategories extends EditRecord
 
         $focalUser = User::query()->where('username', $data['username'] ?? null)->first();
 
-        if (! $focalUser?->isFocalUserForCategory($this->record->categoryDescription)) {
+        if (
+            ! ($capacity === 0 && blank($data['username'] ?? null))
+            && ! $focalUser?->canBeAssignedToSubcategory($this->record->categoryDescription)
+        ) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'data.username' => 'Select a focal user assigned to this main category.',
+                'data.username' => 'Select an eligible focal user or Administrative Officer assigned to this main category.',
             ]);
         }
 

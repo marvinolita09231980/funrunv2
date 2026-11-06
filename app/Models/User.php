@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Validation\ValidationException;
 
 class User extends Authenticatable 
 {
@@ -67,9 +69,11 @@ class User extends Authenticatable
         });
 
         static::deleting(function (User $user): void {
-            Subcategory::query()
-                ->where('username', $user->username)
-                ->update(['username' => null]);
+            if ($user->hasActiveCategoryAssignments()) {
+                throw ValidationException::withMessages([
+                    'user' => 'This user is assigned as a focal user or Administrative Officer. Remove all category and subcategory assignments before deleting the account.',
+                ]);
+            }
         });
     }
 
@@ -105,6 +109,17 @@ class User extends Authenticatable
             'user_id',
             'category_allocation_id',
         )->withTimestamps();
+    }
+
+    public function assignedSubcategories(): HasMany
+    {
+        return $this->hasMany(Subcategory::class, 'username', 'username');
+    }
+
+    public function hasActiveCategoryAssignments(): bool
+    {
+        return $this->administeredCategoryAllocations()->exists()
+            || $this->assignedSubcategories()->exists();
     }
 
     public function administeredCategoryNames(): array
@@ -169,6 +184,12 @@ class User extends Authenticatable
         return $this->hasRole('focal user')
             && filled($category)
             && $this->assigned_category === $category;
+    }
+
+    public function canBeAssignedToSubcategory(?string $category): bool
+    {
+        return $this->isFocalUserForCategory($category)
+            || ($this->isAdministrativeOfficer() && $this->administersCategory($category));
     }
 
     public function canManageCreatedFocalUser(User $user): bool

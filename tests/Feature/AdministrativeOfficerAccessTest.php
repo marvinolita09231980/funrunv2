@@ -501,6 +501,64 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->assertSame(6, $subcategory->fresh()->nop);
     }
 
+    public function test_zero_capacity_needs_no_focal_and_assigned_ao_can_be_selected(): void
+    {
+        CategoryAllocation::query()->create([
+            'categoryDescription' => 'CATEGORY A',
+            'allocated_participants' => 0,
+        ]);
+        $officer = $this->createUser(
+            name: 'Administrative Officer',
+            username: 'ao-one',
+            administeredCategory: 'CATEGORY A',
+        );
+        $officer->assignRole(Role::findByName('administrative officer'));
+
+        $subcategory = Subcategory::query()->create([
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+            'nop' => 0,
+            'username' => null,
+        ]);
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($officer);
+
+        Livewire::test(EditSubcategories::class, [
+            'record' => $subcategory->getRouteKey(),
+        ])
+            ->fillForm([
+                'nop' => 0,
+                'username' => null,
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertNull($subcategory->fresh()->username);
+
+        CategoryAllocation::query()
+            ->where('categoryDescription', 'CATEGORY A')
+            ->update(['allocated_participants' => 1]);
+
+        Livewire::test(EditSubcategories::class, [
+            'record' => $subcategory->getRouteKey(),
+        ])
+            ->fillForm([
+                'nop' => 1,
+                'username' => $officer->username,
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('ao-one', $subcategory->fresh()->username);
+        $this->assertTrue($officer->canBeAssignedToSubcategory('CATEGORY A'));
+        $this->assertFalse($officer->canBeAssignedToSubcategory('CATEGORY B'));
+        $this->assertSame(
+            ['ao-one' => 'Administrative Officer'],
+            SubcategoriesForm::focalUserOptionsForCategory('CATEGORY A'),
+        );
+    }
+
     public function test_officer_can_create_only_focal_users_for_the_administered_category(): void
     {
         Role::query()->firstOrCreate([
@@ -586,6 +644,7 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->assertFalse(Hash::check('secret-password', $focalUser->fresh()->password));
         $this->assertSame(
             [
+                'ao-one' => 'Administrative Officer',
                 'categoryafocal' => 'Category A Focal',
                 'other-category-a-focal' => 'Other Category A Focal',
             ],
@@ -617,10 +676,23 @@ class AdministrativeOfficerAccessTest extends TestCase
             ->firstOrFail();
         $assignedSubcategory->update(['username' => $focalUser->username]);
 
+        $this->assertTrue($focalUser->hasActiveCategoryAssignments());
+        $this->assertFalse($policy->delete($officer, $focalUser));
+
+        try {
+            $focalUser->delete();
+            $this->fail('An assigned focal user was deleted.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('user', $exception->errors());
+        }
+
+        $this->assertDatabaseHas('users', ['id' => $focalUser->getKey()]);
+        $this->assertSame($focalUser->username, $assignedSubcategory->fresh()->username);
+
+        $assignedSubcategory->update(['username' => null]);
         $focalUser->delete();
 
         $this->assertDatabaseMissing('users', ['id' => $focalUser->getKey()]);
-        $this->assertNull($assignedSubcategory->fresh()->username);
     }
 
     public function test_focal_user_can_manage_participants_only_in_assigned_subcategories(): void

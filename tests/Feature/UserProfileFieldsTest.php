@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Users\UserResource;
+use App\Models\CategoryAllocation;
 use App\Models\User;
 use App\Policies\UserPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -98,5 +99,38 @@ class UserProfileFieldsTest extends TestCase
         )->pluck('id');
 
         $this->assertTrue($visibleToSuperAdmin->contains($superAdmin->getKey()));
+    }
+
+    public function test_assigned_administrative_officer_cannot_be_deleted(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::query()->firstOrCreate([
+            'name' => 'admin',
+            'guard_name' => 'web',
+        ]));
+        $admin->givePermissionTo(Permission::findOrCreate('Delete:User'));
+
+        $officer = User::factory()->create();
+        $officer->assignRole(Role::query()->firstOrCreate([
+            'name' => 'administrative officer',
+            'guard_name' => 'web',
+        ]));
+        $allocation = CategoryAllocation::query()->create([
+            'categoryDescription' => 'CATEGORY A',
+            'allocated_participants' => 0,
+        ]);
+        $officer->administeredCategoryAllocations()->attach($allocation);
+
+        $this->assertTrue($officer->hasActiveCategoryAssignments());
+        $this->assertFalse((new UserPolicy())->delete($admin, $officer));
+
+        try {
+            $officer->delete();
+            $this->fail('An assigned Administrative Officer was deleted.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('user', $exception->errors());
+        }
+
+        $this->assertDatabaseHas('users', ['id' => $officer->getKey()]);
     }
 }

@@ -30,7 +30,9 @@ class CreateSubcategories extends CreateRecord
             ]);
         }
 
-        if (! $allocation->accommodatesSubcategoryCapacity((int) $data['nop'])) {
+        $capacity = (int) $data['nop'];
+
+        if (! $allocation->accommodatesSubcategoryCapacity($capacity)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'data.nop' => 'This capacity exceeds the remaining main-category allocation.',
             ]);
@@ -38,9 +40,12 @@ class CreateSubcategories extends CreateRecord
 
         $focalUser = User::query()->where('username', $data['username'] ?? null)->first();
 
-        if (! $focalUser?->isFocalUserForCategory($data['categoryDescription'])) {
+        if (
+            ! ($capacity === 0 && blank($data['username'] ?? null))
+            && ! $focalUser?->canBeAssignedToSubcategory($data['categoryDescription'])
+        ) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'data.username' => 'Select a focal user assigned to this main category.',
+                'data.username' => 'Select an eligible focal user or Administrative Officer assigned to this main category.',
             ]);
         }
 
