@@ -37,7 +37,8 @@ class SubcategoriesForm
                         }
 
                         $available = $allocation->allocated_participants
-                            - $allocation->distributedParticipants($record?->getKey());
+                            - $allocation->distributedParticipants($record?->getKey())
+                            - $allocation->directRegisteredParticipants();
 
                         $minimum = $record?->minimumCapacity() ?? 0;
 

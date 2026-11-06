@@ -89,10 +89,14 @@ class Dashboard extends BaseDashboard implements HasTable
                     AND (
                         LOWER(TRIM(subcategories.categoryDescription)) = 'open category'
                         OR ({$participantSubcategory}) = LOWER(TRIM(subcategories.subDescription))
+                        OR (subcategories.id < 0 AND (
+                            NOT EXISTS (SELECT 1 FROM subcategories AS configured WHERE configured.categoryDescription = subcategories.categoryDescription)
+                            OR COALESCE(participants.subDescription, '') = ''
+                        ))
                     )
                 ";
 
-                return Subcategory::query()
+                return Subcategory::reportQuery($year)
                     ->select([
                         'subcategories.*',
                         DB::raw("(SELECT COUNT(*)
@@ -137,6 +141,7 @@ class Dashboard extends BaseDashboard implements HasTable
                     ->visibleFrom('md'),
                 TextColumn::make('subDescription')
                     ->label('Description')
+                    ->placeholder('No subcategory')
                     ->searchable()
                     ->visibleFrom('md'),
                 TextColumn::make('nop')
@@ -175,14 +180,12 @@ class Dashboard extends BaseDashboard implements HasTable
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(distanceCategory)) = '10km' THEN 1 ELSE 0 END) AS total_10k")
             ->first();
 
-        $subcategoryAllocation = (int) Subcategory::query()->sum('nop');
-        $openCategoryAllocation = (int) CategoryAllocation::query()
-            ->whereIn(
-                DB::raw('LOWER(TRIM(categoryDescription))'),
-                ['open', 'open category'],
-            )
-            ->sum('allocated_participants');
-        $allocated = $subcategoryAllocation + $openCategoryAllocation;
+        $allocated = CategoryAllocation::query()->get()->sum(
+            fn (CategoryAllocation $allocation): int => $allocation->distributedAllotment($year),
+        );
+        $allocated += (int) Subcategory::query()->whereNotIn(
+            'categoryDescription', CategoryAllocation::query()->select('categoryDescription'),
+        )->sum('nop');
         $registered = (int) ($counts->total ?? 0);
         $capacityPercentage = $allocated > 0
             ? min(100, (int) round(($registered / $allocated) * 100))

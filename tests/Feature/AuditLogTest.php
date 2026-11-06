@@ -108,7 +108,7 @@ class AuditLogTest extends TestCase
         $this->assertSame('Administrator (acting as Focal Person)', $log->actor_display_name);
     }
 
-    public function test_only_superadmin_can_open_audit_logs(): void
+    public function test_admin_and_superadmin_can_open_audit_logs(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -117,8 +117,10 @@ class AuditLogTest extends TestCase
         $officer = $this->userWithRole('Officer', 'ao-user', 'administrative officer');
 
         $this->actingAs($admin);
-        $this->assertFalse(AuditLogs::canAccess());
-        Livewire::test(AuditLogs::class)->assertForbidden();
+        $this->assertTrue(AuditLogs::canAccess());
+        Livewire::test(AuditLogs::class)
+            ->assertOk()
+            ->assertSee('Edit and Delete History');
 
         $this->actingAs($superadmin);
         $this->assertTrue(AuditLogs::canAccess());

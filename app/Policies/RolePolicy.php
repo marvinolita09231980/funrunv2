@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Models\User;
+use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
-use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -34,7 +35,22 @@ class RolePolicy
 
     public function delete(AuthUser $authUser, Role $role): bool
     {
+        if (
+            $authUser instanceof User
+            && $authUser->isAdminWithoutSuperAdmin()
+            && $this->isProtectedAdministrativeRole($role)
+        ) {
+            return false;
+        }
+
         return $authUser->can('Delete:Role');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser instanceof User
+            && $authUser->isSuperAdmin()
+            && $authUser->can('Delete:Role');
     }
 
     public function restore(AuthUser $authUser, Role $role): bool
@@ -67,4 +83,19 @@ class RolePolicy
         return $authUser->can('Reorder:Role');
     }
 
+    private function isProtectedAdministrativeRole(Role $role): bool
+    {
+        $normalizedName = str_replace(
+            [' ', '-'],
+            '_',
+            strtolower(trim($role->name)),
+        );
+
+        return in_array($normalizedName, [
+            'admin',
+            'superadmin',
+            'super_admin',
+            'super_administrator',
+        ], true);
+    }
 }

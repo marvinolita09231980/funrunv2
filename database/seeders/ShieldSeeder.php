@@ -12,7 +12,7 @@ class ShieldSeeder extends Seeder
     {
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
-        $rolesWithPermissions = '[{"name":"super_admin","guard_name":"web","permissions":["ViewAny:Participant","View:Participant","Create:Participant","Update:Participant","Delete:Participant","Restore:Participant","ForceDelete:Participant","ForceDeleteAny:Participant","RestoreAny:Participant","Replicate:Participant","Reorder:Participant","ViewAny:Subcategory","View:Subcategory","Create:Subcategory","Update:Subcategory","Delete:Subcategory","Restore:Subcategory","ForceDelete:Subcategory","ForceDeleteAny:Subcategory","RestoreAny:Subcategory","Replicate:Subcategory","Reorder:Subcategory"]}]';
+        $rolesWithPermissions = '[{"name":"superadmin","guard_name":"web","permissions":["ViewAny:Participant","View:Participant","Create:Participant","Update:Participant","Delete:Participant","Restore:Participant","ForceDelete:Participant","ForceDeleteAny:Participant","RestoreAny:Participant","Replicate:Participant","Reorder:Participant","ViewAny:Subcategory","View:Subcategory","Create:Subcategory","Update:Subcategory","Delete:Subcategory","Restore:Subcategory","ForceDelete:Subcategory","ForceDeleteAny:Subcategory","RestoreAny:Subcategory","Replicate:Subcategory","Reorder:Subcategory"]}]';
         $directPermissions = '[]';
 
         static::makeRolesWithPermissions($rolesWithPermissions);

@@ -116,10 +116,14 @@ class ShirtSizes extends Page implements HasTable
                     AND (
                         LOWER(TRIM(subcategories.categoryDescription)) = 'open category'
                         OR ({$participantSubcategory}) = LOWER(TRIM(subcategories.subDescription))
+                        OR (subcategories.id < 0 AND (
+                            NOT EXISTS (SELECT 1 FROM subcategories AS configured WHERE configured.categoryDescription = subcategories.categoryDescription)
+                            OR COALESCE(participants.subDescription, '') = ''
+                        ))
                     )
                 ";
 
-                return Subcategory::query()
+                return Subcategory::reportQuery($year)
                     ->select([
                         'subcategories.*',
 
@@ -163,28 +167,28 @@ class ShirtSizes extends Page implements HasTable
                                   FROM participants 
                                   WHERE {$subcategoryMatch}
                                     AND LOWER(TRIM(participants.shirtSize)) = '2xl'
-                                    AND participants.year = '{$year}') AS 2xl"),
+                                    AND participants.year = '{$year}') AS `2xl`"),
 
                         // 3XL
                         DB::raw("(SELECT COUNT(*) 
                                   FROM participants 
                                   WHERE {$subcategoryMatch}
                                     AND LOWER(TRIM(participants.shirtSize)) = '3xl'
-                                    AND participants.year = '{$year}') AS 3xl"),
+                                    AND participants.year = '{$year}') AS `3xl`"),
 
                         // 4XL
                         DB::raw("(SELECT COUNT(*) 
                                   FROM participants 
                                   WHERE {$subcategoryMatch}
                                     AND LOWER(TRIM(participants.shirtSize)) = '4xl'
-                                    AND participants.year = '{$year}') AS 4xl"),
+                                    AND participants.year = '{$year}') AS `4xl`"),
 
                         // 5XL
                         DB::raw("(SELECT COUNT(*) 
                                   FROM participants 
                                   WHERE {$subcategoryMatch}
                                     AND LOWER(TRIM(participants.shirtSize)) = '5xl'
-                                    AND participants.year = '{$year}') AS 5xl"),
+                                    AND participants.year = '{$year}') AS `5xl`"),
                     ])
                     ->orderBy('categoryDescription');
             })
@@ -230,6 +234,7 @@ class ShirtSizes extends Page implements HasTable
 
                 TextColumn::make('subDescription')
                     ->label('Description')
+                    ->placeholder('No subcategory')
                     ->sortable()
                     ->searchable()
                     ->visibleFrom('md'),

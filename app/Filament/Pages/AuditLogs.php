@@ -38,7 +38,7 @@ class AuditLogs extends Page implements HasTable
         $user = Filament::auth()->user();
 
         return $user instanceof User
-            && $user->isSuperAdmin();
+            && $user->hasAnyRole(['admin', 'superadmin', 'super_admin']);
     }
 
     public function getTitle(): string

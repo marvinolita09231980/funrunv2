@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Participants\Schemas;
 
 use livewire;
 use App\Models\Participant;
+use App\Models\CategoryAllocation;
 use App\Models\Subcategory;
 use App\Models\User;
 use Filament\Support\RawJs;
@@ -117,11 +118,12 @@ class ParticipantForm
                                    ->options(fn (): array => self::categoryOptionsForUser(Auth::user()))
                                     ->searchable()
                                     ->reactive()
+                                    ->afterStateUpdated(fn (callable $set) => $set('subDescription', null))
                                     ->columnSpanFull(),
                                 TextInput::make('subDescription')
                                     ->label('Description')
                                     ->hint('Name of your organization (e.g., Individual, Family/Group, Couple, Team, or Company)')
-                                    ->required()
+                                    ->required(fn ($get) => self::categoryHasSubcategories($get('categoryDescription')))
                                     ->columnSpanFull()
                                     ->visible(fn ($get) => $get('categoryDescription') === 'OPEN CATEGORY') // ✅ Only show when Open Category
                                     ->reactive(),
@@ -143,7 +145,7 @@ class ParticipantForm
                                     ->searchable()
                                     ->required()
                                     ->columnSpanFull()
-                                    ->visible(fn ($get) => $get('categoryDescription') !== 'OPEN CATEGORY') // ✅ Hide if Open Category
+                                    ->visible(fn ($get) => $get('categoryDescription') !== 'OPEN CATEGORY' && self::categoryHasSubcategories($get('categoryDescription')))
                                     ->hint(function ($get) {
                                         $year = now()->year;
                                         $category = $get('categoryDescription');
@@ -269,6 +271,18 @@ class ParticipantForm
 
     public static function categoryOptionsForUser(?User $user): array
     {
+        if ($user?->isAdministrativeOfficer()) {
+            return $user->administeredCategoryAllocations()
+                ->orderBy('categoryDescription')
+                ->pluck('categoryDescription', 'categoryDescription')->all();
+        }
+
+        if ($user?->hasAnyRole(['admin', 'superadmin', 'super_admin'])) {
+            return CategoryAllocation::query()->pluck('categoryDescription', 'categoryDescription')
+                ->merge(Subcategory::query()->pluck('categoryDescription', 'categoryDescription'))
+                ->sort()->all();
+        }
+
         $query = Subcategory::query()->whereNotNull('categoryDescription');
 
         if ($user?->isAdministrativeOfficer()) {
@@ -311,5 +325,10 @@ class ParticipantForm
             ->orderBy('subDescription')
             ->pluck('subDescription', 'subDescription')
             ->all();
+    }
+
+    public static function categoryHasSubcategories(?string $category): bool
+    {
+        return filled($category) && Subcategory::query()->where('categoryDescription', $category)->exists();
     }
 }

@@ -38,7 +38,8 @@ class EditSubcategories extends EditRecord
             $this->record->getKey(),
         )) {
             $available = $allocation->allocated_participants
-                - $allocation->distributedParticipants($this->record->getKey());
+                - $allocation->distributedParticipants($this->record->getKey())
+                - $allocation->directRegisteredParticipants();
 
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'data.nop' => 'This capacity exceeds the available main-category allocation of ' . max(0, $available) . '.',

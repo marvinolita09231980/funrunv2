@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Participants\Pages;
 
 use App\Models\Participant;
+use App\Models\CategoryAllocation;
 use App\Models\Subcategory;
 use App\Models\User;
 use Carbon\Carbon;
@@ -114,6 +115,7 @@ class CreateParticipant extends CreateRecord
             $this->data['year'] = $year;
             $this->data['waiver'] = true;
             $this->data['referenceNumber'] = '0';
+            $this->data['participantNumber'] = '0';
             $this->data['created_by'] = Auth::user()->username;
 
             if (
@@ -153,6 +155,31 @@ class CreateParticipant extends CreateRecord
                 $this->halt();
             }
 
+            $allocation = CategoryAllocation::query()
+                ->where('categoryDescription', $this->data['categoryDescription'])->first();
+
+            if (! Subcategory::query()->where('categoryDescription', $this->data['categoryDescription'])->exists()) {
+                if (! $allocation) {
+                    throw ValidationException::withMessages(['categoryDescription' => 'The category allocation is not available.']);
+                }
+
+                if ($allocation->registrationSlotsRemaining($year) < 1) {
+                    throw ValidationException::withMessages(['categoryDescription' => 'Participant slots are already full.']);
+                }
+
+                if ($this->data['categoryDescription'] !== 'OPEN CATEGORY') {
+                    $this->data['subDescription'] = '';
+                } else {
+                    $this->data['subDescription'] ??= '';
+                }
+
+                return $this->data;
+            }
+
+            if ($allocation && $allocation->registrationSlotsRemaining($year) < 1) {
+                throw ValidationException::withMessages(['categoryDescription' => 'Participant slots are already full.']);
+            }
+
             if($this->data['categoryDescription'] ==='OPEN CATEGORY')
             {
                 $cat = DB::table('subcategories as s')
@@ -184,7 +211,7 @@ class CreateParticipant extends CreateRecord
                             DB::raw('COUNT(p.id) as registered_count')
                         )
                         ->where('s.categoryDescription',$this->data['categoryDescription']) 
-                        ->where('s.subDescription',$this->data['subDescription']) 
+                        ->where('s.subDescription',$this->data['subDescription'] ?? null)
                         ->groupBy('s.nop', 's.categoryDescription', 's.subDescription')
                         ->first();
             }

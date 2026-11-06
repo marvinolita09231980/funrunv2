@@ -56,6 +56,9 @@ class SubcategoryAllocationOverview extends StatsOverviewWidget
                         . ' allotted to subcategories · '
                         . number_format($remaining)
                         . ' free for allotment'
+                        . ($allocation->directRegisteredParticipants() > 0
+                            ? ' · ' . number_format($allocation->directRegisteredParticipants()) . ' registered directly under category'
+                            : '')
                     )
                     ->descriptionIcon('heroicon-o-squares-plus')
                     ->color($remaining > 0 ? 'success' : 'danger');

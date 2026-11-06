@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\Participants\Pages;
 
 use App\Models\Participant;
+use App\Models\CategoryAllocation;
+use App\Models\Subcategory;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\CreateAction;
@@ -63,6 +65,38 @@ class EditParticipant extends EditRecord
             throw ValidationException::withMessages([
                 'subDescription' => 'You may only edit participants in your assigned subcategory.',
             ]);
+        }
+
+        $category = $data['categoryDescription'] ?? null;
+        $year = (int) ($this->record->year ?? now()->year);
+        $allocation = CategoryAllocation::query()->where('categoryDescription', $category)->first();
+        $registered = Participant::query()->where('categoryDescription', $category)
+            ->where('year', $year)->whereKeyNot($this->record->getKey())->count();
+
+        if ($allocation && $registered >= $allocation->allocated_participants) {
+            throw ValidationException::withMessages(['data.categoryDescription' => 'Participant slots are already full.']);
+        }
+
+        if (! Subcategory::query()->where('categoryDescription', $category)->exists()) {
+            if (! $allocation) {
+                throw ValidationException::withMessages(['data.categoryDescription' => 'The category allocation is not available.']);
+            }
+
+            if ($category !== 'OPEN CATEGORY') {
+                $data['subDescription'] = '';
+            } else {
+                $data['subDescription'] ??= '';
+            }
+        } elseif ($category !== 'OPEN CATEGORY') {
+            $subcategory = Subcategory::query()->where('categoryDescription', $category)
+                ->where('subDescription', $data['subDescription'] ?? null)->first();
+            $count = Participant::query()->where('categoryDescription', $category)
+                ->where('subDescription', $data['subDescription'] ?? null)
+                ->where('year', $year)->whereKeyNot($this->record->getKey())->count();
+
+            if (! $subcategory || $count >= $subcategory->nop) {
+                throw ValidationException::withMessages(['data.subDescription' => 'Select an available subcategory with remaining slots.']);
+            }
         }
 
         return $data;

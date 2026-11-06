@@ -60,7 +60,7 @@ class UserProfileFieldsTest extends TestCase
             'name' => 'admin',
             'guard_name' => 'web',
         ]);
-        $superAdminRole = Role::query()->create([
+        $superAdminRole = Role::query()->firstOrCreate([
             'name' => 'superadmin',
             'guard_name' => 'web',
         ]);

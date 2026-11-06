@@ -69,7 +69,23 @@ class CategoryAllocation extends Model
 
     public function remainingParticipants(): int
     {
-        return max(0, $this->allocated_participants - $this->distributedParticipants());
+        return max(0, $this->allocated_participants - $this->distributedParticipants() - $this->directRegisteredParticipants());
+    }
+
+    public function distributedAllotment(?int $year = null): int
+    {
+        return $this->subcategories()->exists()
+            ? $this->distributedParticipants() + $this->directRegisteredParticipants($year)
+            : $this->allocated_participants;
+    }
+
+    public function directRegisteredParticipants(?int $year = null): int
+    {
+        return Participant::query()
+            ->where('categoryDescription', $this->categoryDescription)
+            ->where('year', $year ?? now()->year)
+            ->where(fn ($query) => $query->whereNull('subDescription')->orWhere('subDescription', ''))
+            ->count();
     }
 
     public function registeredParticipants(?int $year = null): int
@@ -91,7 +107,7 @@ class CategoryAllocation extends Model
     public function minimumAllocation(?int $year = null): int
     {
         return max(
-            $this->distributedParticipants(),
+            $this->distributedParticipants() + $this->directRegisteredParticipants($year),
             $this->registeredParticipants($year),
         );
     }
@@ -105,7 +121,7 @@ class CategoryAllocation extends Model
         int $capacity,
         ?int $exceptSubcategoryId = null,
     ): bool {
-        return ($this->distributedParticipants($exceptSubcategoryId) + $capacity)
+        return ($this->distributedParticipants($exceptSubcategoryId) + $this->directRegisteredParticipants() + $capacity)
             <= $this->allocated_participants;
     }
 }

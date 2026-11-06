@@ -601,7 +601,7 @@ class ParticipantsTable
             return [];
         }
 
-        $query = Subcategory::query()
+        $query = Subcategory::reportQuery()
             ->orderBy('categoryDescription')
             ->orderBy('subDescription');
 
@@ -612,7 +612,7 @@ class ParticipantsTable
         return $query
             ->get(['id', 'categoryDescription', 'subDescription'])
             ->mapWithKeys(fn (Subcategory $subcategory): array => [
-                $subcategory->getKey() => "{$subcategory->categoryDescription} — {$subcategory->subDescription}",
+                $subcategory->getKey() => $subcategory->categoryDescription . ' — ' . ($subcategory->subDescription ?: 'No subcategory'),
             ])
             ->all();
     }
@@ -625,7 +625,7 @@ class ParticipantsTable
             return null;
         }
 
-        $query = Subcategory::query()->whereKey($subcategoryId);
+        $query = Subcategory::reportQuery()->whereKey($subcategoryId);
 
         if ($user?->isAdministrativeOfficer()) {
             $query->whereIn('categoryDescription', $user->administeredCategoryNames());
