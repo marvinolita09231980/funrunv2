@@ -76,7 +76,7 @@ class ParticipantAgeReportTest extends TestCase
         $this->assertStringStartsWith('%PDF', $pdf);
     }
 
-    public function test_ao_reports_are_limited_to_assigned_categories_and_include_direct_registrations(): void
+    public function test_ao_reports_include_all_categories_and_direct_registrations(): void
     {
         $officer = $this->user('administrative officer');
         $category = CategoryAllocation::create(['categoryDescription' => 'ASSIGNED', 'allocated_participants' => 10]);
@@ -86,16 +86,16 @@ class ParticipantAgeReportTest extends TestCase
 
         $report = ParticipantAgeReport::build($officer, now()->year, 'youngest', 'male', '5km');
         $this->assertCount(1, $report['sections']);
-        $this->assertSame(['Own Runner'], array_column($report['sections'][0]['participants'], 'name'));
+        $this->assertSame(['Other Runner', 'Own Runner'], array_column($report['sections'][0]['participants'], 'name'));
         $this->assertSame('No subcategory', $report['sections'][0]['participants'][0]['subcategory']);
-        $this->assertSame('ASSIGNED', $report['scope']);
+        $this->assertSame('All categories', $report['scope']);
 
         $officer->administeredCategoryAllocations()->detach();
         $empty = ParticipantAgeReport::build($officer, now()->year, 'oldest', 'male', '5km');
-        $this->assertSame([], $empty['sections'][0]['participants']);
+        $this->assertCount(2, $empty['sections'][0]['participants']);
     }
 
-    public function test_focal_with_report_permission_remains_limited_to_assigned_subcategories(): void
+    public function test_focal_with_report_permission_includes_all_subcategories(): void
     {
         $focal = $this->user('focal user');
         $focal->givePermissionTo(Permission::findOrCreate(ParticipantReports::VIEW_PERMISSION, 'web'));
@@ -104,7 +104,7 @@ class ParticipantAgeReportTest extends TestCase
         $this->participant(['firstName' => 'Hidden', 'categoryDescription' => 'CATEGORY', 'subDescription' => 'OTHER OFFICE']);
 
         $report = ParticipantAgeReport::build($focal, now()->year, 'oldest', 'male', '5km');
-        $this->assertSame(['Visible Runner'], array_column($report['sections'][0]['participants'], 'name'));
+        $this->assertSame(['Hidden Runner', 'Visible Runner'], array_column($report['sections'][0]['participants'], 'name'));
     }
 
     public function test_report_page_downloads_pdfs_and_restricts_focal_access(): void
@@ -121,7 +121,7 @@ class ParticipantAgeReportTest extends TestCase
         Livewire::test(ParticipantReports::class)->assertForbidden();
     }
 
-    public function test_couple_and_family_lists_group_members_and_respect_year_and_ao_scope(): void
+    public function test_couple_and_family_lists_group_members_across_categories_for_selected_year(): void
     {
         $officer = $this->user('administrative officer');
         $category = CategoryAllocation::create(['categoryDescription' => 'ASSIGNED', 'allocated_participants' => 20]);
@@ -142,8 +142,8 @@ class ParticipantAgeReportTest extends TestCase
         $this->assertCount(1, $couple['groups']);
         $this->assertSame(2, $couple['total_runners']);
         $this->assertSame(['Primary Runner', 'Partner Runner'], array_column($couple['groups'][0]['members'], 'name'));
-        $this->assertCount(1, $family['groups']);
-        $this->assertSame(2, $family['total_runners']);
+        $this->assertCount(2, $family['groups']);
+        $this->assertSame(3, $family['total_runners']);
         $this->assertSame(['Parent Runner', 'Child Runner'], array_column($family['groups'][0]['members'], 'name'));
 
         $this->actingAs($officer);

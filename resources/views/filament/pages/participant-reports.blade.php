@@ -14,10 +14,10 @@
                 </label>
                 <x-filament::button icon="heroicon-o-arrow-down-tray" wire:click="downloadReport" wire:loading.attr="disabled" wire:target="downloadReport">Download All 8 Reports</x-filament::button>
             </div>
-            <p style="margin-top: 1rem; font-size: 0.875rem; color: #6b7280;">Rankings use birth dates. Ages are calculated as of today for the current year, or December 31 for other years. Ties are ordered by name. Reports follow your category and subcategory access.</p>
+            <p style="margin-top: 1rem; font-size: 0.875rem; color: #6b7280;">Rankings use birth dates. Ages are calculated as of today for the current year, or December 31 for other years. Ties are ordered by name. Reports include all categories, regardless of who registered the participants.</p>
         </x-filament::section>
 
-        <x-filament::section heading="Couple & Family Runner Lists" description="All runners for the selected year, grouped by their registration reference. AO reports include assigned categories only.">
+        <x-filament::section heading="Couple & Family Runner Lists" description="All categories for the selected year, grouped by registration reference, regardless of who entered the runners.">
             <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
                 <x-filament::button color="gray" icon="heroicon-o-arrow-down-tray" wire:click="downloadRunnerList('couple')" wire:loading.attr="disabled" wire:target="downloadRunnerList">Couple Runners PDF</x-filament::button>
                 <x-filament::button color="gray" icon="heroicon-o-arrow-down-tray" wire:click="downloadRunnerList('family')" wire:loading.attr="disabled" wire:target="downloadRunnerList">Family Runners PDF</x-filament::button>

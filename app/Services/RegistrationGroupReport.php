@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Filament\Resources\Participants\Tables\ParticipantsTable;
 use App\Models\Participant;
 use App\Models\User;
 use Carbon\Carbon;
@@ -12,18 +11,11 @@ class RegistrationGroupReport
     public static function build(User $user, int $year, string $type): array
     {
         $query = Participant::query()->where('year', $year);
-        if ($user->hasRole('focal user') && ! $user->isAdministrativeOfficer()) {
-            ParticipantsTable::applyVisibilityForUser($query, $user);
-        }
 
         if ($type === 'couple') {
             $query->where(fn ($query) => $query->where('couple', true)->orWhereRaw("LOWER(TRIM(subDescription)) = 'couple'"));
         } else {
             $query->whereRaw("LOWER(TRIM(subDescription)) = 'family'")->where('couple', false);
-        }
-
-        if ($user->isAdministrativeOfficer() && ! $user->hasAnyRole(['admin', 'superadmin', 'super_admin'])) {
-            $query->whereIn('categoryDescription', $user->administeredCategoryNames());
         }
 
         $groups = $query->orderBy('id')->get()->groupBy(function (Participant $participant): string {

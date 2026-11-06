@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Filament\Resources\Participants\Tables\ParticipantsTable;
 use App\Models\Participant;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -33,14 +32,6 @@ class ParticipantAgeReport
                         ->whereNotNull('birthDate')->where('birthDate', '>', '0000-00-00')
                         ->whereDate('birthDate', '<=', min($asOf->toDateString(), now()->toDateString()));
 
-                    if ($user->hasRole('focal user') && ! $user->isAdministrativeOfficer()) {
-                        ParticipantsTable::applyVisibilityForUser($query, $user);
-                    }
-
-                    if ($user->isAdministrativeOfficer() && ! $user->hasAnyRole(['admin', 'superadmin', 'super_admin'])) {
-                        $query->whereIn('categoryDescription', $user->administeredCategoryNames());
-                    }
-
                     $participants = $query->orderBy('birthDate', $order === 'oldest' ? 'asc' : 'desc')
                         ->orderBy('lastName')->orderBy('firstName')->orderBy('id')->limit(10)->get()
                         ->map(fn (Participant $participant, int $index): array => [
@@ -60,9 +51,7 @@ class ParticipantAgeReport
         return [
             'year' => $year, 'as_of' => $asOf->format('m/d/Y'),
             'generated_at' => now('Asia/Shanghai')->format('m/d/Y h:i A'),
-            'scope' => $user->isAdministrativeOfficer() && ! $user->hasAnyRole(['admin', 'superadmin', 'super_admin'])
-                ? implode(', ', $user->administeredCategoryNames()) ?: 'No assigned categories'
-                : ($user->hasRole('focal user') && ! $user->hasAnyRole(['admin', 'superadmin', 'super_admin']) ? 'Assigned subcategories' : 'All categories'),
+            'scope' => 'All categories',
             'sections' => $sections,
         ];
     }
