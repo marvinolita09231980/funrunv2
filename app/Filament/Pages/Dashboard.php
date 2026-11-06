@@ -21,6 +21,59 @@ class Dashboard extends BaseDashboard implements HasTable
 
     public int $selectedYear;
 
+    public bool $showAllocationBreakdown = false;
+
+    public function openAllocationBreakdown(): void
+    {
+        $this->showAllocationBreakdown = true;
+        $this->dispatch('open-modal', id: 'distributed-allotment-breakdown');
+    }
+
+    public function getAllocationBreakdown(): array
+    {
+        $groups = [];
+
+        foreach (CategoryAllocation::query()->with('subcategories')->orderBy('categoryDescription')->get() as $category) {
+            $items = [];
+
+            if ($category->subcategories->isEmpty()) {
+                $items[] = ['label' => 'Main category', 'type' => 'No subcategories', 'amount' => (int) $category->allocated_participants];
+            } else {
+                foreach ($category->subcategories->sortBy('subDescription') as $subcategory) {
+                    $items[] = ['label' => $subcategory->subDescription, 'type' => 'Subcategory allotment', 'amount' => (int) $subcategory->nop];
+                }
+
+                $direct = $category->directRegisteredParticipants($this->selectedYear);
+                if ($direct > 0) {
+                    $items[] = ['label' => 'Direct category registrations', 'type' => 'Slots used before subcategories were added', 'amount' => $direct];
+                }
+            }
+
+            $groups[] = ['category' => $category->categoryDescription, 'items' => $items, 'total' => array_sum(array_column($items, 'amount'))];
+        }
+
+        $legacy = Subcategory::query()->whereNotIn('categoryDescription', CategoryAllocation::query()->select('categoryDescription'))
+            ->orderBy('categoryDescription')->orderBy('subDescription')->get()->groupBy('categoryDescription');
+
+        foreach ($legacy as $category => $subcategories) {
+            $items = $subcategories->map(fn (Subcategory $subcategory): array => [
+                'label' => $subcategory->subDescription, 'type' => 'Subcategory allotment', 'amount' => (int) $subcategory->nop,
+            ])->all();
+            $groups[] = ['category' => $category, 'items' => $items, 'total' => array_sum(array_column($items, 'amount'))];
+        }
+
+        $groups = array_values(array_filter(array_map(function (array $group): array {
+            $group['items'] = array_values(array_filter(
+                $group['items'],
+                fn (array $item): bool => $item['amount'] !== 0,
+            ));
+
+            return $group;
+        }, $groups), fn (array $group): bool => $group['total'] !== 0));
+
+        return ['groups' => $groups, 'total' => array_sum(array_column($groups, 'total'))];
+    }
+
     public function mount(): void
     {
         $this->selectedYear = (int) date('Y');
@@ -180,12 +233,7 @@ class Dashboard extends BaseDashboard implements HasTable
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(distanceCategory)) = '10km' THEN 1 ELSE 0 END) AS total_10k")
             ->first();
 
-        $allocated = CategoryAllocation::query()->get()->sum(
-            fn (CategoryAllocation $allocation): int => $allocation->distributedAllotment($year),
-        );
-        $allocated += (int) Subcategory::query()->whereNotIn(
-            'categoryDescription', CategoryAllocation::query()->select('categoryDescription'),
-        )->sum('nop');
+        $allocated = $this->getAllocationBreakdown()['total'];
         $registered = (int) ($counts->total ?? 0);
         $capacityPercentage = $allocated > 0
             ? min(100, (int) round(($registered / $allocated) * 100))

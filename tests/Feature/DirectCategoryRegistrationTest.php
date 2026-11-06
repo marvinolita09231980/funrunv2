@@ -87,6 +87,11 @@ class DirectCategoryRegistrationTest extends TestCase
         $this->assertTrue(ParticipantForm::categoryHasSubcategories('DIRECT CATEGORY'));
         $this->assertSame(3, $category->distributedAllotment());
         $this->assertSame(0, $category->remainingParticipants());
+        $dashboardPage = app(Dashboard::class);
+        $dashboardPage->selectedYear = now()->year;
+        $breakdown = $dashboardPage->getAllocationBreakdown();
+        $this->assertSame(3, $breakdown['total']);
+        $this->assertSame([2, 1], array_column($breakdown['groups'][0]['items'], 'amount'));
         $this->assertSame(2, Subcategory::reportQuery()->count());
         $this->assertSame(1, ShirtSizes::shirtSizeReportForYear(now()->year)['grand_total']);
 
