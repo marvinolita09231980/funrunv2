@@ -56,7 +56,7 @@ class DirectCategoryRegistrationTest extends TestCase
 
         $this->assertArrayHasKey('DIRECT CATEGORY', ParticipantForm::categoryOptionsForUser($officer));
         $this->assertFalse(ParticipantForm::categoryHasSubcategories('DIRECT CATEGORY'));
-        $this->assertSame(3, $category->distributedAllotment());
+        $this->assertSame(3, $category->distributedAllocation());
 
         $data = [
             'firstName' => 'Direct', 'lastName' => 'Registrant', 'birthDate' => '1990-01-02',
@@ -85,7 +85,7 @@ class DirectCategoryRegistrationTest extends TestCase
 
         Subcategory::create(['categoryDescription' => 'DIRECT CATEGORY', 'subDescription' => 'New Office', 'nop' => 2]);
         $this->assertTrue(ParticipantForm::categoryHasSubcategories('DIRECT CATEGORY'));
-        $this->assertSame(3, $category->distributedAllotment());
+        $this->assertSame(3, $category->distributedAllocation());
         $this->assertSame(0, $category->remainingParticipants());
         $dashboardPage = app(Dashboard::class);
         $dashboardPage->selectedYear = now()->year;

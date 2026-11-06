@@ -72,7 +72,7 @@ class CategoryAllocation extends Model
         return max(0, $this->allocated_participants - $this->distributedParticipants() - $this->directRegisteredParticipants());
     }
 
-    public function distributedAllotment(?int $year = null): int
+    public function distributedAllocation(?int $year = null): int
     {
         return $this->subcategories()->exists()
             ? $this->distributedParticipants() + $this->directRegisteredParticipants($year)

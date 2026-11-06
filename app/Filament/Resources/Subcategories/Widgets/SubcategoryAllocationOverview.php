@@ -12,7 +12,7 @@ class SubcategoryAllocationOverview extends StatsOverviewWidget
 {
     protected ?string $heading = 'Category Allocation for Subcategories';
 
-    protected ?string $description = 'Distributed capacity and free slots available for further subcategory allotment.';
+    protected ?string $description = 'Distributed capacity and free slots available for further subcategory allocation.';
 
     protected ?string $pollingInterval = '10s';
 
@@ -53,9 +53,9 @@ class SubcategoryAllocationOverview extends StatsOverviewWidget
                 )
                     ->description(
                         number_format($distributed)
-                        . ' allotted to subcategories · '
+                        . ' allocated to subcategories · '
                         . number_format($remaining)
-                        . ' free for allotment'
+                        . ' free for allocation'
                         . ($allocation->directRegisteredParticipants() > 0
                             ? ' · ' . number_format($allocation->directRegisteredParticipants()) . ' registered directly under category'
                             : '')

@@ -328,8 +328,8 @@ class AdministrativeOfficerAccessTest extends TestCase
             ->assertSee('Category Allocation for Subcategories')
             ->assertSee('CATEGORY A')
             ->assertSee('10 allocated')
-            ->assertSee('8 allotted to subcategories')
-            ->assertSee('2 free for allotment');
+            ->assertSee('8 allocated to subcategories')
+            ->assertSee('2 free for allocation');
     }
 
     public function test_admin_can_set_the_overall_allocation_but_officer_cannot(): void

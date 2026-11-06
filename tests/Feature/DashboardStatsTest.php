@@ -16,7 +16,7 @@ class DashboardStatsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_total_allotment_includes_the_open_category_main_allocation_once(): void
+    public function test_total_allocation_includes_the_open_category_main_allocation_once(): void
     {
         CategoryAllocation::query()->create([
             'categoryDescription' => 'OPEN CATEGORY',
@@ -65,8 +65,8 @@ class DashboardStatsTest extends TestCase
         Livewire::test(Dashboard::class)
             ->call('openAllocationBreakdown')
             ->assertSet('showAllocationBreakdown', true)
-            ->assertDispatched('open-modal', id: 'distributed-allotment-breakdown')
-            ->assertSee('Distributed Allotment Breakdown')
+            ->assertDispatched('open-modal', id: 'distributed-allocation-breakdown')
+            ->assertSee('Distributed Allocation Breakdown')
             ->assertSee('Office One')
             ->assertSee('Office Two')
             ->assertSee('No subcategories');

@@ -26,7 +26,7 @@ class Dashboard extends BaseDashboard implements HasTable
     public function openAllocationBreakdown(): void
     {
         $this->showAllocationBreakdown = true;
-        $this->dispatch('open-modal', id: 'distributed-allotment-breakdown');
+        $this->dispatch('open-modal', id: 'distributed-allocation-breakdown');
     }
 
     public function getAllocationBreakdown(): array
@@ -40,7 +40,7 @@ class Dashboard extends BaseDashboard implements HasTable
                 $items[] = ['label' => 'Main category', 'type' => 'No subcategories', 'amount' => (int) $category->allocated_participants];
             } else {
                 foreach ($category->subcategories->sortBy('subDescription') as $subcategory) {
-                    $items[] = ['label' => $subcategory->subDescription, 'type' => 'Subcategory allotment', 'amount' => (int) $subcategory->nop];
+                    $items[] = ['label' => $subcategory->subDescription, 'type' => 'Subcategory allocation', 'amount' => (int) $subcategory->nop];
                 }
 
                 $direct = $category->directRegisteredParticipants($this->selectedYear);
@@ -57,7 +57,7 @@ class Dashboard extends BaseDashboard implements HasTable
 
         foreach ($legacy as $category => $subcategories) {
             $items = $subcategories->map(fn (Subcategory $subcategory): array => [
-                'label' => $subcategory->subDescription, 'type' => 'Subcategory allotment', 'amount' => (int) $subcategory->nop,
+                'label' => $subcategory->subDescription, 'type' => 'Subcategory allocation', 'amount' => (int) $subcategory->nop,
             ])->all();
             $groups[] = ['category' => $category, 'items' => $items, 'total' => array_sum(array_column($items, 'amount'))];
         }
@@ -179,7 +179,7 @@ class Dashboard extends BaseDashboard implements HasTable
                     ->label('Category Overview')
                     ->getStateUsing(fn ($record): string => $record->categoryDescription . ' — ' . $record->subDescription)
                     ->description(fn ($record): string => collect([
-                        'Allotted: ' . number_format((int) $record->nop),
+                        'Allocated: ' . number_format((int) $record->nop),
                         'Registered: ' . number_format((int) $record->registered),
                         'Rave Run (3K): ' . number_format((int) $record->count_3k),
                         '5 KM: ' . number_format((int) $record->count_5k),
@@ -198,7 +198,7 @@ class Dashboard extends BaseDashboard implements HasTable
                     ->searchable()
                     ->visibleFrom('md'),
                 TextColumn::make('nop')
-                    ->label('Allot.')
+                    ->label('Allocation')
                     ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
                     ->visibleFrom('md'),
                 TextColumn::make('registered')

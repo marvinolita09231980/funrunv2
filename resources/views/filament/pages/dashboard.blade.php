@@ -103,18 +103,18 @@
 
         button.dashboard-stat-card { text-align: left; width: 100%; cursor: pointer; }
         button.dashboard-stat-card:focus-visible { outline: 2px solid #d97706; outline-offset: 3px; }
-        .allotment-breakdown { display: grid; gap: 1.25rem; }
-        .allotment-breakdown-group { border: 1px solid #e5e7eb; border-radius: 0.75rem; overflow: hidden; }
-        .allotment-breakdown-heading, .allotment-breakdown-total { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; font-weight: 700; background: #f8fafc; color: #111827; }
-        .allotment-breakdown-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.875rem; }
-        .allotment-breakdown-table th, .allotment-breakdown-table td { padding: 0.85rem 1rem; text-align: left; overflow-wrap: anywhere; border-top: 1px solid #e5e7eb; }
-        .allotment-breakdown-table th:last-child, .allotment-breakdown-table td:last-child { width: 6.5rem; text-align: right; }
-        .allotment-breakdown-type { display: block; margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280; }
-        .allotment-breakdown-total { border-radius: 0.75rem; background: #fffbeb; color: #92400e; }
-        .dark .allotment-breakdown-group { border-color: #374151; }
-        .dark .allotment-breakdown-heading { background: #1f2937; color: #f9fafb; }
-        .dark .allotment-breakdown-table th, .dark .allotment-breakdown-table td { border-color: #374151; }
-        .dark .allotment-breakdown-type { color: #9ca3af; }
+        .allocation-breakdown { display: grid; gap: 1.25rem; }
+        .allocation-breakdown-group { border: 1px solid #e5e7eb; border-radius: 0.75rem; overflow: hidden; }
+        .allocation-breakdown-heading, .allocation-breakdown-total { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; font-weight: 700; background: #f8fafc; color: #111827; }
+        .allocation-breakdown-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.875rem; }
+        .allocation-breakdown-table th, .allocation-breakdown-table td { padding: 0.85rem 1rem; text-align: left; overflow-wrap: anywhere; border-top: 1px solid #e5e7eb; }
+        .allocation-breakdown-table th:last-child, .allocation-breakdown-table td:last-child { width: 6.5rem; text-align: right; }
+        .allocation-breakdown-type { display: block; margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280; }
+        .allocation-breakdown-total { border-radius: 0.75rem; background: #fffbeb; color: #92400e; }
+        .dark .allocation-breakdown-group { border-color: #374151; }
+        .dark .allocation-breakdown-heading { background: #1f2937; color: #f9fafb; }
+        .dark .allocation-breakdown-table th, .dark .allocation-breakdown-table td { border-color: #374151; }
+        .dark .allocation-breakdown-type { color: #9ca3af; }
 
         .dashboard-stat-top {
             display: flex;
@@ -325,17 +325,17 @@
         </section>
 
         <section class="dashboard-stats-grid" aria-label="Registration statistics">
-            <button type="button" class="dashboard-stat-card dashboard-tone-slate" wire:click="openAllocationBreakdown" aria-haspopup="dialog" aria-label="View Total Distributed Allotment breakdown">
+            <button type="button" class="dashboard-stat-card dashboard-tone-slate" wire:click="openAllocationBreakdown" aria-haspopup="dialog" aria-label="View Total Distributed Allocation breakdown">
                 <div class="dashboard-stat-top">
                     <div>
-                        <p class="dashboard-stat-label">Total Distributed Allotment</p>
+                        <p class="dashboard-stat-label">Total Distributed Allocation</p>
                         <p class="dashboard-stat-value">{{ number_format($stats['allocated']) }}</p>
                     </div>
                     <span class="dashboard-stat-icon-wrap">
                         <x-filament::icon icon="heroicon-o-ticket" class="dashboard-stat-icon" />
                     </span>
                 </div>
-                <p class="dashboard-stat-note">View allotment breakdown →</p>
+                <p class="dashboard-stat-note">View allocation breakdown →</p>
             </button>
 
             <article class="dashboard-stat-card dashboard-tone-blue">
@@ -414,34 +414,34 @@
 
     </div>
 
-    <x-filament::modal id="distributed-allotment-breakdown" width="3xl">
-        <x-slot name="heading">Distributed Allotment Breakdown</x-slot>
+    <x-filament::modal id="distributed-allocation-breakdown" width="3xl">
+        <x-slot name="heading">Distributed Allocation Breakdown</x-slot>
         <x-slot name="description">Each amount is listed once. Add the rows to get the total for {{ $stats['year'] }}.</x-slot>
 
         @if ($showAllocationBreakdown)
             @php($breakdown = $this->getAllocationBreakdown())
-            <div class="allotment-breakdown">
-                    <div class="allotment-breakdown-group">
-                        <table class="allotment-breakdown-table">
-                            <thead><tr><th scope="col">Category / Subcategory</th><th scope="col">Allotment</th></tr></thead>
+            <div class="allocation-breakdown">
+                    <div class="allocation-breakdown-group">
+                        <table class="allocation-breakdown-table">
+                            <thead><tr><th scope="col">Category / Subcategory</th><th scope="col">Allocation</th></tr></thead>
                             <tbody>
                                 @forelse ($breakdown['groups'] as $group)
                                 @foreach ($group['items'] as $item)
                                     <tr>
                                         <td>
                                             {{ $group['category'] }}
-                                            <span class="allotment-breakdown-type">{{ $item['label'] === 'Main category' ? 'No subcategories' : $item['label'] }}</span>
+                                            <span class="allocation-breakdown-type">{{ $item['label'] === 'Main category' ? 'No subcategories' : $item['label'] }}</span>
                                         </td>
                                         <td>{{ number_format($item['amount']) }}</td>
                                     </tr>
                                 @endforeach
                                 @empty
-                                    <tr><td colspan="2">No allotments have been configured.</td></tr>
+                                    <tr><td colspan="2">No allocations have been configured.</td></tr>
                                 @endforelse
                             </tbody>
                             <tfoot>
-                                <tr class="allotment-breakdown-total-row">
-                                    <th scope="row">Total Distributed Allotment</th>
+                                <tr class="allocation-breakdown-total-row">
+                                    <th scope="row">Total Distributed Allocation</th>
                                     <td><strong>{{ number_format($breakdown['total']) }}</strong></td>
                                 </tr>
                             </tfoot>
@@ -450,7 +450,7 @@
             </div>
         @endif
         <x-slot name="footerActions">
-            <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'distributed-allotment-breakdown' })">Close</x-filament::button>
+            <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'distributed-allocation-breakdown' })">Close</x-filament::button>
         </x-slot>
     </x-filament::modal>
 </x-filament-panels::page>
