@@ -91,7 +91,13 @@ class SubcategoriesForm
                                 'roles',
                                 fn ($query) => $query->whereIn(
                                     'name',
-                                    ['administrative officer', 'ao'],
+                                    [
+                                        'administrative officer',
+                                        'ao',
+                                        'admin',
+                                        'superadmin',
+                                        'super_admin',
+                                    ],
                                 ),
                             )
                             ->whereHas(

@@ -189,7 +189,19 @@ class User extends Authenticatable
     public function canBeAssignedToSubcategory(?string $category): bool
     {
         return $this->isFocalUserForCategory($category)
-            || ($this->isAdministrativeOfficer() && $this->administersCategory($category));
+            || (
+                filled($category)
+                && $this->hasAnyRole([
+                    'administrative officer',
+                    'ao',
+                    'admin',
+                    'superadmin',
+                    'super_admin',
+                ])
+                && $this->administeredCategoryAllocations()
+                    ->where('categoryDescription', $category)
+                    ->exists()
+            );
     }
 
     public function canManageCreatedFocalUser(User $user): bool

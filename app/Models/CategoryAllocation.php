@@ -38,7 +38,13 @@ class CategoryAllocation extends Model
             'user_id',
         )->whereHas(
             'roles',
-            fn ($query) => $query->whereIn('name', ['administrative officer', 'ao']),
+            fn ($query) => $query->whereIn('name', [
+                'administrative officer',
+                'ao',
+                'admin',
+                'superadmin',
+                'super_admin',
+            ]),
         )->withTimestamps();
     }
 

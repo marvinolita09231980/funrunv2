@@ -9,6 +9,7 @@ use App\Filament\Resources\Subcategories\Widgets\SubcategoryAllocationOverview;
 use App\Filament\Resources\CategoryAllocations\CategoryAllocationResource;
 use App\Filament\Resources\CategoryAllocations\Pages\EditCategoryAllocation;
 use App\Filament\Resources\CategoryAllocations\Pages\ListCategoryAllocations;
+use App\Filament\Resources\CategoryAllocations\Schemas\CategoryAllocationForm;
 use App\Filament\Resources\Participants\Schemas\ParticipantForm;
 use App\Filament\Resources\Participants\Tables\ParticipantsTable;
 use App\Filament\Resources\Participants\Pages\ListParticipants;
@@ -555,6 +556,55 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->assertFalse($officer->canBeAssignedToSubcategory('CATEGORY B'));
         $this->assertSame(
             ['ao-one' => 'Administrative Officer'],
+            SubcategoriesForm::focalUserOptionsForCategory('CATEGORY A'),
+        );
+    }
+
+    public function test_admin_can_assign_their_own_account_as_category_ao(): void
+    {
+        $adminRole = Role::query()->firstOrCreate([
+            'name' => 'admin',
+            'guard_name' => 'web',
+        ]);
+        $admin = $this->createUser('Administrator', 'admin-user');
+        $admin->assignRole($adminRole);
+
+        $otherAdmin = $this->createUser('Other Administrator', 'other-admin');
+        $otherAdmin->assignRole($adminRole);
+
+        $allocation = CategoryAllocation::query()->create([
+            'categoryDescription' => 'CATEGORY A',
+            'allocated_participants' => 0,
+        ]);
+
+        $eligibleAdminIds = CategoryAllocationForm::applyAdministrativeOfficerOptionScope(
+            User::query(),
+            $admin,
+            $allocation,
+        )->pluck('users.id')->all();
+
+        $this->assertContains($admin->getKey(), $eligibleAdminIds);
+        $this->assertNotContains($otherAdmin->getKey(), $eligibleAdminIds);
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($admin);
+
+        Livewire::test(EditCategoryAllocation::class, [
+            'record' => $allocation->getRouteKey(),
+        ])
+            ->fillForm([
+                'administrativeOfficers' => [$admin->getKey()],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $allocation->refresh();
+
+        $this->assertTrue($allocation->administrativeOfficers->contains($admin));
+        $this->assertSame('Administrator', $allocation->assigned_ao_names);
+        $this->assertTrue($admin->canBeAssignedToSubcategory('CATEGORY A'));
+        $this->assertSame(
+            ['admin-user' => 'Administrator'],
             SubcategoriesForm::focalUserOptionsForCategory('CATEGORY A'),
         );
     }
