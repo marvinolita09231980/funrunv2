@@ -2,29 +2,29 @@
 
 namespace App\Providers\Filament;
 
-use Filament\Panel;
-use Filament\PanelProvider;
-use Filament\Pages\Dashboard;
 use App\Filament\Resources\Finishers\Pages\ListFinishers;
 use App\Filament\Resources\Participants\Pages\ListParticipants;
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use Filament\Http\Middleware\Authenticate;
+use Filament\Http\Middleware\AuthenticateSession;
+use Filament\Http\Middleware\DisableBladeIconComponents;
+use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Pages\Dashboard;
+use Filament\Panel;
+use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Tables\View\TablesRenderHook;
 use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
-use Javarex\DdoLogin\LoginDdoPlugin;
 use Filament\Widgets\FilamentInfoWidget;
-use Filament\Http\Middleware\Authenticate;
-use Illuminate\Session\Middleware\StartSession;
-use Illuminate\Cookie\Middleware\EncryptCookies;
-use Filament\Http\Middleware\AuthenticateSession;
-use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
-use Illuminate\Routing\Middleware\SubstituteBindings;
-use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Filament\Http\Middleware\DisableBladeIconComponents;
-use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Javarex\DdoLogin\Pages\Login as DdoLogin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -37,7 +37,7 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->passwordReset()
             ->globalSearch(false)
-            ->brandName('Fun Run ' . date('Y'))
+            ->brandName('Fun Run '.date('Y'))
             ->colors([
                 'primary' => Color::Amber,
             ])
@@ -56,6 +56,11 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::BODY_END,
                 fn (): string => Blade::render('<livewire:contact-information-prompt />'),
+            )
+            ->renderHook(
+                PanelsRenderHook::SIMPLE_LAYOUT_END,
+                fn () => view('filament.auth.partials.feedback-share-card'),
+                scopes: DdoLogin::class,
             )
             ->pages([
                 // Dashboard::class,
@@ -85,5 +90,4 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->databaseNotifications();
     }
-
 }
