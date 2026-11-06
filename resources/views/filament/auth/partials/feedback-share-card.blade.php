@@ -11,8 +11,11 @@
         display: grid;
         grid-template-columns: auto minmax(0, 1fr);
         width: min(72rem, calc(100% - 2rem));
+        max-width: calc(100% - 2rem);
+        min-width: 0;
         margin: 1.25rem auto 2rem;
         overflow: hidden;
+        box-sizing: border-box;
         border: 1px solid rgba(217, 119, 6, 0.2);
         border-radius: 1.25rem;
         background: #ffffff;
@@ -118,18 +121,31 @@
         flex: 0 0 auto;
     }
 
-    @media (max-width: 639px) {
+    @media (max-width: 767px) {
         .feedback-share-card {
             grid-template-columns: 1fr;
+            width: calc(100% - 1.5rem);
+            max-width: calc(100% - 1.5rem);
+            margin: 0.25rem auto 1rem;
         }
 
         .feedback-share-qr-wrap {
-            padding-bottom: 0.75rem;
+            min-width: 0;
+            padding: 1rem 1rem 0.75rem;
+        }
+
+        .feedback-share-qr {
+            width: min(8rem, 45vw);
+            height: auto;
+            aspect-ratio: 1;
         }
 
         .feedback-share-content {
-            padding: 1.1rem 1.25rem 1.35rem;
+            width: 100%;
+            max-width: 100%;
+            padding: 1rem;
             text-align: center;
+            box-sizing: border-box;
         }
 
         .feedback-share-copy {
@@ -137,7 +153,15 @@
         }
 
         .feedback-share-actions {
+            flex-direction: column;
             justify-content: center;
+            width: 100%;
+        }
+
+        .feedback-share-button {
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
     }
 </style>
