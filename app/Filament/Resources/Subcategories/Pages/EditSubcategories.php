@@ -24,8 +24,17 @@ class EditSubcategories extends EditRecord
             ]);
         }
 
+        $capacity = (int) $data['nop'];
+        $minimum = $this->record->minimumCapacity();
+
+        if (! $this->record->canSetCapacity($capacity)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'data.nop' => "The minimum allowed capacity is {$minimum} because this subcategory currently has {$minimum} registered participant(s).",
+            ]);
+        }
+
         if (! $allocation->accommodatesSubcategoryCapacity(
-            (int) $data['nop'],
+            $capacity,
             $this->record->getKey(),
         )) {
             $available = $allocation->allocated_participants

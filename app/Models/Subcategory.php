@@ -45,4 +45,13 @@ class Subcategory extends Model
         return max(0, (int) $this->nop - $this->registeredParticipants($year));
     }
 
+    public function minimumCapacity(?int $year = null): int
+    {
+        return $this->registeredParticipants($year);
+    }
+
+    public function canSetCapacity(int $capacity, ?int $year = null): bool
+    {
+        return $capacity >= $this->minimumCapacity($year);
+    }
 }

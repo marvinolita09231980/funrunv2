@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Finishers\Tables;
 
 use Carbon\Carbon;
 use App\Models\Finisher;
+use App\Models\Participant;
 use Filament\Tables\Table;
 use Filament\Facades\Filament;
 use Filament\Actions\EditAction;
@@ -51,6 +52,7 @@ class FinishersTable
                         ]),
                     TextColumn::make('distanceCategory')
                         ->label('Distance')
+                        ->formatStateUsing(fn (?string $state): string => Participant::distanceLabel($state))
                         ->badge()
                         ->color('info'),
                     TextColumn::make('participant.year')

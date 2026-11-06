@@ -4,8 +4,8 @@ namespace App\Filament\Participant\Pages;
 
 use Filament\Pages\Page;
 use Filament\Actions\Action;
+use App\Models\CategoryAllocation;
 use App\Models\Participant;
-use App\Models\Subcategory;
 use Filament\Support\RawJs;
 use Filament\Schemas\Schema;
 use Livewire\Attributes\Locked;
@@ -409,7 +409,7 @@ class RegisterForm extends Page implements HasSchemas
                            
                             ->required()
                             ->options([
-                                    '3km' =>    '3KM',
+                                    '3km' =>    'Rave Run (3K)',
                                     '5km' =>    '5KM',
                                     '10km' =>   '10KM',
                                 ])
@@ -485,11 +485,11 @@ class RegisterForm extends Page implements HasSchemas
             return;
         }
 
-        $subcategory = Subcategory::query()
+        $allocation = CategoryAllocation::query()
             ->where('categoryDescription', $category)
             ->first();
 
-        if (! $subcategory) {
+        if (! $allocation) {
             $this->categoryFull = true;
 
             return;
@@ -500,7 +500,7 @@ class RegisterForm extends Page implements HasSchemas
             ->where('year', now()->year)
             ->count();
 
-        $this->categoryFull = $registeredCount >= (int) $subcategory->nop;
+        $this->categoryFull = $registeredCount >= (int) $allocation->allocated_participants;
     }
 
     public function checkRegistrationAvailability(): void
@@ -593,12 +593,12 @@ class RegisterForm extends Page implements HasSchemas
                 $registrationType,
             ): Participant {
                 $year = (int) now()->year;
-                $subcategory = Subcategory::query()
+                $allocation = CategoryAllocation::query()
                     ->where('categoryDescription', $formData['categoryDescription'])
                     ->lockForUpdate()
                     ->first();
 
-                if (! $subcategory) {
+                if (! $allocation) {
                     throw ValidationException::withMessages([
                         'data.categoryDescription' => 'The selected category is not available.',
                     ]);
@@ -608,7 +608,10 @@ class RegisterForm extends Page implements HasSchemas
                     ->where('categoryDescription', $formData['categoryDescription'])
                     ->where('year', $year)
                     ->count();
-                $remainingSlots = max(0, (int) $subcategory->nop - $registeredCount);
+                $remainingSlots = max(
+                    0,
+                    (int) $allocation->allocated_participants - $registeredCount,
+                );
 
                 if (count($registrants) > $remainingSlots) {
                     throw ValidationException::withMessages([
@@ -987,7 +990,7 @@ class RegisterForm extends Page implements HasSchemas
             'year' => $participant->year,
             'category' => $participant->categoryDescription,
             'organization' => $participant->subDescription,
-            'distance' => strtoupper((string) $participant->distanceCategory),
+            'distance' => Participant::distanceLabel($participant->distanceCategory),
             'shirt_size' => strtoupper((string) $participant->shirtSize),
             'participant_number' => $participantNumber,
             'registration_count' => max(1, $registrationParticipants->count()),

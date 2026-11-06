@@ -339,7 +339,7 @@
             <article class="dashboard-stat-card dashboard-tone-emerald">
                 <div class="dashboard-stat-top">
                     <div>
-                        <p class="dashboard-stat-label">3 KM</p>
+                        <p class="dashboard-stat-label">Rave Run (3K)</p>
                         <p class="dashboard-stat-value">{{ number_format($stats['total_3k']) }}</p>
                     </div>
                     <span class="dashboard-stat-icon-wrap">

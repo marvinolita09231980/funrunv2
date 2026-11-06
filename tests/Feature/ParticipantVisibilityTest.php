@@ -81,6 +81,13 @@ class ParticipantVisibilityTest extends TestCase
         );
     }
 
+    public function test_three_kilometer_distance_uses_the_rave_run_label(): void
+    {
+        $this->assertSame('Rave Run (3K)', Participant::distanceLabel('3km'));
+        $this->assertSame('Rave Run (3K)', Participant::distanceLabel(' 3K '));
+        $this->assertSame('5KM', Participant::distanceLabel('5km'));
+    }
+
     private function createUser(string $username): User
     {
         return User::query()->create([

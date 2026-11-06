@@ -348,7 +348,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                     $data[] = [
                         $ctr++, 
                         $fullName,                   // Name
-                        $p->distanceCategory,                           // Position
+                        Participant::distanceLabel($p->distanceCategory), // Position
                         $agency,     // Agency
                         '',                           // IP
                         '',                           // Non-IP

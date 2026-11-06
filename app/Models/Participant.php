@@ -32,5 +32,19 @@ class Participant extends Model
         return strcasecmp(trim((string) $this->created_by), 'opencategory') === 0;
     }
 
-   
+    public static function distanceLabel(?string $distance): string
+    {
+        $value = trim((string) $distance);
+        $normalized = strtolower((string) preg_replace('/\s+/', '', $value));
+
+        return match ($normalized) {
+            '3k', '3km' => 'Rave Run (3K)',
+            default => $value !== '' ? strtoupper($value) : 'Not provided',
+        };
+    }
+
+    public function getDistanceLabelAttribute(): string
+    {
+        return self::distanceLabel($this->distanceCategory);
+    }
 }

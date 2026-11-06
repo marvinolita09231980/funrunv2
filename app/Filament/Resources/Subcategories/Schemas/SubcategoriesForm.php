@@ -25,7 +25,7 @@ class SubcategoriesForm
                 TextInput::make('nop')
                     ->label('Maximum Participants')
                     ->numeric()
-                    ->minValue(0)
+                    ->minValue(fn (?Subcategory $record): int => $record?->minimumCapacity() ?? 0)
                     ->helperText(function (Get $get, ?Subcategory $record): ?string {
                         $allocation = CategoryAllocation::query()
                             ->where('categoryDescription', $get('categoryDescription'))
@@ -38,7 +38,11 @@ class SubcategoriesForm
                         $available = $allocation->allocated_participants
                             - $allocation->distributedParticipants($record?->getKey());
 
-                        return "Main-category allocation: {$allocation->allocated_participants}. Available for this subcategory: " . max(0, $available) . '.';
+                        $minimum = $record?->minimumCapacity() ?? 0;
+
+                        return "Main-category allocation: {$allocation->allocated_participants}. Available for this subcategory: "
+                            . max(0, $available)
+                            . ". Minimum allowed: {$minimum}.";
                     })
                     ->required(),
                 TextInput::make('subDescription')

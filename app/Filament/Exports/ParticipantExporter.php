@@ -42,7 +42,8 @@ class ParticipantExporter extends Exporter
              ExportColumn::make('gender')
                  ->label('Gender'),
              ExportColumn::make('distanceCategory')
-                 ->label('Distance'),
+                 ->label('Distance')
+                 ->getStateUsing(fn (Participant $record): string => Participant::distanceLabel($record->distanceCategory)),
              ExportColumn::make('shirtSize')
                  ->label('Shirt Size'),
              ExportColumn::make('signature')

@@ -62,7 +62,7 @@ class CreateParticipant extends CreateRecord
             'year' => $participant->year,
             'category' => $participant->categoryDescription ?: 'Not recorded',
             'subcategory' => $participant->subDescription ?: 'Not recorded',
-            'distance' => strtoupper((string) $participant->distanceCategory),
+            'distance' => Participant::distanceLabel($participant->distanceCategory),
             'shirt_size' => strtoupper((string) $participant->shirtSize),
             'creator_name' => $participant->creator_name,
             'creator_role' => $this->creatorRoleLabel($creator),

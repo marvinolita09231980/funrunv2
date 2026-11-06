@@ -123,7 +123,7 @@ class Dashboard extends BaseDashboard implements HasTable
                     ->description(fn ($record): string => collect([
                         'Allotted: ' . number_format((int) $record->nop),
                         'Registered: ' . number_format((int) $record->registered),
-                        '3 KM: ' . number_format((int) $record->count_3k),
+                        'Rave Run (3K): ' . number_format((int) $record->count_3k),
                         '5 KM: ' . number_format((int) $record->count_5k),
                         '10 KM: ' . number_format((int) $record->count_10k),
                     ])->join(' • '))
@@ -147,7 +147,7 @@ class Dashboard extends BaseDashboard implements HasTable
                     ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
                     ->visibleFrom('md'),
                 TextColumn::make('count_3k')
-                    ->label('3 KM')
+                    ->label('Rave Run (3K)')
                     ->formatStateUsing(fn ($state) => $state == 0 ? '--' : $state)
                     ->visibleFrom('md'),
                 TextColumn::make('count_5k')

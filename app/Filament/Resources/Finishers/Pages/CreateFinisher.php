@@ -70,6 +70,7 @@ class CreateFinisher extends Page implements HasTable
                         ->wrap(),
                     TextColumn::make('distanceCategory')
                         ->label('Distance')
+                        ->formatStateUsing(fn (?string $state): string => Participant::distanceLabel($state))
                         ->badge()
                         ->color('info'),
                     TextColumn::make('categoryDescription')
@@ -144,7 +145,7 @@ class CreateFinisher extends Page implements HasTable
                     ->button()
                     ->modalWidth('md')
                     ->modalHeading(fn (Participant $record): string => "Record {$record->firstName} {$record->lastName}")
-                    ->modalDescription(fn (Participant $record): string => strtoupper((string) $record->distanceCategory) . ' runner')
+                    ->modalDescription(fn (Participant $record): string => Participant::distanceLabel($record->distanceCategory) . ' runner')
                     ->modalSubmitActionLabel('Record Runner')
                     ->schema([
                         TextInput::make('racebib')
@@ -167,7 +168,7 @@ class CreateFinisher extends Page implements HasTable
                                     };
 
                                     if ($requiredPrefix && ! str_starts_with((string) $value, $requiredPrefix)) {
-                                        $fail(strtoupper($distance) . " bib numbers must start with {$requiredPrefix}.");
+                                        $fail(Participant::distanceLabel($distance) . " bib numbers must start with {$requiredPrefix}.");
                                     }
                                 };
                             })
@@ -196,7 +197,7 @@ class CreateFinisher extends Page implements HasTable
                                         ->exists();
 
                                     if ($rankExists) {
-                                        $fail("Rank {$value} is already recorded for {$record->distanceCategory}.");
+                                        $fail("Rank {$value} is already recorded for " . Participant::distanceLabel($record->distanceCategory) . '.');
                                     }
                                 };
                             }),

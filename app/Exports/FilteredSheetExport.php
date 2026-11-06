@@ -278,7 +278,7 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
                         $fullName,
                         $p->birthDate,
                         $age,
-                        $p->distanceCategory ?? '',
+                        Participant::distanceLabel($p->distanceCategory),
                         $p->gender ?? '',
                         $p->categoryDescription ?? '',
                         $p->subDescription ?? '',

@@ -219,7 +219,7 @@
                 </td>
                 <td>
                     <div class="label">Race distance</div>
-                    <div class="value">{{ filled($participant->distanceCategory) ? strtoupper($participant->distanceCategory) : 'Not provided' }}</div>
+                    <div class="value">{{ \App\Models\Participant::distanceLabel($participant->distanceCategory) }}</div>
                 </td>
             </tr>
             <tr>

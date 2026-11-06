@@ -82,9 +82,17 @@ class CategoryAllocation extends Model
         );
     }
 
-    public function canSetAllocation(int $allocation): bool
+    public function minimumAllocation(?int $year = null): int
     {
-        return $allocation >= $this->distributedParticipants();
+        return max(
+            $this->distributedParticipants(),
+            $this->registeredParticipants($year),
+        );
+    }
+
+    public function canSetAllocation(int $allocation, ?int $year = null): bool
+    {
+        return $allocation >= $this->minimumAllocation($year);
     }
 
     public function accommodatesSubcategoryCapacity(

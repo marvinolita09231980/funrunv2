@@ -3,8 +3,8 @@
 namespace Tests\Feature;
 
 use App\Filament\Participant\Pages\RegisterForm;
+use App\Models\CategoryAllocation;
 use App\Models\Participant;
-use App\Models\Subcategory;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
@@ -23,10 +23,9 @@ class RegisterFormTest extends TestCase
 
         Filament::setCurrentPanel(Filament::getPanel('register'));
 
-        Subcategory::query()->create([
+        CategoryAllocation::query()->create([
             'categoryDescription' => 'OPEN CATEGORY',
-            'subDescription' => 'Open',
-            'nop' => 100,
+            'allocated_participants' => 100,
         ]);
     }
 
@@ -44,6 +43,41 @@ class RegisterFormTest extends TestCase
             ->assertSee('Category')
             ->assertSee('Description')
             ->assertSee('Distance category');
+    }
+
+    public function test_open_category_uses_its_main_allocation_without_a_subcategory(): void
+    {
+        CategoryAllocation::query()
+            ->where('categoryDescription', 'OPEN CATEGORY')
+            ->update(['allocated_participants' => 1]);
+
+        $this->assertDatabaseCount('subcategories', 0);
+
+        Livewire::test(RegisterForm::class)
+            ->assertSet('categoryFull', false)
+            ->set('data.firstName', 'Open')
+            ->set('data.lastName', 'Runner')
+            ->set('data.birthDate', '1990-01-01')
+            ->set('data.gender', 'male')
+            ->set('data.shirtSize', 'large')
+            ->set('data.address', 'Test address')
+            ->set('data.contactNumber', '09987654321')
+            ->set('data.pwd', '0')
+            ->set('data.rpwuds', '0')
+            ->set('data.registrationType', 'individual')
+            ->set('data.distanceCategory', '5km')
+            ->set('data.waiver', true)
+            ->call('create')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('participants', [
+            'firstName' => 'Open',
+            'lastName' => 'Runner',
+            'categoryDescription' => 'OPEN CATEGORY',
+        ]);
+
+        Livewire::test(RegisterForm::class)
+            ->assertSet('categoryFull', true);
     }
 
     public function test_registration_type_reveals_its_conditional_fields(): void

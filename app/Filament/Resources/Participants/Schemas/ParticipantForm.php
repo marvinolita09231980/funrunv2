@@ -200,7 +200,7 @@ class ParticipantForm
                                 Radio::make('distanceCategory')
                                     ->required()
                                     ->options([
-                                            '3km' =>    '3KM',
+                                            '3km' =>    'Rave Run (3K)',
                                             '5km' =>    '5KM',
                                             '10km' =>   '10KM',
                                         ])

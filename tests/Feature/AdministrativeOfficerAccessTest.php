@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Subcategories\SubcategoriesResource;
+use App\Filament\Resources\Subcategories\Pages\EditSubcategories;
 use App\Filament\Resources\Subcategories\Pages\ListSubcategories;
 use App\Filament\Resources\Subcategories\Widgets\SubcategoryAllocationOverview;
 use App\Filament\Resources\CategoryAllocations\CategoryAllocationResource;
@@ -394,6 +395,110 @@ class AdministrativeOfficerAccessTest extends TestCase
 
         Livewire::test(ListCategoryAllocations::class)
             ->assertActionHidden('setOverallAllocation');
+    }
+
+    public function test_category_allocation_cannot_be_reduced_below_registered_participants(): void
+    {
+        $adminRole = Role::query()->firstOrCreate([
+            'name' => 'admin',
+            'guard_name' => 'web',
+        ]);
+        $admin = $this->createUser('Administrator', 'admin-user');
+        $admin->assignRole($adminRole);
+
+        $allocation = CategoryAllocation::query()->create([
+            'categoryDescription' => 'OPEN CATEGORY',
+            'allocated_participants' => 10,
+        ]);
+        OverallAllocation::current()->update(['total_participants' => 10]);
+
+        foreach (range(1, 6) as $number) {
+            $this->createParticipant("Open {$number}", 'OPEN CATEGORY', 'Individual');
+        }
+
+        $this->assertSame(6, $allocation->registeredParticipants());
+        $this->assertSame(6, $allocation->minimumAllocation());
+        $this->assertFalse($allocation->canSetAllocation(5));
+        $this->assertTrue($allocation->canSetAllocation(6));
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($admin);
+
+        Livewire::test(EditCategoryAllocation::class, [
+            'record' => $allocation->getRouteKey(),
+        ])
+            ->fillForm(['allocated_participants' => 5])
+            ->call('save')
+            ->assertHasFormErrors(['allocated_participants']);
+
+        $this->assertSame(10, $allocation->fresh()->allocated_participants);
+
+        Livewire::test(EditCategoryAllocation::class, [
+            'record' => $allocation->getRouteKey(),
+        ])
+            ->fillForm(['allocated_participants' => 6])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(6, $allocation->fresh()->allocated_participants);
+    }
+
+    public function test_subcategory_capacity_cannot_be_reduced_below_registered_participants(): void
+    {
+        $focalRole = Role::query()->firstOrCreate([
+            'name' => 'focal user',
+            'guard_name' => 'web',
+        ]);
+        $focalUser = $this->createUser('Focal Person', 'focal-person');
+        $focalUser->forceFill(['assigned_category' => 'CATEGORY A'])->save();
+        $focalUser->assignRole($focalRole);
+
+        CategoryAllocation::query()->create([
+            'categoryDescription' => 'CATEGORY A',
+            'allocated_participants' => 10,
+        ]);
+        $officer = $this->createUser(
+            name: 'Administrative Officer',
+            username: 'ao-one',
+            administeredCategory: 'CATEGORY A',
+        );
+        $officer->assignRole(Role::findByName('administrative officer'));
+
+        $subcategory = Subcategory::query()->create([
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+            'nop' => 10,
+            'username' => $focalUser->username,
+        ]);
+
+        foreach (range(1, 6) as $number) {
+            $this->createParticipant("Office {$number}", 'CATEGORY A', 'Office A');
+        }
+
+        $this->assertSame(6, $subcategory->minimumCapacity());
+        $this->assertFalse($subcategory->canSetCapacity(5));
+        $this->assertTrue($subcategory->canSetCapacity(6));
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($officer);
+
+        Livewire::test(EditSubcategories::class, [
+            'record' => $subcategory->getRouteKey(),
+        ])
+            ->fillForm(['nop' => 5])
+            ->call('save')
+            ->assertHasFormErrors(['nop']);
+
+        $this->assertSame(10, $subcategory->fresh()->nop);
+
+        Livewire::test(EditSubcategories::class, [
+            'record' => $subcategory->getRouteKey(),
+        ])
+            ->fillForm(['nop' => 6])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(6, $subcategory->fresh()->nop);
     }
 
     public function test_officer_can_create_only_focal_users_for_the_administered_category(): void

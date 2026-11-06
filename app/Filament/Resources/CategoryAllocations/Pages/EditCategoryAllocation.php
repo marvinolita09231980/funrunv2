@@ -15,11 +15,13 @@ class EditCategoryAllocation extends EditRecord
     protected function mutateFormDataBeforeSave(array $data): array
     {
         $distributed = $this->record->distributedParticipants();
+        $registered = $this->record->registeredParticipants();
+        $minimum = $this->record->minimumAllocation();
         $allocation = (int) $data['allocated_participants'];
 
         if (! $this->record->canSetAllocation($allocation)) {
             throw ValidationException::withMessages([
-                'data.allocated_participants' => "Allocation cannot be lower than the {$distributed} participants already distributed among subcategories.",
+                'data.allocated_participants' => "The minimum allowed allocation is {$minimum}. This category has {$registered} registered participant(s) and {$distributed} slot(s) distributed among subcategories.",
             ]);
         }
 

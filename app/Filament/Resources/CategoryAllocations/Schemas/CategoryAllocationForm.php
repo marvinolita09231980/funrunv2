@@ -30,12 +30,16 @@ class CategoryAllocationForm
                     ->searchable(),
                 TextInput::make('allocated_participants')
                     ->label('Allocated Participants')
-                    ->helperText(fn (?CategoryAllocation $record): string => 'Available from the overall allocation: '
-                        . number_format(
+                    ->helperText(fn (?CategoryAllocation $record): string => collect([
+                        'Available from the overall allocation: ' . number_format(
                             OverallAllocation::current()->availableForCategory($record?->getKey()),
-                        ))
+                        ),
+                        $record
+                            ? 'Minimum allowed: ' . number_format($record->minimumAllocation())
+                            : null,
+                    ])->filter()->join(' • '))
                     ->numeric()
-                    ->minValue(0)
+                    ->minValue(fn (?CategoryAllocation $record): int => $record?->minimumAllocation() ?? 0)
                     ->maxValue(fn (?CategoryAllocation $record): int => OverallAllocation::current()
                         ->availableForCategory($record?->getKey()))
                     ->required(),

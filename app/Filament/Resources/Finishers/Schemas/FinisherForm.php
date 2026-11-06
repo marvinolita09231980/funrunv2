@@ -107,26 +107,22 @@ class FinisherForm
                         ->rule(function($get) {
                             return function ($attribute, $value, $fail) use ($get) {
 
-                                $distance = $get('distance_category');
+                                $distance = strtolower(trim((string) $get('distanceCategory')));
 
                                 // Must be exactly 4 digits
                                 if (strlen($value) !== 4) {
                                     return $fail('Race Bib must be exactly 4 digits.');
                                 }
 
-                                // 10K → bib must start with 1
-                                if ($distance === '10K' && !str_starts_with($value, '1')) {
-                                    return $fail('10K bib numbers must start with 1.');
-                                }
+                                $requiredPrefix = match ($distance) {
+                                    '10k', '10km' => '1',
+                                    '5k', '5km' => '5',
+                                    '3k', '3km' => '3',
+                                    default => null,
+                                };
 
-                                // 5K → bib must start with 5
-                                if ($distance === '5K' && !str_starts_with($value, '5')) {
-                                    return $fail('5K bib numbers must start with 5.');
-                                }
-
-                                // 3K → bib must start with 3
-                                if ($distance === '3K' && !str_starts_with($value, '3')) {
-                                    return $fail('3K bib numbers must start with 3.');
+                                if ($requiredPrefix && ! str_starts_with((string) $value, $requiredPrefix)) {
+                                    return $fail(Participant::distanceLabel($distance) . " bib numbers must start with {$requiredPrefix}.");
                                 }
                             };
                         }),
@@ -159,6 +155,7 @@ class FinisherForm
                         ->disabled(),
                         TextInput::make('distanceCategory')
                         ->label('Distance Category')
+                        ->formatStateUsing(fn (?string $state): string => Participant::distanceLabel($state))
                         ->disabled(),
 
                   ])

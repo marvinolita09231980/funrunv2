@@ -279,7 +279,7 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                         $ctr++, 
                         $p->singlet ?? '',          // Racebib No.
                         $fullName,                  // Name
-                        $p->distanceCategory ?? '',
+                        Participant::distanceLabel($p->distanceCategory),
                         $p->shirtSize ?? '',
                         '',                         // IP
                         '',                         // Non-IP
