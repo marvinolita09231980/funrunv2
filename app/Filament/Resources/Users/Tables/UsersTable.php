@@ -83,12 +83,12 @@ class UsersTable
                     ->visible(function (User $record): bool {
                         $user = Auth::user();
 
-                        return $user?->hasAnyRole([
+                        return $record->canBeImpersonated() && ($user?->hasAnyRole([
                             'admin',
                             'superadmin',
                             'super_admin',
                         ])
-                            || ($user?->canImpersonateFocalUser($record) ?? false);
+                            || ($user?->canImpersonateFocalUser($record) ?? false));
                     }),
             ])
             ->toolbarActions([

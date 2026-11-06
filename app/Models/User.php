@@ -87,6 +87,16 @@ class User extends Authenticatable
         return $this->hasAnyRole(['administrative officer', 'ao']);
     }
 
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasAnyRole(['superadmin', 'super_admin']);
+    }
+
+    public function isAdminWithoutSuperAdmin(): bool
+    {
+        return $this->hasRole('admin') && ! $this->isSuperAdmin();
+    }
+
     public function administeredCategoryAllocations(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -193,6 +203,10 @@ class User extends Authenticatable
         $actor = Auth::user();
 
         if (! $actor instanceof User) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin() && ! $actor->isSuperAdmin()) {
             return false;
         }
 

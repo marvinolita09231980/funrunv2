@@ -16,6 +16,10 @@ class UserPolicy
 
     public function view(User $authUser, User $user): bool
     {
+        if ($this->isProtectedSuperAdmin($authUser, $user)) {
+            return false;
+        }
+
         if ($authUser->isAdministrativeOfficer()) {
             return $user->hasRole('focal user')
                 && $authUser->administersCategory($user->assigned_category);
@@ -31,6 +35,10 @@ class UserPolicy
 
     public function update(User $authUser, User $user): bool
     {
+        if ($this->isProtectedSuperAdmin($authUser, $user)) {
+            return false;
+        }
+
         if ($authUser->isAdministrativeOfficer()) {
             return $authUser->can('Update:User')
                 && $authUser->canManageCreatedFocalUser($user);
@@ -41,6 +49,10 @@ class UserPolicy
 
     public function delete(User $authUser, User $user): bool
     {
+        if ($this->isProtectedSuperAdmin($authUser, $user)) {
+            return false;
+        }
+
         if ($authUser->isAdministrativeOfficer()) {
             return $authUser->can('Delete:User')
                 && $authUser->canManageCreatedFocalUser($user);
@@ -51,11 +63,19 @@ class UserPolicy
 
     public function restore(User $authUser, User $user): bool
     {
+        if ($this->isProtectedSuperAdmin($authUser, $user)) {
+            return false;
+        }
+
         return $authUser->can('Restore:User');
     }
 
     public function forceDelete(User $authUser, User $user): bool
     {
+        if ($this->isProtectedSuperAdmin($authUser, $user)) {
+            return false;
+        }
+
         return $authUser->can('ForceDelete:User');
     }
 
@@ -71,12 +91,21 @@ class UserPolicy
 
     public function replicate(User $authUser, User $user): bool
     {
+        if ($this->isProtectedSuperAdmin($authUser, $user)) {
+            return false;
+        }
+
         return $authUser->can('Replicate:User');
     }
 
     public function reorder(User $authUser): bool
     {
         return $authUser->can('Reorder:User');
+    }
+
+    private function isProtectedSuperAdmin(User $authUser, User $user): bool
+    {
+        return $authUser->isAdminWithoutSuperAdmin() && $user->isSuperAdmin();
     }
 
 }

@@ -135,6 +135,16 @@ class UserResource extends Resource
 
     public static function applyVisibilityForUser(Builder $query, ?User $user): Builder
     {
+        if ($user?->isAdminWithoutSuperAdmin()) {
+            return $query->whereDoesntHave(
+                'roles',
+                fn (Builder $query): Builder => $query->whereIn(
+                    'name',
+                    ['superadmin', 'super_admin'],
+                ),
+            );
+        }
+
         if (! $user?->isAdministrativeOfficer()) {
             return $query;
         }

@@ -2,8 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
+use App\Policies\UserPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class UserProfileFieldsTest extends TestCase
@@ -47,5 +51,52 @@ class UserProfileFieldsTest extends TestCase
 
         $this->assertNull($user->email);
         $this->assertSame('noemailuser', $user->username);
+    }
+
+    public function test_admin_cannot_view_manage_or_impersonate_a_superadmin(): void
+    {
+        $adminRole = Role::query()->create([
+            'name' => 'admin',
+            'guard_name' => 'web',
+        ]);
+        $superAdminRole = Role::query()->create([
+            'name' => 'superadmin',
+            'guard_name' => 'web',
+        ]);
+
+        $admin = User::factory()->create(['name' => 'Administrator']);
+        $admin->assignRole($adminRole);
+        $superAdmin = User::factory()->create(['name' => 'Protected Superadmin']);
+        $superAdmin->assignRole($superAdminRole);
+        $regularUser = User::factory()->create(['name' => 'Regular User']);
+
+        foreach (['View:User', 'Update:User', 'Delete:User', 'ForceDelete:User', 'Restore:User', 'Replicate:User'] as $permission) {
+            $admin->givePermissionTo(Permission::findOrCreate($permission));
+        }
+
+        $visibleUserIds = UserResource::applyVisibilityForUser(User::query(), $admin)
+            ->pluck('id');
+
+        $this->assertFalse($visibleUserIds->contains($superAdmin->getKey()));
+        $this->assertTrue($visibleUserIds->contains($regularUser->getKey()));
+
+        $policy = new UserPolicy();
+        $this->assertFalse($policy->view($admin, $superAdmin));
+        $this->assertFalse($policy->update($admin, $superAdmin));
+        $this->assertFalse($policy->delete($admin, $superAdmin));
+        $this->assertFalse($policy->forceDelete($admin, $superAdmin));
+        $this->assertFalse($policy->restore($admin, $superAdmin));
+        $this->assertFalse($policy->replicate($admin, $superAdmin));
+
+        $this->actingAs($admin);
+        $this->assertFalse($superAdmin->canBeImpersonated());
+        $this->assertTrue($regularUser->canBeImpersonated());
+
+        $visibleToSuperAdmin = UserResource::applyVisibilityForUser(
+            User::query(),
+            $superAdmin,
+        )->pluck('id');
+
+        $this->assertTrue($visibleToSuperAdmin->contains($superAdmin->getKey()));
     }
 }
