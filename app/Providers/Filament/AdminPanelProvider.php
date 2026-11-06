@@ -9,6 +9,7 @@ use App\Filament\Resources\Finishers\Pages\ListFinishers;
 use App\Filament\Resources\Participants\Pages\ListParticipants;
 use Filament\Support\Colors\Color;
 use Filament\Tables\View\TablesRenderHook;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Javarex\DdoLogin\LoginDdoPlugin;
 use Filament\Widgets\FilamentInfoWidget;
@@ -23,6 +24,7 @@ use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Support\Facades\Blade;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -33,6 +35,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->passwordReset()
             ->globalSearch(false)
             ->brandName('Fun Run ' . date('Y'))
             ->colors([
@@ -49,6 +52,10 @@ class AdminPanelProvider extends PanelProvider
                 TablesRenderHook::TOOLBAR_SEARCH_BEFORE,
                 fn () => view('filament.pages.partials.table-year-filter'),
                 scopes: ListFinishers::class,
+            )
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string => Blade::render('<livewire:contact-information-prompt />'),
             )
             ->pages([
                 // Dashboard::class,
