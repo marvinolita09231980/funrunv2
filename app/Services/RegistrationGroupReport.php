@@ -12,7 +12,9 @@ class RegistrationGroupReport
     public static function build(User $user, int $year, string $type): array
     {
         $query = Participant::query()->where('year', $year);
-        ParticipantsTable::applyVisibilityForUser($query, $user);
+        if ($user->hasRole('focal user') && ! $user->isAdministrativeOfficer()) {
+            ParticipantsTable::applyVisibilityForUser($query, $user);
+        }
 
         if ($type === 'couple') {
             $query->where(fn ($query) => $query->where('couple', true)->orWhereRaw("LOWER(TRIM(subDescription)) = 'couple'"));

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Pages\ParticipantReports;
 use App\Models\CategoryAllocation;
 use App\Models\Participant;
+use App\Models\Subcategory;
 use App\Models\User;
 use App\Services\ParticipantAgeReport;
 use App\Services\RegistrationGroupReport;
@@ -20,6 +21,28 @@ use Tests\TestCase;
 class ParticipantAgeReportTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_authorized_report_role_lists_existing_runners_even_when_created_by_other_users(): void
+    {
+        $viewer = $this->user('report viewer');
+        $viewer->givePermissionTo(Permission::findOrCreate(ParticipantReports::VIEW_PERMISSION, 'web'));
+
+        foreach (['1992-09-14', '1999-03-31', '1999-08-21', '1996-09-30', '1970-05-03'] as $birthDate) {
+            $this->participant(['year' => 2026, 'gender' => 'male', 'distanceCategory' => '10km', 'birthDate' => $birthDate, 'created_by' => 'another-focal']);
+        }
+        $this->participant(['year' => 2026, 'gender' => 'female', 'distanceCategory' => '5km', 'birthDate' => '1962-09-14']);
+        foreach (['2001-04-21', '1988-01-01'] as $birthDate) {
+            $this->participant(['year' => 2026, 'gender' => 'female', 'distanceCategory' => '10km', 'birthDate' => $birthDate]);
+        }
+        for ($index = 0; $index < 7; $index++) {
+            $this->participant(['year' => 2026, 'distanceCategory' => '3km']);
+        }
+
+        $report = ParticipantAgeReport::build($viewer, 2026);
+        $this->assertSame([0, 5, 1, 2, 0, 5, 1, 2], array_map(fn (array $section): int => count($section['participants']), $report['sections']));
+        $this->assertSame('05/03/1970', $report['sections'][1]['participants'][0]['birth_date']);
+        $this->assertSame('08/21/1999', $report['sections'][5]['participants'][0]['birth_date']);
+    }
 
     public function test_eight_rankings_select_the_correct_ten_in_each_gender_and_distance(): void
     {
@@ -70,6 +93,18 @@ class ParticipantAgeReportTest extends TestCase
         $officer->administeredCategoryAllocations()->detach();
         $empty = ParticipantAgeReport::build($officer, now()->year, 'oldest', 'male', '5km');
         $this->assertSame([], $empty['sections'][0]['participants']);
+    }
+
+    public function test_focal_with_report_permission_remains_limited_to_assigned_subcategories(): void
+    {
+        $focal = $this->user('focal user');
+        $focal->givePermissionTo(Permission::findOrCreate(ParticipantReports::VIEW_PERMISSION, 'web'));
+        Subcategory::create(['categoryDescription' => 'CATEGORY', 'subDescription' => 'OWN OFFICE', 'nop' => 10, 'username' => $focal->username]);
+        $this->participant(['firstName' => 'Visible', 'categoryDescription' => 'CATEGORY', 'subDescription' => 'OWN OFFICE']);
+        $this->participant(['firstName' => 'Hidden', 'categoryDescription' => 'CATEGORY', 'subDescription' => 'OTHER OFFICE']);
+
+        $report = ParticipantAgeReport::build($focal, now()->year, 'oldest', 'male', '5km');
+        $this->assertSame(['Visible Runner'], array_column($report['sections'][0]['participants'], 'name'));
     }
 
     public function test_report_page_downloads_pdfs_and_restricts_focal_access(): void

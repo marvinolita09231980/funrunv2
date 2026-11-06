@@ -33,7 +33,9 @@ class ParticipantAgeReport
                         ->whereNotNull('birthDate')->where('birthDate', '>', '0000-00-00')
                         ->whereDate('birthDate', '<=', min($asOf->toDateString(), now()->toDateString()));
 
-                    ParticipantsTable::applyVisibilityForUser($query, $user);
+                    if ($user->hasRole('focal user') && ! $user->isAdministrativeOfficer()) {
+                        ParticipantsTable::applyVisibilityForUser($query, $user);
+                    }
 
                     if ($user->isAdministrativeOfficer() && ! $user->hasAnyRole(['admin', 'superadmin', 'super_admin'])) {
                         $query->whereIn('categoryDescription', $user->administeredCategoryNames());
@@ -60,7 +62,7 @@ class ParticipantAgeReport
             'generated_at' => now('Asia/Shanghai')->format('m/d/Y h:i A'),
             'scope' => $user->isAdministrativeOfficer() && ! $user->hasAnyRole(['admin', 'superadmin', 'super_admin'])
                 ? implode(', ', $user->administeredCategoryNames()) ?: 'No assigned categories'
-                : ($user->hasAnyRole(['admin', 'superadmin', 'super_admin']) ? 'All categories' : 'Participants visible to your account'),
+                : ($user->hasRole('focal user') && ! $user->hasAnyRole(['admin', 'superadmin', 'super_admin']) ? 'Assigned subcategories' : 'All categories'),
             'sections' => $sections,
         ];
     }
