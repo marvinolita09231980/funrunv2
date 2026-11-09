@@ -26,7 +26,7 @@ class CategoryAllocationForm
                     ->disabled(fn (?CategoryAllocation $record): bool => filled($record)),
                 Select::make('administrativeOfficers')
                     ->label('Assigned Administrative Officers')
-                    ->helperText('An Administrative Officer may be assigned to multiple main categories. You may also assign yourself.')
+                    ->helperText('Select Administrative Officers or administrators to manage this category. You may assign yourself, and each user may manage multiple categories.')
                     ->relationship(
                         'administrativeOfficers',
                         'name',
@@ -71,7 +71,7 @@ class CategoryAllocationForm
                 'roles',
                 fn (Builder $roleQuery): Builder => $roleQuery->whereIn(
                     'name',
-                    ['administrative officer', 'ao'],
+                    ['administrative officer', 'ao', 'admin'],
                 ),
             );
 

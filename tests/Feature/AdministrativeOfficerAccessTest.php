@@ -584,7 +584,7 @@ class AdministrativeOfficerAccessTest extends TestCase
         )->pluck('users.id')->all();
 
         $this->assertContains($admin->getKey(), $eligibleAdminIds);
-        $this->assertNotContains($otherAdmin->getKey(), $eligibleAdminIds);
+        $this->assertContains($otherAdmin->getKey(), $eligibleAdminIds);
 
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         $this->actingAs($admin);
@@ -607,6 +607,18 @@ class AdministrativeOfficerAccessTest extends TestCase
             ['admin-user' => 'Administrator'],
             SubcategoriesForm::focalUserOptionsForCategory('CATEGORY A'),
         );
+
+        Livewire::test(EditCategoryAllocation::class, [
+            'record' => $allocation->getRouteKey(),
+        ])->fillForm([
+            'administrativeOfficers' => [$admin->getKey(), $otherAdmin->getKey()],
+        ])->call('save')->assertHasNoFormErrors();
+
+        $allocation->refresh();
+        $this->assertTrue($allocation->administrativeOfficers->contains($otherAdmin));
+        $this->assertSame('Administrator, Other Administrator', $allocation->assigned_ao_names);
+        $this->assertTrue($otherAdmin->hasRole('admin'));
+        $this->assertTrue($otherAdmin->canBeAssignedToSubcategory('CATEGORY A'));
     }
 
     public function test_officer_can_create_only_focal_users_for_the_administered_category(): void
