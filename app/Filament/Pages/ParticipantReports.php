@@ -24,6 +24,10 @@ class ParticipantReports extends Page
 
     protected static ?string $navigationLabel = 'Participant Reports';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Reports';
+
+    protected static ?int $navigationSort = 20;
+
     protected string $view = 'filament.pages.participant-reports';
 
     public int $selectedYear;

@@ -2,41 +2,45 @@
 
 namespace App\Filament\Pages;
 
-use BackedEnum;
 use App\Models\CategoryAllocation;
-use Filament\Pages\Page;
-use Filament\Actions\Action;
-use Filament\Tables\Table;
-use Filament\Tables\Enums\FiltersLayout;
 use App\Models\Participant;
 use App\Models\Subcategory;
-
-use Filament\Facades\Filament;
-use Illuminate\Support\Facades\DB;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Concerns\InteractsWithTable;
+use BackedEnum;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Actions\Action;
+use Filament\Facades\Filament;
+use Filament\Pages\Page;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ShirtSizes extends Page implements HasTable
 {
-    
     use InteractsWithTable;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-archive-box';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Reports';
+
+    protected static ?int $navigationSort = 10;
+
     protected string $view = 'filament.pages.shirt-sizes';
 
     public static function shouldRegisterNavigation(): bool
     {
-              $user = Filament::auth()->user();
+        $user = Filament::auth()->user();
 
-              if (! $user) {
-                  return false; 
-              }
+        if (! $user) {
+            return false;
+        }
 
-              return ! str_contains($user->username, 'marshal');
+        return ! str_contains($user->username, 'marshal');
     }
 
     public static function canView(): bool
@@ -44,7 +48,7 @@ class ShirtSizes extends Page implements HasTable
         $user = Filament::auth()->user();
 
         if (! $user) {
-            return false; 
+            return false;
         }
 
         return ! str_contains($user->username, 'marshal');
@@ -64,7 +68,8 @@ class ShirtSizes extends Page implements HasTable
     public function downloadPdfReport(): StreamedResponse
     {
         $year = (int) ($this->getTableFilterState('year')['value'] ?? date('Y'));
-        $report = self::shirtSizeReportForYear($year);
+        $category = $this->selectedCategory();
+        $report = self::shirtSizeReportForYear($year, $category);
         $pdfContent = Pdf::loadView('pdf.shirt-size-report', [
             'report' => $report,
             'logoDataUri' => $this->reportLogoDataUri(),
@@ -76,9 +81,17 @@ class ShirtSizes extends Page implements HasTable
             static function () use ($pdfContent): void {
                 echo $pdfContent;
             },
-            "shirt-size-report-{$year}.pdf",
+            'shirt-size-report-'.$year.($category ? '-'.Str::slug($category) : '').'.pdf',
             ['Content-Type' => 'application/pdf'],
         );
+    }
+
+    public function categoryFilterOptions(): array
+    {
+        return CategoryAllocation::query()
+            ->orderBy('categoryDescription')
+            ->pluck('categoryDescription', 'categoryDescription')
+            ->all();
     }
 
     public function table(Table $table): Table
@@ -86,21 +99,9 @@ class ShirtSizes extends Page implements HasTable
         return $table
             ->query(function () {
                 $year = (int) ($this->getTableFilterState('year')['value'] ?? date('Y'));
+                $category = $this->selectedCategory();
 
-                $participantCategory = <<<'SQL'
-                    CASE
-                        WHEN LOWER(TRIM(participants.categoryDescription)) = 'provincial government of davao de oro' THEN 'plgu'
-                        WHEN LOWER(TRIM(participants.categoryDescription)) = 'open' THEN 'open category'
-                        WHEN LOWER(TRIM(participants.categoryDescription)) IN ('lgu', 'local government unit of davao de oro') THEN 'madac-lgu'
-                        WHEN LOWER(TRIM(participants.categoryDescription)) = 'ona'
-                            AND LOWER(TRIM(participants.subDescription)) = 'pdea' THEN 'padac members'
-                        WHEN LOWER(TRIM(participants.categoryDescription)) = 'ona' THEN 'national government agencies'
-                        WHEN LOWER(TRIM(participants.categoryDescription)) = 'pnp' THEN 'padac members'
-                        WHEN LOWER(TRIM(participants.categoryDescription)) = 'governor' THEN 'plgu'
-                        WHEN LOWER(TRIM(participants.categoryDescription)) = 'marshal' THEN 'open category'
-                        ELSE LOWER(TRIM(participants.categoryDescription))
-                    END
-                    SQL;
+                $participantCategory = self::participantCategoryExpression();
 
                 $participantSubcategory = <<<'SQL'
                     CASE
@@ -124,6 +125,13 @@ class ShirtSizes extends Page implements HasTable
                 ";
 
                 return Subcategory::reportQuery($year)
+                    ->when(
+                        $category,
+                        fn ($query) => $query->whereRaw(
+                            'LOWER(TRIM(subcategories.categoryDescription)) = ?',
+                            [strtolower(trim($category))],
+                        ),
+                    )
                     ->select([
                         'subcategories.*',
 
@@ -204,24 +212,29 @@ class ShirtSizes extends Page implements HasTable
                     ->selectablePlaceholder(false)
                     ->indicateUsing(fn (): array => [])
                     ->query(fn ($query) => $query),
+                SelectFilter::make('category')
+                    ->label('Category')
+                    ->options(fn (): array => $this->categoryFilterOptions())
+                    ->placeholder('All Categories')
+                    ->indicateUsing(fn (): array => [])
+                    ->query(fn ($query) => $query),
             ], layout: FiltersLayout::Hidden)
             ->deferFilters(false)
-
 
             ->columns([
                 TextColumn::make('mobile_size_summary')
                     ->label('Organization Shirt Sizes')
-                    ->getStateUsing(fn ($record): string => $record->categoryDescription . ' — ' . $record->subDescription)
+                    ->getStateUsing(fn ($record): string => $record->categoryDescription.' — '.$record->subDescription)
                     ->description(fn ($record): string => collect([
-                        'XS: ' . number_format((int) $record->xs),
-                        'S: ' . number_format((int) $record->small),
-                        'M: ' . number_format((int) $record->medium),
-                        'L: ' . number_format((int) $record->large),
-                        'XL: ' . number_format((int) $record->xl),
-                        '2XL: ' . number_format((int) $record->{'2xl'}),
-                        '3XL: ' . number_format((int) $record->{'3xl'}),
-                        '4XL: ' . number_format((int) $record->{'4xl'}),
-                        '5XL: ' . number_format((int) $record->{'5xl'}),
+                        'XS: '.number_format((int) $record->xs),
+                        'S: '.number_format((int) $record->small),
+                        'M: '.number_format((int) $record->medium),
+                        'L: '.number_format((int) $record->large),
+                        'XL: '.number_format((int) $record->xl),
+                        '2XL: '.number_format((int) $record->{'2xl'}),
+                        '3XL: '.number_format((int) $record->{'3xl'}),
+                        '4XL: '.number_format((int) $record->{'4xl'}),
+                        '5XL: '.number_format((int) $record->{'5xl'}),
                     ])->join(' • '))
                     ->weight('bold')
                     ->wrap()
@@ -239,18 +252,17 @@ class ShirtSizes extends Page implements HasTable
                     ->searchable()
                     ->visibleFrom('md'),
 
-                TextColumn::make('xs')->label('XS')->getStateUsing(fn($record) => $record->xs ?: '--')->visibleFrom('md'),
-                TextColumn::make('small')->label('S')->getStateUsing(fn($record) => $record->small ?: '--')->visibleFrom('md'),
-                TextColumn::make('medium')->label('M')->getStateUsing(fn($record) => $record->medium ?: '--')->visibleFrom('md'),
-                TextColumn::make('large')->label('L')->getStateUsing(fn($record) => $record->large ?: '--')->visibleFrom('md'),
-                TextColumn::make('xl')->label('XL')->getStateUsing(fn($record) => $record->xl ?: '--')->visibleFrom('md'),
-                TextColumn::make('2xl')->label('2XL')->getStateUsing(fn($record) => $record->{'2xl'} ?: '--')->visibleFrom('md'),
-                TextColumn::make('3xl')->label('3XL')->getStateUsing(fn($record) => $record->{'3xl'} ?: '--')->visibleFrom('md'),
-                TextColumn::make('4xl')->label('4XL')->getStateUsing(fn($record) => $record->{'4xl'} ?: '--')->visibleFrom('md'),
-                TextColumn::make('5xl')->label('5XL')->getStateUsing(fn($record) => $record->{'5xl'} ?: '--')->visibleFrom('md'),
-               
+                TextColumn::make('xs')->label('XS')->getStateUsing(fn ($record) => $record->xs ?: '--')->visibleFrom('md'),
+                TextColumn::make('small')->label('S')->getStateUsing(fn ($record) => $record->small ?: '--')->visibleFrom('md'),
+                TextColumn::make('medium')->label('M')->getStateUsing(fn ($record) => $record->medium ?: '--')->visibleFrom('md'),
+                TextColumn::make('large')->label('L')->getStateUsing(fn ($record) => $record->large ?: '--')->visibleFrom('md'),
+                TextColumn::make('xl')->label('XL')->getStateUsing(fn ($record) => $record->xl ?: '--')->visibleFrom('md'),
+                TextColumn::make('2xl')->label('2XL')->getStateUsing(fn ($record) => $record->{'2xl'} ?: '--')->visibleFrom('md'),
+                TextColumn::make('3xl')->label('3XL')->getStateUsing(fn ($record) => $record->{'3xl'} ?: '--')->visibleFrom('md'),
+                TextColumn::make('4xl')->label('4XL')->getStateUsing(fn ($record) => $record->{'4xl'} ?: '--')->visibleFrom('md'),
+                TextColumn::make('5xl')->label('5XL')->getStateUsing(fn ($record) => $record->{'5xl'} ?: '--')->visibleFrom('md'),
 
-          ])
+            ])
             ->striped();
     }
 
@@ -258,15 +270,23 @@ class ShirtSizes extends Page implements HasTable
     {
         $year = (int) ($this->getTableFilterState('year')['value'] ?? date('Y'));
 
-        return self::shirtSizeStatsForYear($year);
+        return self::shirtSizeStatsForYear($year, $this->selectedCategory());
     }
 
-    public static function shirtSizeStatsForYear(int $year): array
+    public static function shirtSizeStatsForYear(int $year, ?string $category = null): array
     {
         $distance = "REPLACE(LOWER(TRIM(distanceCategory)), ' ', '')";
+        $category = self::normalizedCategoryFilter($category);
 
         $counts = Participant::query()
             ->where('year', $year)
+            ->when(
+                $category,
+                fn ($query) => $query->whereRaw(
+                    '('.self::participantCategoryExpression().') = ?',
+                    [$category],
+                ),
+            )
             ->selectRaw('LOWER(TRIM(shirtSize)) AS normalized_size, COUNT(*) AS total')
             ->selectRaw("SUM(CASE WHEN {$distance} IN ('3k', '3km') THEN 1 ELSE 0 END) AS count_3k")
             ->selectRaw("SUM(CASE WHEN {$distance} IN ('5k', '5km') THEN 1 ELSE 0 END) AS count_5k")
@@ -318,14 +338,18 @@ class ShirtSizes extends Page implements HasTable
 
         return [
             'year' => $year,
+            'category' => $category
+                ? self::categoryDisplayName($category)
+                : 'All Categories',
             'total' => collect($sizes)->sum('count'),
             'distance_totals' => $distanceTotals,
             'sizes' => $sizes,
         ];
     }
 
-    public static function shirtSizeReportForYear(int $year): array
+    public static function shirtSizeReportForYear(int $year, ?string $category = null): array
     {
+        $selectedCategory = self::normalizedCategoryFilter($category);
         $sizeLabels = self::sizeLabels();
         $distanceLabels = [
             '3km' => 'Rave Run (3K)',
@@ -336,6 +360,13 @@ class ShirtSizes extends Page implements HasTable
 
         Participant::query()
             ->where('year', $year)
+            ->when(
+                $selectedCategory,
+                fn ($query) => $query->whereRaw(
+                    '('.self::participantCategoryExpression().') = ?',
+                    [$selectedCategory],
+                ),
+            )
             ->get([
                 'categoryDescription',
                 'subDescription',
@@ -359,6 +390,13 @@ class ShirtSizes extends Page implements HasTable
 
         $categories = CategoryAllocation::query()
             ->with(['subcategories' => fn ($query) => $query->orderBy('subDescription')])
+            ->when(
+                $selectedCategory,
+                fn ($query) => $query->whereRaw(
+                    'LOWER(TRIM(categoryDescription)) = ?',
+                    [$selectedCategory],
+                ),
+            )
             ->orderBy('categoryDescription')
             ->get();
         $groups = [];
@@ -429,6 +467,9 @@ class ShirtSizes extends Page implements HasTable
 
         return [
             'year' => $year,
+            'category' => $selectedCategory
+                ? self::categoryDisplayName($selectedCategory)
+                : 'All Categories',
             'generated_at' => now('Asia/Shanghai')->format('F j, Y g:i A'),
             'size_labels' => $sizeLabels,
             'distance_labels' => $distanceLabels,
@@ -533,6 +574,45 @@ class ShirtSizes extends Page implements HasTable
         };
     }
 
+    private static function normalizedCategoryFilter(?string $category): ?string
+    {
+        $category = strtolower(trim((string) $category));
+
+        return $category !== '' ? $category : null;
+    }
+
+    private static function categoryDisplayName(string $normalizedCategory): string
+    {
+        return (string) (CategoryAllocation::query()
+            ->whereRaw('LOWER(TRIM(categoryDescription)) = ?', [$normalizedCategory])
+            ->value('categoryDescription') ?? Str::headline($normalizedCategory));
+    }
+
+    private static function participantCategoryExpression(): string
+    {
+        return <<<'SQL'
+            CASE
+                WHEN LOWER(TRIM(participants.categoryDescription)) = 'provincial government of davao de oro' THEN 'plgu'
+                WHEN LOWER(TRIM(participants.categoryDescription)) = 'open' THEN 'open category'
+                WHEN LOWER(TRIM(participants.categoryDescription)) IN ('lgu', 'local government unit of davao de oro') THEN 'madac-lgu'
+                WHEN LOWER(TRIM(participants.categoryDescription)) = 'ona'
+                    AND LOWER(TRIM(participants.subDescription)) = 'pdea' THEN 'padac members'
+                WHEN LOWER(TRIM(participants.categoryDescription)) = 'ona' THEN 'national government agencies'
+                WHEN LOWER(TRIM(participants.categoryDescription)) = 'pnp' THEN 'padac members'
+                WHEN LOWER(TRIM(participants.categoryDescription)) = 'governor' THEN 'plgu'
+                WHEN LOWER(TRIM(participants.categoryDescription)) = 'marshal' THEN 'open category'
+                ELSE LOWER(TRIM(participants.categoryDescription))
+            END
+            SQL;
+    }
+
+    private function selectedCategory(): ?string
+    {
+        return self::normalizedCategoryFilter(
+            $this->getTableFilterState('category')['value'] ?? null,
+        );
+    }
+
     private function reportLogoDataUri(): ?string
     {
         $logoPath = public_path('images/login-logo.png');
@@ -541,6 +621,6 @@ class ShirtSizes extends Page implements HasTable
             return null;
         }
 
-        return 'data:image/png;base64,' . base64_encode((string) file_get_contents($logoPath));
+        return 'data:image/png;base64,'.base64_encode((string) file_get_contents($logoPath));
     }
 }

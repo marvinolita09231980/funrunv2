@@ -42,13 +42,22 @@
             font-size: 0.84rem;
         }
 
-        .shirt-size-year-control {
+        .shirt-size-filter-controls {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
             flex: 0 0 auto;
-            min-width: 9rem;
+            gap: 0.65rem;
         }
 
-        .shirt-size-year-control .table-year-filter {
+        .shirt-size-filter-controls .table-year-filter {
             display: block;
+        }
+
+        .shirt-size-category-filter {
+            display: block;
+            min-width: 15rem;
+            flex: 0 0 auto;
         }
 
         .shirt-size-summary {
@@ -389,7 +398,8 @@
                 padding: 1.1rem;
             }
 
-            .shirt-size-year-control {
+            .shirt-size-filter-controls,
+            .shirt-size-category-filter {
                 width: 100%;
             }
 
@@ -467,8 +477,24 @@
                 <p class="shirt-size-subtitle">Review shirt requirements and organization-level distribution for the selected year.</p>
             </div>
 
-            <div class="shirt-size-year-control">
+            <div class="shirt-size-filter-controls">
                 @include('filament.pages.partials.table-year-filter')
+
+                <label class="shirt-size-category-filter">
+                    <span class="fi-sr-only">Category</span>
+
+                    <x-filament::input.wrapper prefix="Category">
+                        <x-filament::input.select
+                            wire:model.live="tableFilters.category.value"
+                            aria-label="Category"
+                        >
+                            <option value="">All Categories</option>
+                            @foreach ($this->categoryFilterOptions() as $value => $label)
+                                <option value="{{ $value }}">{{ $label }}</option>
+                            @endforeach
+                        </x-filament::input.select>
+                    </x-filament::input.wrapper>
+                </label>
             </div>
         </section>
 
@@ -501,7 +527,9 @@
                         <h3 class="shirt-size-matrix-title">Shirt Size by Race Distance</h3>
                         <p class="shirt-size-matrix-copy">Each race distance is one row, with shirt sizes arranged in columns.</p>
                     </div>
-                    <span class="shirt-size-matrix-legend">Selected year: {{ $stats['year'] }}</span>
+                    <span class="shirt-size-matrix-legend">
+                        Selected year: {{ $stats['year'] }} &bull; Category: {{ $stats['category'] }}
+                    </span>
                 </header>
 
                 <div
@@ -561,7 +589,9 @@
         <section class="shirt-size-detail-section">
             <header>
                 <h3 class="shirt-size-section-title">Sizes by Organization</h3>
-                <p class="shirt-size-section-copy">Detailed shirt-size counts for each category and organization in {{ $stats['year'] }}.</p>
+                <p class="shirt-size-section-copy">
+                    Detailed shirt-size counts for {{ $stats['category'] }} in {{ $stats['year'] }}.
+                </p>
             </header>
             {{ $this->table }}
         </section>

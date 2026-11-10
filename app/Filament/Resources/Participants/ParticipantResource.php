@@ -19,7 +19,11 @@ class ParticipantResource extends Resource
     protected static ?string $model = Participant::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-    
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Registration';
+
+    protected static ?int $navigationSort = 10;
+
     protected static ?string $recordTitleAttribute = 'participantNumber';
 
     public static function form(Schema $schema): Schema

@@ -29,7 +29,9 @@ class PotentialDuplicates extends Page implements HasTable
 
     protected static ?string $navigationLabel = 'Potential Duplicates';
 
-    protected static ?int $navigationSort = 4;
+    protected static string|\UnitEnum|null $navigationGroup = 'Registration';
+
+    protected static ?int $navigationSort = 20;
 
     protected string $view = 'filament.pages.potential-duplicates';
 

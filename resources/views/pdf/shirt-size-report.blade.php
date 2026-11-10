@@ -117,6 +117,7 @@
             </td>
             <td class="meta">
                 <strong>Registration year:</strong> {{ $report['year'] }}<br>
+                <strong>Category:</strong> {{ $report['category'] }}<br>
                 <strong>Generated:</strong> {{ $report['generated_at'] }}
             </td>
         </tr>
@@ -192,7 +193,7 @@
     </table>
 
     <div class="footer">
-        This report includes all configured main categories and their subcategories for {{ $report['year'] }}.
+        This report includes {{ $report['category'] }} and its configured subcategories for {{ $report['year'] }}.
         Counts are grouped by race distance and shirt size.
     </div>
 </body>

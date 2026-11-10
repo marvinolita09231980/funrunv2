@@ -25,6 +25,10 @@ class CategoryAllocationResource extends Resource
 
     protected static ?string $navigationLabel = 'Category Allocations';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Event Operations';
+
+    protected static ?int $navigationSort = 10;
+
     protected static ?string $modelLabel = 'Category Allocation';
 
     public static function form(Schema $schema): Schema

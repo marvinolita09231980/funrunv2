@@ -16,7 +16,9 @@ class RegistrationControl extends Page
 
     protected static ?string $navigationLabel = 'Public Registration';
 
-    protected static ?int $navigationSort = 100;
+    protected static string|\UnitEnum|null $navigationGroup = 'Registration';
+
+    protected static ?int $navigationSort = 30;
 
     protected static ?string $slug = 'public-registration';
 

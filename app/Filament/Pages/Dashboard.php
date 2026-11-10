@@ -17,6 +17,10 @@ class Dashboard extends BaseDashboard implements HasTable
 {
     use InteractsWithTable;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Overview';
+
+    protected static ?int $navigationSort = 10;
+
     protected string $view = 'filament.pages.dashboard';
 
     public int $selectedYear;

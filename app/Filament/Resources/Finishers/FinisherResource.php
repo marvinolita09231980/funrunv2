@@ -23,6 +23,10 @@ class FinisherResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Event Operations';
+
+    protected static ?int $navigationSort = 30;
+
     protected static ?string $recordTitleAttribute = 'Finisher';
 
     public static function form(Schema $schema): Schema
