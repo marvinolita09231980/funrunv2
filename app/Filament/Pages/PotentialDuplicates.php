@@ -6,6 +6,8 @@ use App\Filament\Resources\Participants\ParticipantResource;
 use App\Models\Participant;
 use App\Models\User;
 use BackedEnum;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Pages\Page;
@@ -17,6 +19,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PotentialDuplicates extends Page implements HasTable
 {
@@ -47,6 +50,106 @@ class PotentialDuplicates extends Page implements HasTable
         return 'Potential Duplicate Participants';
     }
 
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('downloadPdfReport')
+                ->label('Download Printable PDF')
+                ->icon('heroicon-o-printer')
+                ->color('primary')
+                ->action(fn (): StreamedResponse => $this->downloadPdfReport()),
+        ];
+    }
+
+    public function downloadPdfReport(): StreamedResponse
+    {
+        abort_unless(static::canAccess(), 403);
+
+        $year = $this->selectedYear();
+        $generatedAt = CarbonImmutable::now();
+        $records = self::applyPotentialDuplicateScope(
+            Participant::query()->where('year', $year),
+        )
+            ->orderBy('lastName')
+            ->orderBy('birthDate')
+            ->orderBy('firstName')
+            ->orderBy('id')
+            ->get()
+            ->map(function (Participant $participant) use ($generatedAt): array {
+                $birthDate = filled($participant->birthDate)
+                    ? CarbonImmutable::parse($participant->birthDate)
+                    : null;
+
+                return [
+                    'id' => $participant->getKey(),
+                    'name' => collect([
+                        $participant->lastName.',',
+                        $participant->firstName,
+                        filled($participant->middleInitial)
+                            ? rtrim((string) $participant->middleInitial, '.').'.'
+                            : null,
+                    ])->filter()->join(' '),
+                    'birth_date' => $birthDate?->format('m/d/Y') ?? 'Not provided',
+                    'age' => $birthDate && $birthDate->lessThanOrEqualTo($generatedAt)
+                        ? (int) $birthDate->diffInYears($generatedAt)
+                        : null,
+                    'address' => filled($participant->address)
+                        ? trim((string) $participant->address)
+                        : 'Not provided',
+                    'phone_number' => filled($participant->contactNumber)
+                        ? trim((string) $participant->contactNumber)
+                        : 'Not provided',
+                    'category' => filled($participant->categoryDescription)
+                        ? trim((string) $participant->categoryDescription)
+                        : 'Not provided',
+                    'subcategory' => filled($participant->subDescription)
+                        ? trim((string) $participant->subDescription)
+                        : 'Not provided',
+                    'group_key' => implode('|', [
+                        self::normalizedName($participant->lastName),
+                        (string) $participant->birthDate,
+                    ]),
+                ];
+            });
+
+        $groups = $records
+            ->groupBy('group_key')
+            ->map(fn ($group): array => [
+                'birth_date' => $group->first()['birth_date'],
+                'last_name' => trim((string) str($group->first()['name'])->before(',')),
+                'records' => $group->map(fn (array $record): array => collect($record)
+                    ->except('group_key')
+                    ->all())
+                    ->values()
+                    ->all(),
+            ])
+            ->values()
+            ->all();
+
+        $report = [
+            'year' => $year,
+            'as_of' => $generatedAt->format('F j, Y'),
+            'generated_at' => $generatedAt->format('F j, Y g:i A'),
+            'record_count' => $records->count(),
+            'group_count' => count($groups),
+            'groups' => $groups,
+        ];
+
+        $pdfContent = Pdf::loadView('pdf.potential-duplicates-report', [
+            'report' => $report,
+        ])
+            ->setPaper('a4', 'landscape')
+            ->output();
+
+        return response()->streamDownload(
+            static function () use ($pdfContent): void {
+                echo $pdfContent;
+            },
+            "potential-duplicates-{$year}.pdf",
+            ['Content-Type' => 'application/pdf'],
+        );
+    }
+
     public function table(Table $table): Table
     {
         return $table
@@ -61,10 +164,10 @@ class PotentialDuplicates extends Page implements HasTable
                 TextColumn::make('mobile_duplicate_summary')
                     ->label('Participant for Review')
                     ->getStateUsing(fn (Participant $record): string => collect([
-                        $record->lastName . ',',
+                        $record->lastName.',',
                         $record->firstName,
                         filled($record->middleInitial)
-                            ? rtrim((string) $record->middleInitial, '.') . '.'
+                            ? rtrim((string) $record->middleInitial, '.').'.'
                             : null,
                     ])->filter()->join(' '))
                     ->description(fn (Participant $record): string => collect([
@@ -80,10 +183,10 @@ class PotentialDuplicates extends Page implements HasTable
                 TextColumn::make('participant_name')
                     ->label('Participant')
                     ->getStateUsing(fn (Participant $record): string => collect([
-                        $record->lastName . ',',
+                        $record->lastName.',',
                         $record->firstName,
                         filled($record->middleInitial)
-                            ? rtrim((string) $record->middleInitial, '.') . '.'
+                            ? rtrim((string) $record->middleInitial, '.').'.'
                             : null,
                     ])->filter()->join(' '))
                     ->description(fn (Participant $record): string => collect([
@@ -282,13 +385,13 @@ class PotentialDuplicates extends Page implements HasTable
                             "SUBSTR(LOWER(REPLACE(TRIM(firstName), ' ', '')), 1, LENGTH(?)) = ?",
                             [$normalizedFirstName, $normalizedFirstName],
                         )
-                        ->orWhereRaw(
-                            "SUBSTR(?, 1, LENGTH(LOWER(REPLACE(TRIM(firstName), ' ', '')))) = LOWER(REPLACE(TRIM(firstName), ' ', ''))",
-                            [$normalizedFirstName],
-                        )
-                        ->orWhereRaw('SOUNDEX(firstName) = SOUNDEX(?)', [
-                            $participant->firstName,
-                        ]);
+                            ->orWhereRaw(
+                                "SUBSTR(?, 1, LENGTH(LOWER(REPLACE(TRIM(firstName), ' ', '')))) = LOWER(REPLACE(TRIM(firstName), ' ', ''))",
+                                [$normalizedFirstName],
+                            )
+                            ->orWhereRaw('SOUNDEX(firstName) = SOUNDEX(?)', [
+                                $participant->firstName,
+                            ]);
                     });
             })
             ->count();

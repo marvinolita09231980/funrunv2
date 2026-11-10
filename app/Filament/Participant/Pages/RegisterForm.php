@@ -121,7 +121,7 @@ class RegisterForm extends Page implements HasSchemas
                         DatePicker::make('birthDate')
                             ->required()
                             ->columnSpan(2)
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(function (): void {
                                 $this->checkParticipantExists();
                             }),
@@ -180,8 +180,7 @@ class RegisterForm extends Page implements HasSchemas
                                 true => 'YES',
                             ])
                             ->inline()
-                            ->disabled(fn (): bool => $this->participantExists)
-                            ->reactive(),
+                            ->disabled(fn (): bool => $this->participantExists),
                         Radio::make('rpwuds')
                             ->label('Recovering Person Who Used Drugs')
                             // ->hint('Recovering Persons Who Used Drugs')
@@ -192,8 +191,7 @@ class RegisterForm extends Page implements HasSchemas
                             ])
                             ->inline()
                             ->columnSpan(2)
-                            ->disabled(fn (): bool => $this->participantExists)
-                            ->reactive(),
+                            ->disabled(fn (): bool => $this->participantExists),
 
                     ])
                     ->columns(5),
@@ -309,7 +307,7 @@ class RegisterForm extends Page implements HasSchemas
                                 DatePicker::make('birthDate')
                                     ->label('Birth Date')
                                     ->required()
-                                    ->live()
+                                    ->live(onBlur: true)
                                     ->afterStateUpdated(function (Get $get, Set $set, $component): void {
                                         $set('_confirmed', false);
                                         $this->checkAdditionalParticipantExists(
@@ -415,8 +413,7 @@ class RegisterForm extends Page implements HasSchemas
                                 '10km' => '10KM',
                             ])
                             ->inline()
-                            ->disabled(fn (): bool => $this->participantExists || $this->categoryFull)
-                            ->reactive(),
+                            ->disabled(fn (): bool => $this->participantExists || $this->categoryFull),
 
                         // Radio::make('couple')
                         //     ->label('Couple Runner')
@@ -513,15 +510,6 @@ class RegisterForm extends Page implements HasSchemas
         }
 
         if ($this->checkParticipantExists()) {
-            return;
-        }
-
-        $this->updateCategoryAvailability($this->data['categoryDescription'] ?? null);
-
-        if ($this->categoryFull) {
-            $this->errorMessage = 'Participant slots are already full. Registration cannot continue.';
-            $this->dispatch('open-modal', id: 'registration-full');
-
             return;
         }
 
@@ -654,7 +642,7 @@ class RegisterForm extends Page implements HasSchemas
                     ]);
                 }
 
-                return $primaryParticipant->fresh();
+                return $primaryParticipant;
             });
 
             $this->setParticipantModalData($participant, registrationSuccessful: true);
@@ -737,7 +725,7 @@ class RegisterForm extends Page implements HasSchemas
             ->where('year', now()->year)
             ->where('firstName', $firstName)
             ->where('lastName', $lastName)
-            ->whereDate('birthDate', $birthDate)
+            ->where('birthDate', $birthDate)
             ->exists();
 
         if ($exists) {
@@ -762,7 +750,7 @@ class RegisterForm extends Page implements HasSchemas
             ->where('year', now()->year)
             ->where('firstName', trim((string) $itemData['firstName']))
             ->where('lastName', trim((string) $itemData['lastName']))
-            ->whereDate('birthDate', $itemData['birthDate'])
+            ->where('birthDate', $itemData['birthDate'])
             ->exists();
 
         if ($alreadyRegistered) {
@@ -852,15 +840,42 @@ class RegisterForm extends Page implements HasSchemas
             }
 
             $submittedIdentities[$identity] = true;
+        }
 
-            $exists = Participant::query()
-                ->where('year', $year)
-                ->where('firstName', $registrant['firstName'])
-                ->where('lastName', $registrant['lastName'])
-                ->whereDate('birthDate', $registrant['birthDate'])
-                ->exists();
+        // Fetch every matching identity in one round trip. Group registrations
+        // previously issued one query per runner, twice during a submission.
+        $existingIdentities = Participant::query()
+            ->select(['firstName', 'lastName', 'birthDate'])
+            ->where('year', $year)
+            ->where(function ($query) use ($registrants): void {
+                foreach ($registrants as $registrant) {
+                    $query->orWhere(function ($identityQuery) use ($registrant): void {
+                        $identityQuery
+                            ->where('firstName', $registrant['firstName'])
+                            ->where('lastName', $registrant['lastName'])
+                            ->where('birthDate', $registrant['birthDate']);
+                    });
+                }
+            })
+            ->get()
+            ->mapWithKeys(fn (Participant $participant): array => [
+                mb_strtolower(implode('|', [
+                    trim((string) $participant->firstName),
+                    trim((string) $participant->lastName),
+                    (string) $participant->birthDate,
+                ])) => true,
+            ]);
 
-            if ($exists) {
+        foreach ($registrants as $index => $registrant) {
+            $identity = mb_strtolower(implode('|', [
+                $registrant['firstName'],
+                $registrant['lastName'],
+                (string) $registrant['birthDate'],
+            ]));
+
+            if ($existingIdentities->has($identity)) {
+                $name = trim($registrant['firstName'].' '.$registrant['lastName']);
+
                 throw ValidationException::withMessages([
                     $fieldPaths[$index] => "{$name} is already registered for this year.",
                 ]);
@@ -931,7 +946,7 @@ class RegisterForm extends Page implements HasSchemas
             ->where('year', now()->year)
             ->where('firstName', $firstName)
             ->where('lastName', $lastName)
-            ->whereDate('birthDate', $birthDate)
+            ->where('birthDate', $birthDate)
             ->first();
 
         if (! $participant) {
@@ -963,7 +978,9 @@ class RegisterForm extends Page implements HasSchemas
         Participant $participant,
         bool $registrationSuccessful = false,
     ): void {
-        $participant->loadMissing('creator');
+        if (! $participant->isSelfRegistered()) {
+            $participant->loadMissing('creator');
+        }
 
         $isOpenCategoryRegistration = $this->isOpenCategoryRegistration($participant);
         $this->registrationSuccessful = $registrationSuccessful;

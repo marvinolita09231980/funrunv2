@@ -26,7 +26,7 @@
     </section>
 @else
 <div  x-data="{
-        agreed: @entangle('data.waiver').live,
+        agreed: @entangle('data.waiver'),
         participantExists: @entangle('participantExists'),
         categoryFull: @entangle('categoryFull')
     }">

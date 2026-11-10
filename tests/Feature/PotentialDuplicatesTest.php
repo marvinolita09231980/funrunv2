@@ -6,10 +6,13 @@ use App\Filament\Pages\PotentialDuplicates;
 use App\Models\CategoryAllocation;
 use App\Models\Participant;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Mockery;
 use Spatie\Permission\Models\Role;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tests\TestCase;
 
 class PotentialDuplicatesTest extends TestCase
@@ -269,6 +272,70 @@ class PotentialDuplicatesTest extends TestCase
 
         $this->actingAs($focal);
         $this->assertFalse(PotentialDuplicates::canAccess());
+    }
+
+    public function test_authorized_user_can_download_printable_duplicate_report(): void
+    {
+        $admin = $this->userWithRole('Duplicate Admin', 'duplicate-admin', 'admin');
+        $year = now()->year;
+
+        $this->participant([
+            'year' => $year,
+            'firstName' => 'Maria Elena',
+            'lastName' => 'Santos',
+            'birthDate' => '1994-06-15',
+            'address' => 'Poblacion, Nabunturan',
+            'contactNumber' => '09171234567',
+        ]);
+        $this->participant([
+            'year' => $year,
+            'firstName' => 'Maria',
+            'lastName' => 'Santos',
+            'birthDate' => '1994-06-15',
+            'address' => 'Mankilam, Tagum City',
+            'contactNumber' => '09981234567',
+        ]);
+
+        $pdfDocument = Mockery::mock(\Barryvdh\DomPDF\PDF::class);
+        $pdfDocument->shouldReceive('setPaper')
+            ->once()
+            ->with('a4', 'landscape')
+            ->andReturnSelf();
+        $pdfDocument->shouldReceive('output')->once()->andReturn('%PDF duplicate report');
+
+        Pdf::shouldReceive('loadView')
+            ->once()
+            ->withArgs(function (string $view, array $data) use ($year): bool {
+                if ($view !== 'pdf.potential-duplicates-report') {
+                    return false;
+                }
+
+                $html = view($view, $data)->render();
+
+                return $data['report']['year'] === $year
+                    && $data['report']['record_count'] === 2
+                    && $data['report']['group_count'] === 1
+                    && str_contains($html, 'Name')
+                    && str_contains($html, 'Age')
+                    && str_contains($html, 'Address')
+                    && str_contains($html, 'Phone Number')
+                    && str_contains($html, 'Maria Elena')
+                    && str_contains($html, 'Poblacion, Nabunturan')
+                    && str_contains($html, '09171234567');
+            })
+            ->andReturn($pdfDocument);
+
+        $this->actingAs($admin);
+
+        $component = Livewire::test(PotentialDuplicates::class)
+            ->assertActionExists('downloadPdfReport');
+        $response = $component->instance()->downloadPdfReport();
+
+        $this->assertInstanceOf(StreamedResponse::class, $response);
+        $this->assertStringContainsString(
+            "potential-duplicates-{$year}.pdf",
+            (string) $response->headers->get('Content-Disposition'),
+        );
     }
 
     private function userWithRole(string $name, string $username, string $roleName): User
