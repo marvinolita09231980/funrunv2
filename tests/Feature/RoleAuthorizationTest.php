@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Policies\RolePolicy;
 use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
+use Filament\Facades\Filament;
+use Filament\Models\Contracts\FilamentUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Permission;
@@ -14,6 +16,15 @@ use Tests\TestCase;
 class RoleAuthorizationTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_user_can_be_authorized_by_filament_in_production(): void
+    {
+        $user = User::factory()->create();
+        $user->assignRole(Role::findOrCreate('superadmin', 'web'));
+
+        $this->assertInstanceOf(FilamentUser::class, $user);
+        $this->assertTrue($user->canAccessPanel(Filament::getPanel('admin')));
+    }
 
     public function test_superadmin_has_unrestricted_access_without_assigned_permissions(): void
     {
