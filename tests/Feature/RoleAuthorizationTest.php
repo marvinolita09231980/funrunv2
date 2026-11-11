@@ -40,6 +40,47 @@ class RoleAuthorizationTest extends TestCase
         $this->assertTrue(RoleResource::canDeleteAny());
     }
 
+    public function test_superadmin_impersonation_can_enter_panel_as_a_lower_account_without_panel_permission(): void
+    {
+        $superadmin = User::factory()->create();
+        $superadmin->assignRole(Role::findOrCreate('superadmin', 'web'));
+
+        $lowerAccount = User::factory()->create();
+        $lowerAccount->assignRole(Role::findOrCreate('event encoder', 'web'));
+
+        $panel = Filament::getPanel('admin');
+
+        $this->actingAs($lowerAccount);
+        $this->assertFalse($lowerAccount->canAccessPanel($panel));
+
+        session()->put(
+            config('laravel-impersonate.session_key', 'impersonated_by'),
+            $superadmin->getKey(),
+        );
+
+        $this->assertTrue($lowerAccount->canAccessPanel($panel));
+
+        session()->forget(config('laravel-impersonate.session_key', 'impersonated_by'));
+        $this->assertFalse($lowerAccount->canAccessPanel($panel));
+    }
+
+    public function test_non_superadmin_impersonation_does_not_bypass_panel_access(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('admin', 'web'));
+
+        $lowerAccount = User::factory()->create();
+        $lowerAccount->assignRole(Role::findOrCreate('event encoder', 'web'));
+
+        $this->actingAs($lowerAccount);
+        session()->put(
+            config('laravel-impersonate.session_key', 'impersonated_by'),
+            $admin->getKey(),
+        );
+
+        $this->assertFalse($lowerAccount->canAccessPanel(Filament::getPanel('admin')));
+    }
+
     public function test_admin_cannot_delete_admin_or_superadmin_roles(): void
     {
         $deletePermission = Permission::findOrCreate('Delete:Role', 'web');

@@ -250,7 +250,30 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        // Allow only superadmins or users with 'access_admin_panel' permission
-        return $this->hasRole('superadmin') || $this->can('access_admin_panel');
+        return $this->hasRole('superadmin')
+            || $this->can('access_admin_panel')
+            || $this->isImpersonatedBySuperAdmin();
+    }
+
+    private function isImpersonatedBySuperAdmin(): bool
+    {
+        if (! app()->bound('impersonate')) {
+            return false;
+        }
+
+        try {
+            $impersonation = app('impersonate');
+
+            if (! $impersonation->isImpersonating()) {
+                return false;
+            }
+
+            $impersonator = $impersonation->getImpersonator();
+
+            return $impersonator instanceof self
+                && $impersonator->isSuperAdmin();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }
