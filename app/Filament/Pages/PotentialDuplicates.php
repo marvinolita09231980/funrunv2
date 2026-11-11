@@ -183,6 +183,9 @@ class PotentialDuplicates extends Page implements HasTable
                         filled($record->birthDate)
                             ? \Carbon\Carbon::parse($record->birthDate)->format('M j, Y')
                             : null,
+                        filled($record->contactNumber)
+                            ? "Phone {$record->contactNumber}"
+                            : 'Phone not provided',
                         $record->categoryDescription,
                         $record->subDescription,
                     ])->filter()->join(' • '))
@@ -205,9 +208,12 @@ class PotentialDuplicates extends Page implements HasTable
                         filled($record->participantNumber)
                             ? "Participant #{$record->participantNumber}"
                             : null,
+                        filled($record->contactNumber)
+                            ? "Phone {$record->contactNumber}"
+                            : 'Phone not provided',
                         "Year {$record->year}",
                     ])->filter()->join(' • '))
-                    ->searchable(['firstName', 'lastName'])
+                    ->searchable(['firstName', 'lastName', 'contactNumber'])
                     ->weight('bold')
                     ->wrap()
                     ->visibleFrom('md'),

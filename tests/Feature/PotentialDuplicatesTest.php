@@ -56,6 +56,7 @@ class PotentialDuplicatesTest extends TestCase
             'firstName' => 'Maria Elena',
             'lastName' => 'Santos',
             'birthDate' => '1994-06-15',
+            'contactNumber' => '09171111111',
             'categoryDescription' => 'CATEGORY A',
             'subDescription' => 'Office A',
         ]);
@@ -111,6 +112,7 @@ class PotentialDuplicatesTest extends TestCase
             ])
             ->assertTableColumnStateSet('potential_duplicate_count', 1, $firstDuplicate)
             ->assertTableColumnStateSet('potential_duplicate_count', 1, $secondDuplicate)
+            ->assertSee('Phone 09171111111')
             ->assertSee('High-Probability Groups')
             ->assertSee('Records for Review')
             ->assertSee('High Probability')
