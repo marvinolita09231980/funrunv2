@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Participant extends Model
 {
@@ -14,6 +15,11 @@ class Participant extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by', 'username');
+    }
+
+    public function reportExclusions(): HasMany
+    {
+        return $this->hasMany(ParticipantReportExclusion::class);
     }
 
     public function getCreatorNameAttribute(): string

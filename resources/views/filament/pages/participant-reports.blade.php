@@ -1,12 +1,12 @@
 <x-filament-panels::page>
     <style>
         .participant-report-preview {
-            position: relative;
-            min-height: min(72vh, 54rem);
-            overflow: hidden;
+            display: grid;
+            gap: 1.25rem;
+            padding: 1rem;
             border: 1px solid rgba(148, 163, 184, 0.35);
             border-radius: 0.85rem;
-            background: #e5e7eb;
+            background: #f8fafc;
         }
 
         .dark .participant-report-preview {
@@ -14,36 +14,111 @@
             background: #111827;
         }
 
-        .participant-report-preview iframe {
-            display: block;
-            width: 100%;
-            min-height: min(72vh, 54rem);
-            border: 0;
+        .participant-report-preview-section {
+            overflow: hidden;
+            border: 1px solid #dbe3ec;
+            border-radius: 0.75rem;
             background: #fff;
-            transition: opacity 180ms ease;
         }
 
-        .participant-report-preview-loading {
-            position: absolute;
-            z-index: 1;
-            inset: 0;
-            display: grid;
-            place-content: center;
-            gap: 0.8rem;
-            color: #475569;
-            background: #f8fafc;
+        .dark .participant-report-preview-section {
+            border-color: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .participant-report-preview-heading {
+            margin: 0;
+            padding: 0.85rem 1rem;
+            color: #78350f;
+            background: #fef3c7;
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+
+        .dark .participant-report-preview-heading {
+            color: #fde68a;
+            background: rgba(146, 64, 14, 0.25);
+        }
+
+        .participant-report-preview-heading.is-excluded {
+            color: #991b1b;
+            background: #fee2e2;
+        }
+
+        .dark .participant-report-preview-heading.is-excluded {
+            color: #fecaca;
+            background: rgba(127, 29, 29, 0.3);
+        }
+
+        .participant-report-preview-table .action-column {
+            width: 1%;
             text-align: center;
+            white-space: nowrap;
         }
 
-        .dark .participant-report-preview-loading {
-            color: #cbd5e1;
-            background: #111827;
+        .participant-report-preview-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .participant-report-preview-table {
+            width: 100%;
+            min-width: 64rem;
+            border-collapse: collapse;
+            font-size: 0.78rem;
+        }
+
+        .participant-report-preview-table th,
+        .participant-report-preview-table td {
+            padding: 0.7rem 0.75rem;
+            border: 1px solid #dbe3ec;
+            vertical-align: middle;
+            text-align: left;
+        }
+
+        .participant-report-preview-table th {
+            color: #fff;
+            background: #1f2937;
+            font-weight: 650;
+            white-space: nowrap;
+        }
+
+        .participant-report-preview-table .group-row td {
+            color: #78350f;
+            background: #fffbeb;
+            font-weight: 700;
+        }
+
+        .dark .participant-report-preview-table td {
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #e5e7eb;
+        }
+
+        .dark .participant-report-preview-table .group-row td {
+            color: #fde68a;
+            background: rgba(146, 64, 14, 0.18);
+        }
+
+        .participant-report-modal-header {
+            display: flex;
+            width: 100%;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            padding-right: 0.25rem;
+        }
+
+        .participant-report-modal-header-actions {
+            display: flex;
+            flex: none;
+            flex-wrap: wrap;
+            gap: 0.5rem;
         }
 
         @media (max-width: 767px) {
-            .participant-report-preview,
-            .participant-report-preview iframe {
-                min-height: 65vh;
+            .participant-report-modal-header {
+                align-items: stretch;
+                flex-direction: column;
             }
         }
     </style>
@@ -90,7 +165,7 @@
                             outlined
                             icon="heroicon-o-eye"
                         >
-                            View {{ $typeLabel }} PDF
+                            Preview {{ $typeLabel }} Report
                         </x-filament::button>
                     </div>
                 @endforeach
@@ -114,7 +189,7 @@
                                         outlined
                                         icon="heroicon-o-eye"
                                     >
-                                        View PDF
+                                        Preview Report
                                     </x-filament::button>
                                 </div>
                             </div>
@@ -129,55 +204,212 @@
         id="participant-report-pdf-preview"
         width="7xl"
         :close-by-clicking-away="false"
+        :close-button="false"
+        :sticky-header="true"
     >
         <x-slot name="heading">{{ $previewTitle }}</x-slot>
-        <x-slot name="description">
-            Review the generated document below or download a copy for printing and records.
+        <x-slot name="header">
+            <div class="participant-report-modal-header">
+                <div>
+                    <h2 id="participant-report-pdf-preview.heading" class="fi-modal-heading">{{ $previewTitle }}</h2>
+                    <p class="fi-modal-description">
+                        Review the report data below. Excluding a row refreshes the list and promotes the next eligible participant when applicable. Excluded participants can be included back below.
+                    </p>
+                </div>
+                <div class="participant-report-modal-header-actions">
+                    <x-filament::button
+                        size="sm"
+                        icon="heroicon-o-arrow-down-tray"
+                        wire:click="downloadPreview"
+                        wire:loading.attr="disabled"
+                        wire:target="downloadPreview"
+                    >
+                        Download PDF
+                    </x-filament::button>
+                    <x-filament::icon-button
+                        size="sm"
+                        color="gray"
+                        icon="heroicon-m-x-mark"
+                        label="Close report preview"
+                        tooltip="Close"
+                        x-on:click="$dispatch('close-modal', { id: 'participant-report-pdf-preview' })"
+                    />
+                </div>
+            </div>
         </x-slot>
 
-        @if ($previewUrl)
-            <div
-                wire:key="participant-report-preview-{{ md5($previewUrl) }}"
-                class="participant-report-preview"
-                x-data="{ loaded: false }"
-            >
-                <div
-                    x-show="! loaded"
-                    class="participant-report-preview-loading"
-                    role="status"
-                    aria-live="polite"
-                >
-                    <x-filament::loading-indicator class="mx-auto h-8 w-8" />
-                    <div>
-                        <p style="font-weight: 650;">Generating PDF preview</p>
-                        <p style="margin-top: 0.25rem; font-size: 0.8rem;">Please wait while the report is prepared.</p>
-                    </div>
-                </div>
+        @if ($previewReportType)
+            @php($reportPreview = $this->previewReport())
 
-                <iframe
-                    src="{{ $previewUrl }}"
-                    title="{{ $previewTitle }}"
-                    x-on:load="loaded = true"
-                    x-bind:style="loaded ? 'opacity: 1' : 'opacity: 0'"
-                ></iframe>
+            <div class="participant-report-preview" wire:loading.class="opacity-60" wire:target="excludePreviewParticipant">
+                @if ($previewReportType === 'age')
+                    @forelse ($reportPreview['sections'] ?? [] as $section)
+                        <section class="participant-report-preview-section">
+                            <h3 class="participant-report-preview-heading">{{ $section['title'] }}</h3>
+                            <div class="participant-report-preview-table-wrap">
+                                <table class="participant-report-preview-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Rank</th>
+                                            <th>Participant</th>
+                                            <th>Birth Date</th>
+                                            <th>Age</th>
+                                            <th>Phone Number</th>
+                                            <th>Category</th>
+                                            <th>Subcategory</th>
+                                            <th class="action-column">Exclude</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @forelse ($section['participants'] as $participant)
+                                            <tr wire:key="age-preview-{{ $section['ranking'] }}-{{ $section['gender'] }}-{{ $section['distance'] }}-{{ $participant['participant_id'] }}">
+                                                <td>{{ $participant['rank'] }}</td>
+                                                <td>{{ $participant['name'] }}</td>
+                                                <td>{{ $participant['birth_date'] }}</td>
+                                                <td>{{ $participant['age'] }}</td>
+                                                <td>{{ $participant['phone_number'] }}</td>
+                                                <td>{{ $participant['category'] }}</td>
+                                                <td>{{ $participant['subcategory'] }}</td>
+                                                <td class="action-column">
+                                                    <x-filament::button
+                                                        type="button"
+                                                        size="xs"
+                                                        color="danger"
+                                                        outlined
+                                                        icon="heroicon-m-x-mark"
+                                                        aria-label="Remove {{ $participant['name'] }} from report"
+                                                        wire:click="excludePreviewParticipant({{ $participant['participant_id'] }}, '{{ $section['ranking'] }}', '{{ $section['gender'] }}', '{{ $section['distance'] }}')"
+                                                        wire:confirm="Remove {{ $participant['name'] }} from this report?"
+                                                        wire:loading.attr="disabled"
+                                                        wire:target="excludePreviewParticipant"
+                                                    >
+                                                        <span aria-hidden="true" style="display: block; width: 0; height: 0; overflow: hidden;">&nbsp;</span>
+                                                    </x-filament::button>
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="8">No eligible participants registered in this group.</td></tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    @empty
+                        <div>No age-report sections are available.</div>
+                    @endforelse
+                @elseif ($previewReportType === 'group')
+                    <section class="participant-report-preview-section">
+                        <h3 class="participant-report-preview-heading">
+                            {{ $reportPreview['title'] ?? 'Runner List' }} · {{ $reportPreview['total_runners'] ?? 0 }} runner(s)
+                        </h3>
+                        <div class="participant-report-preview-table-wrap">
+                            <table class="participant-report-preview-table">
+                                <thead>
+                                    <tr>
+                                        <th>No.</th>
+                                        <th>Runner</th>
+                                        <th>Birth Date</th>
+                                        <th>Phone Number</th>
+                                        <th>Gender</th>
+                                        <th>Distance</th>
+                                        <th>Shirt Size</th>
+                                        <th class="action-column">Exclude</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse ($reportPreview['groups'] ?? [] as $group)
+                                        <tr class="group-row">
+                                            <td colspan="8">
+                                                Registration #{{ $group['reference'] }} · {{ $group['category'] }} · {{ count($group['members']) }} runner(s)
+                                            </td>
+                                        </tr>
+                                        @foreach ($group['members'] as $member)
+                                            <tr wire:key="group-preview-{{ $member['participant_id'] }}">
+                                                <td>{{ $loop->iteration }}</td>
+                                                <td>{{ $member['name'] }}</td>
+                                                <td>{{ $member['birth_date'] }}</td>
+                                                <td>{{ $member['phone_number'] }}</td>
+                                                <td>{{ $member['gender'] }}</td>
+                                                <td>{{ $member['distance'] }}</td>
+                                                <td>{{ $member['shirt_size'] }}</td>
+                                                <td class="action-column">
+                                                    <x-filament::button
+                                                        type="button"
+                                                        size="xs"
+                                                        color="danger"
+                                                        outlined
+                                                        icon="heroicon-m-x-mark"
+                                                        aria-label="Remove {{ $member['name'] }} from report"
+                                                        wire:click="excludePreviewParticipant({{ $member['participant_id'] }})"
+                                                        wire:confirm="Remove {{ $member['name'] }} from this report?"
+                                                        wire:loading.attr="disabled"
+                                                        wire:target="excludePreviewParticipant"
+                                                    >
+                                                        <span aria-hidden="true" style="display: block; width: 0; height: 0; overflow: hidden;">&nbsp;</span>
+                                                    </x-filament::button>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    @empty
+                                        <tr><td colspan="8">No runners are available for this report.</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                @endif
+
+                @php($excludedPreviewSections = $this->previewExcludedSections())
+                @foreach ($excludedPreviewSections as $excludedSection)
+                    <section class="participant-report-preview-section">
+                        <h3 class="participant-report-preview-heading is-excluded">
+                            Excluded · {{ $excludedSection['title'] }} · {{ count($excludedSection['participants']) }} participant(s)
+                        </h3>
+                        <div class="participant-report-preview-table-wrap">
+                            <table class="participant-report-preview-table">
+                                <thead>
+                                    <tr>
+                                        <th>Participant</th>
+                                        <th>Birth Date</th>
+                                        <th>Age</th>
+                                        <th>Phone Number</th>
+                                        <th>Category</th>
+                                        <th>Subcategory</th>
+                                        <th class="action-column">Include Back</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($excludedSection['participants'] as $participant)
+                                        <tr wire:key="excluded-preview-{{ $excludedSection['report_key'] }}-{{ $participant['participant_id'] }}">
+                                            <td>{{ $participant['name'] }}</td>
+                                            <td>{{ $participant['birth_date'] }}</td>
+                                            <td>{{ $participant['age'] }}</td>
+                                            <td>{{ $participant['phone_number'] }}</td>
+                                            <td>{{ $participant['category'] }}</td>
+                                            <td>{{ $participant['subcategory'] }}</td>
+                                            <td class="action-column">
+                                                <x-filament::button
+                                                    type="button"
+                                                    size="xs"
+                                                    color="success"
+                                                    icon="heroicon-m-arrow-uturn-left"
+                                                    wire:click="includePreviewParticipant({{ $participant['participant_id'] }}, '{{ $excludedSection['report_key'] }}')"
+                                                    wire:loading.attr="disabled"
+                                                    wire:target="includePreviewParticipant"
+                                                >
+                                                    Include back
+                                                </x-filament::button>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                @endforeach
             </div>
         @endif
 
-        <x-slot name="footerActions">
-            <x-filament::button
-                color="gray"
-                x-on:click="$dispatch('close-modal', { id: 'participant-report-pdf-preview' })"
-            >
-                Close
-            </x-filament::button>
-            <x-filament::button
-                icon="heroicon-o-arrow-down-tray"
-                wire:click="downloadPreview"
-                wire:loading.attr="disabled"
-                wire:target="downloadPreview"
-            >
-                Download PDF
-            </x-filament::button>
-        </x-slot>
     </x-filament::modal>
+
 </x-filament-panels::page>

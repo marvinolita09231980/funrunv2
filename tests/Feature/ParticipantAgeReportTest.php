@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Pages\ParticipantReports;
 use App\Models\CategoryAllocation;
 use App\Models\Participant;
+use App\Models\ParticipantReportExclusion;
 use App\Models\Subcategory;
 use App\Models\User;
 use App\Services\ParticipantAgeReport;
@@ -41,6 +42,7 @@ class ParticipantAgeReportTest extends TestCase
         $report = ParticipantAgeReport::build($viewer, 2026);
         $this->assertSame([0, 5, 1, 2, 0, 5, 1, 2], array_map(fn (array $section): int => count($section['participants']), $report['sections']));
         $this->assertSame('05/03/1970', $report['sections'][1]['participants'][0]['birth_date']);
+        $this->assertSame('09123456789', $report['sections'][1]['participants'][0]['phone_number']);
         $this->assertSame('08/21/1999', $report['sections'][5]['participants'][0]['birth_date']);
     }
 
@@ -74,6 +76,10 @@ class ParticipantAgeReportTest extends TestCase
 
         $pdf = Pdf::loadView('pdf.participant-age-report', ['report' => $report])->setPaper('a4', 'landscape')->output();
         $this->assertStringStartsWith('%PDF', $pdf);
+        $html = view('pdf.participant-age-report', ['report' => $report])->render();
+        $this->assertStringContainsString('Phone Number', $html);
+        $this->assertStringContainsString('>Time<', $html);
+        $this->assertStringContainsString('09123456789', $html);
     }
 
     public function test_ao_reports_include_all_categories_and_direct_registrations(): void
@@ -113,7 +119,9 @@ class ParticipantAgeReportTest extends TestCase
         $this->actingAs($this->user('superadmin'));
         Livewire::test(ParticipantReports::class)
             ->assertSee('View All 8 Reports')
-            ->assertSee('View PDF')
+            ->assertSee('Preview Report')
+            ->assertSee('Preview Couple Report')
+            ->assertDontSee('Manage Exclusions')
             ->assertDontSee('Download All 8 Reports')
             ->assertDontSee('Download Couple PDF')
             ->assertDontSee('Download Family PDF');
@@ -192,6 +200,233 @@ class ParticipantAgeReportTest extends TestCase
             ->assertFileDownloaded("family-runners-{$year}.pdf");
     }
 
+    public function test_participants_can_be_excluded_directly_from_the_interactive_preview(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $superadmin = $this->user('superadmin');
+        $this->actingAs($superadmin);
+
+        $participants = collect();
+        for ($index = 0; $index < 11; $index++) {
+            $participants->push($this->participant([
+                'firstName' => "PreviewRunner{$index}",
+                'gender' => 'male',
+                'distanceCategory' => '5km',
+                'birthDate' => (1960 + $index).'-01-01',
+            ]));
+        }
+
+        $page = Livewire::test(ParticipantReports::class)
+            ->call('openAgeReportPreview', 'oldest', 'male', '5km')
+            ->assertSee('PreviewRunner0 Runner')
+            ->assertSee('Exclude')
+            ->call(
+                'excludePreviewParticipant',
+                $participants[0]->getKey(),
+                'oldest',
+                'male',
+                '5km',
+            )
+            ->assertHasNoErrors()
+            ->assertSee('PreviewRunner10 Runner');
+
+        $preview = $page->instance()->previewReport();
+        $previewNames = array_column($preview['sections'][0]['participants'], 'name');
+        $this->assertCount(10, $previewNames);
+        $this->assertNotContains('PreviewRunner0 Runner', $previewNames);
+        $this->assertContains('PreviewRunner10 Runner', $previewNames);
+        $this->assertDatabaseHas('participant_report_exclusions', [
+            'participant_id' => $participants[0]->getKey(),
+            'year' => now()->year,
+            'report_key' => ParticipantReportExclusion::ageKey('oldest', 'male', '5km'),
+            'excluded_by' => $superadmin->getKey(),
+        ]);
+
+        $coupleRunner = $this->participant([
+            'firstName' => 'Preview Couple',
+            'subDescription' => 'Couple',
+            'couple' => true,
+            'participantNumber' => 'PREVIEW-C-1',
+        ]);
+
+        $page
+            ->call('openRunnerListPreview', 'couple')
+            ->assertSee('Preview Couple Runner')
+            ->call('excludePreviewParticipant', $coupleRunner->getKey())
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('participant_report_exclusions', [
+            'participant_id' => $coupleRunner->getKey(),
+            'year' => now()->year,
+            'report_key' => ParticipantReportExclusion::groupKey('couple'),
+            'excluded_by' => $superadmin->getKey(),
+        ]);
+    }
+
+    public function test_each_report_can_exclude_and_include_participants_independently(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $superadmin = $this->user('superadmin');
+        $this->actingAs($superadmin);
+
+        $year = now()->year;
+        $participants = collect();
+
+        for ($index = 0; $index < 12; $index++) {
+            $participants->push($this->participant([
+                'firstName' => "Runner{$index}",
+                'gender' => 'male',
+                'distanceCategory' => '5km',
+                'birthDate' => (1960 + $index).'-01-01',
+            ]));
+        }
+
+        $oldestBefore = ParticipantAgeReport::build(
+            $superadmin,
+            $year,
+            'oldest',
+            'male',
+            '5km',
+        );
+        $youngestBefore = ParticipantAgeReport::build(
+            $superadmin,
+            $year,
+            'youngest',
+            'male',
+            '5km',
+        );
+        $this->assertSame('Runner0 Runner', $oldestBefore['sections'][0]['participants'][0]['name']);
+
+        $page = Livewire::test(ParticipantReports::class)
+            ->call('openAgeReportPreview', 'oldest', 'male', '5km')
+            ->call(
+                'excludePreviewParticipant',
+                $participants[0]->getKey(),
+                'oldest',
+                'male',
+                '5km',
+            )
+            ->assertSee('Include back');
+
+        $includedParticipants = $page->instance()->previewReport()['sections'][0]['participants'];
+        $excludedSections = $page->instance()->previewExcludedSections();
+        $this->assertCount(10, $includedParticipants);
+        $this->assertCount(1, $excludedSections);
+        $this->assertCount(1, $excludedSections[0]['participants']);
+        $this->assertSame($participants[0]->getKey(), $excludedSections[0]['participants'][0]['participant_id']);
+        $this->assertSame(
+            (int) \Carbon\CarbonImmutable::parse($participants[0]->birthDate)->diffInYears(\Carbon\CarbonImmutable::today()),
+            $excludedSections[0]['participants'][0]['age'],
+        );
+        $this->assertContains($participants[10]->getKey(), array_column($includedParticipants, 'participant_id'));
+
+        $this->assertDatabaseHas('participant_report_exclusions', [
+            'participant_id' => $participants[0]->getKey(),
+            'year' => $year,
+            'report_key' => ParticipantReportExclusion::ageKey('oldest', 'male', '5km'),
+            'excluded_by' => $superadmin->getKey(),
+        ]);
+
+        $oldestAfter = ParticipantAgeReport::build(
+            $superadmin,
+            $year,
+            'oldest',
+            'male',
+            '5km',
+        );
+        $youngestUnaffected = ParticipantAgeReport::build(
+            $superadmin,
+            $year,
+            'youngest',
+            'male',
+            '5km',
+        );
+
+        $this->assertSame('Runner1 Runner', $oldestAfter['sections'][0]['participants'][0]['name']);
+        $this->assertContains('Runner10 Runner', array_column(
+            $oldestAfter['sections'][0]['participants'],
+            'name',
+        ));
+        $this->assertSame(
+            array_column($youngestBefore['sections'][0]['participants'], 'name'),
+            array_column($youngestUnaffected['sections'][0]['participants'], 'name'),
+        );
+
+        $page
+            ->call(
+                'includePreviewParticipant',
+                $participants[0]->getKey(),
+                ParticipantReportExclusion::ageKey('oldest', 'male', '5km'),
+            );
+
+        $this->assertDatabaseMissing('participant_report_exclusions', [
+            'participant_id' => $participants[0]->getKey(),
+            'year' => $year,
+            'report_key' => ParticipantReportExclusion::ageKey('oldest', 'male', '5km'),
+        ]);
+        $this->assertSame(
+            'Runner0 Runner',
+            ParticipantAgeReport::build(
+                $superadmin,
+                $year,
+                'oldest',
+                'male',
+                '5km',
+            )['sections'][0]['participants'][0]['name'],
+        );
+    }
+
+    public function test_couple_and_family_exclusions_are_independent(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $superadmin = $this->user('superadmin');
+        $this->actingAs($superadmin);
+
+        $coupleRunner = $this->participant([
+            'firstName' => 'Couple Primary',
+            'subDescription' => 'Couple',
+            'couple' => true,
+            'participantNumber' => 'C-100',
+        ]);
+        $this->participant([
+            'firstName' => 'Couple Partner',
+            'subDescription' => 'Couple',
+            'couple' => true,
+            'participantNumber' => 'C-100',
+        ]);
+        $familyRunner = $this->participant([
+            'firstName' => 'Family Parent',
+            'subDescription' => 'Family',
+            'couple' => false,
+            'participantNumber' => 'F-100',
+        ]);
+
+        Livewire::test(ParticipantReports::class)
+            ->call('openRunnerListPreview', 'couple')
+            ->call('excludePreviewParticipant', $coupleRunner->getKey())
+            ->assertSee('Include back');
+
+        $couple = RegistrationGroupReport::build($superadmin, now()->year, 'couple');
+        $family = RegistrationGroupReport::build($superadmin, now()->year, 'family');
+
+        $this->assertSame(
+            ['Couple Partner Runner'],
+            array_column($couple['groups'][0]['members'], 'name'),
+        );
+        $this->assertSame(
+            ['Family Parent Runner'],
+            array_column($family['groups'][0]['members'], 'name'),
+        );
+        $this->assertDatabaseHas('participant_report_exclusions', [
+            'participant_id' => $coupleRunner->getKey(),
+            'report_key' => ParticipantReportExclusion::groupKey('couple'),
+        ]);
+        $this->assertDatabaseMissing('participant_report_exclusions', [
+            'participant_id' => $familyRunner->getKey(),
+            'report_key' => ParticipantReportExclusion::groupKey('family'),
+        ]);
+    }
+
     public function test_pdf_preview_routes_enforce_report_permissions(): void
     {
         $this->actingAs($this->user('focal user'));
@@ -228,15 +463,19 @@ class ParticipantAgeReportTest extends TestCase
         $this->assertCount(1, $couple['groups']);
         $this->assertSame(2, $couple['total_runners']);
         $this->assertSame(['Primary Runner', 'Partner Runner'], array_column($couple['groups'][0]['members'], 'name'));
+        $this->assertSame('09123456789', $couple['groups'][0]['members'][0]['phone_number']);
         $this->assertCount(2, $family['groups']);
         $this->assertSame(3, $family['total_runners']);
         $this->assertSame(['Parent Runner', 'Child Runner'], array_column($family['groups'][0]['members'], 'name'));
+        $groupHtml = view('pdf.registration-group-report', ['report' => $couple])->render();
+        $this->assertStringContainsString('Phone Number', $groupHtml);
+        $this->assertStringContainsString('>Time<', $groupHtml);
 
         $this->actingAs($officer);
         $officer->givePermissionTo(Permission::findOrCreate(ParticipantReports::VIEW_PERMISSION, 'web'));
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         Livewire::test(ParticipantReports::class)
-            ->assertSee('View Couple PDF')->assertSee('View Family PDF')
+            ->assertSee('Preview Couple Report')->assertSee('Preview Family Report')
             ->call('downloadRunnerList', 'couple')->assertFileDownloaded('couple-runners-'.now()->year.'.pdf')
             ->call('downloadRunnerList', 'family')->assertFileDownloaded('family-runners-'.now()->year.'.pdf');
     }
