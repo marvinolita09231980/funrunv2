@@ -35,6 +35,13 @@ class PotentialDuplicates extends Page implements HasTable
 
     protected string $view = 'filament.pages.potential-duplicates';
 
+    public bool $duplicatesReady = false;
+
+    public function loadPotentialDuplicates(): void
+    {
+        $this->duplicatesReady = true;
+    }
+
     public static function canAccess(): bool
     {
         $user = Auth::user();

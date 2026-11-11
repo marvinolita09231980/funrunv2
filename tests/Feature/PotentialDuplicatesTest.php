@@ -101,6 +101,7 @@ class PotentialDuplicatesTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
             ->assertCanSeeTableRecords([$firstDuplicate, $secondDuplicate])
             ->assertCanNotSeeTableRecords([
                 $differentBirthDate,
@@ -175,6 +176,7 @@ class PotentialDuplicatesTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
             ->assertCanSeeTableRecords([
                 $markJohn,
                 $mark,
@@ -272,6 +274,22 @@ class PotentialDuplicatesTest extends TestCase
 
         $this->actingAs($focal);
         $this->assertFalse(PotentialDuplicates::canAccess());
+    }
+
+    public function test_page_shows_generation_status_before_loading_duplicate_results(): void
+    {
+        $admin = $this->userWithRole('Duplicate Admin', 'duplicate-admin', 'admin');
+
+        $this->actingAs($admin);
+
+        Livewire::test(PotentialDuplicates::class)
+            ->assertSet('duplicatesReady', false)
+            ->assertSee('Generating potential duplicates')
+            ->assertSee('Please wait while we carefully compare participant records.')
+            ->call('loadPotentialDuplicates')
+            ->assertSet('duplicatesReady', true)
+            ->assertDontSee('Generating potential duplicates')
+            ->assertSee('High-Probability Duplicate Review');
     }
 
     public function test_authorized_user_can_download_printable_duplicate_report(): void
