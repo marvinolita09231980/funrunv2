@@ -4,10 +4,8 @@ namespace App\Filament\Pages;
 
 use App\Models\Participant;
 use App\Models\User;
-use App\Services\ParticipantAgeReport;
-use App\Services\RegistrationGroupReport;
+use App\Services\ParticipantReportPdf;
 use BackedEnum;
-use Barryvdh\DomPDF\Facade\Pdf;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
@@ -60,13 +58,17 @@ class ParticipantReports extends Page
             'distance' => ['nullable', Rule::in(['5km', '10km'])],
         ])->validate();
 
-        $report = ParticipantAgeReport::build(Auth::user(), $this->selectedYear, $ranking, $gender, $distance);
-        $content = Pdf::loadView('pdf.participant-age-report', ['report' => $report])->setPaper('a4', 'landscape')->output();
-        $filename = implode('-', array_filter(['top-10', $ranking, $gender, $distance, $this->selectedYear])).'.pdf';
+        $document = ParticipantReportPdf::age(
+            Auth::user(),
+            $this->selectedYear,
+            $ranking,
+            $gender,
+            $distance,
+        );
 
-        return response()->streamDownload(static function () use ($content): void {
-            echo $content;
-        }, $filename, ['Content-Type' => 'application/pdf']);
+        return response()->streamDownload(static function () use ($document): void {
+            echo $document['content'];
+        }, $document['filename'], ['Content-Type' => 'application/pdf']);
     }
 
     public function downloadRunnerList(string $type): StreamedResponse
@@ -77,11 +79,35 @@ class ParticipantReports extends Page
             'type' => ['required', Rule::in(['couple', 'family'])],
         ])->validate();
 
-        $report = RegistrationGroupReport::build(Auth::user(), $this->selectedYear, $type);
-        $content = Pdf::loadView('pdf.registration-group-report', ['report' => $report])->setPaper('a4', 'landscape')->output();
+        $document = ParticipantReportPdf::group(
+            Auth::user(),
+            $this->selectedYear,
+            $type,
+        );
 
-        return response()->streamDownload(static function () use ($content): void {
-            echo $content;
-        }, "{$type}-runners-{$this->selectedYear}.pdf", ['Content-Type' => 'application/pdf']);
+        return response()->streamDownload(static function () use ($document): void {
+            echo $document['content'];
+        }, $document['filename'], ['Content-Type' => 'application/pdf']);
+    }
+
+    public function previewReportUrl(
+        string $ranking = 'all',
+        ?string $gender = null,
+        ?string $distance = null,
+    ): string {
+        return route('participant-reports.preview.age', array_filter([
+            'year' => $this->selectedYear,
+            'ranking' => $ranking,
+            'gender' => $gender,
+            'distance' => $distance,
+        ], fn (mixed $value): bool => $value !== null));
+    }
+
+    public function previewRunnerListUrl(string $type): string
+    {
+        return route('participant-reports.preview.group', [
+            'type' => $type,
+            'year' => $this->selectedYear,
+        ]);
     }
 }

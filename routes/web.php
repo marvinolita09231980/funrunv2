@@ -1,11 +1,23 @@
 <?php
 
+use App\Http\Controllers\ParticipantReportPdfController;
 use App\Support\FeedbackShareLink;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return redirect('/admin/login');
 });
+
+Route::get(
+    '/admin/participant-reports/preview/age',
+    [ParticipantReportPdfController::class, 'age'],
+)->name('participant-reports.preview.age');
+
+Route::get(
+    '/admin/participant-reports/preview/groups/{type}',
+    [ParticipantReportPdfController::class, 'group'],
+)->whereIn('type', ['couple', 'family'])
+    ->name('participant-reports.preview.group');
 
 Route::get('/feedback/feedback-qr-code.png', function () {
     return response(FeedbackShareLink::downloadableQrCodePng(), 200, [
@@ -30,4 +42,3 @@ Route::get('/feedback/share-feedback-form', function () {
         'shareUrl' => FeedbackShareLink::shareUrl(),
     ]);
 })->name('feedback.share');
-

@@ -113,12 +113,71 @@ class ParticipantAgeReportTest extends TestCase
         $this->actingAs($this->user('superadmin'));
         Livewire::test(ParticipantReports::class)
             ->assertSee('Download All 8 Reports')
+            ->assertSee('View All 8 Reports')
+            ->assertSee('View PDF')
             ->call('downloadReport', 'oldest', 'female', '10km')
             ->assertFileDownloaded('top-10-oldest-female-10km-'.now()->year.'.pdf');
 
         $this->actingAs($this->user('focal user'));
         $this->assertFalse(ParticipantReports::canAccess());
         Livewire::test(ParticipantReports::class)->assertForbidden();
+    }
+
+    public function test_authorized_user_can_view_report_pdfs_inline(): void
+    {
+        $this->actingAs($this->user('superadmin'));
+
+        $ageReports = [
+            ['ranking' => 'all'],
+            ['ranking' => 'oldest', 'gender' => 'female', 'distance' => '10km'],
+        ];
+
+        foreach ($ageReports as $parameters) {
+            $response = $this->get(route('participant-reports.preview.age', [
+                'year' => now()->year,
+                ...$parameters,
+            ]));
+
+            $response
+                ->assertOk()
+                ->assertHeader('Content-Type', 'application/pdf');
+            $this->assertStringContainsString(
+                'inline; filename=',
+                (string) $response->headers->get('Content-Disposition'),
+            );
+            $this->assertStringStartsWith('%PDF', (string) $response->getContent());
+        }
+
+        foreach (['couple', 'family'] as $type) {
+            $response = $this->get(route('participant-reports.preview.group', [
+                'type' => $type,
+                'year' => now()->year,
+            ]));
+
+            $response
+                ->assertOk()
+                ->assertHeader('Content-Type', 'application/pdf')
+                ->assertHeader(
+                    'Content-Disposition',
+                    "inline; filename=\"{$type}-runners-".now()->year.'.pdf"',
+                );
+            $this->assertStringStartsWith('%PDF', (string) $response->getContent());
+        }
+    }
+
+    public function test_pdf_preview_routes_enforce_report_permissions(): void
+    {
+        $this->actingAs($this->user('focal user'));
+
+        $this->get(route('participant-reports.preview.age', [
+            'year' => now()->year,
+            'ranking' => 'all',
+        ]))->assertForbidden();
+
+        $this->get(route('participant-reports.preview.group', [
+            'type' => 'couple',
+            'year' => now()->year,
+        ]))->assertForbidden();
     }
 
     public function test_couple_and_family_lists_group_members_across_categories_for_selected_year(): void
@@ -150,7 +209,7 @@ class ParticipantAgeReportTest extends TestCase
         $officer->givePermissionTo(Permission::findOrCreate(ParticipantReports::VIEW_PERMISSION, 'web'));
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         Livewire::test(ParticipantReports::class)
-            ->assertSee('Couple Runners PDF')->assertSee('Family Runners PDF')
+            ->assertSee('View Couple PDF')->assertSee('View Family PDF')
             ->call('downloadRunnerList', 'couple')->assertFileDownloaded('couple-runners-'.now()->year.'.pdf')
             ->call('downloadRunnerList', 'family')->assertFileDownloaded('family-runners-'.now()->year.'.pdf');
     }
