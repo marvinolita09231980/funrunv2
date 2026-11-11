@@ -30,6 +30,15 @@ class ParticipantReports extends Page
 
     public int $selectedYear;
 
+    public ?string $previewUrl = null;
+
+    public string $previewTitle = 'Participant Report Preview';
+
+    public ?string $previewReportType = null;
+
+    /** @var array<string, int|string|null> */
+    public array $previewReportParameters = [];
+
     public static function canAccess(): bool
     {
         $user = Auth::user();
@@ -90,6 +99,77 @@ class ParticipantReports extends Page
         }, $document['filename'], ['Content-Type' => 'application/pdf']);
     }
 
+    public function openAgeReportPreview(
+        string $ranking = 'all',
+        ?string $gender = null,
+        ?string $distance = null,
+    ): void {
+        abort_unless(static::canAccess(), 403);
+
+        $parameters = validator([
+            'year' => $this->selectedYear,
+            'ranking' => $ranking,
+            'gender' => $gender,
+            'distance' => $distance,
+        ], [
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'ranking' => ['required', Rule::in(['all', 'oldest', 'youngest'])],
+            'gender' => ['nullable', Rule::in(['male', 'female'])],
+            'distance' => ['nullable', Rule::in(['5km', '10km'])],
+        ])->validate();
+
+        $this->previewReportType = 'age';
+        $this->previewReportParameters = $parameters;
+        $this->previewUrl = $this->previewReportUrl(
+            $parameters['ranking'],
+            $parameters['gender'] ?? null,
+            $parameters['distance'] ?? null,
+        );
+        $this->previewTitle = $this->agePreviewTitle(
+            $parameters['ranking'],
+            $parameters['gender'] ?? null,
+            $parameters['distance'] ?? null,
+            (int) $parameters['year'],
+        );
+
+        $this->dispatch('open-modal', id: 'participant-report-pdf-preview');
+    }
+
+    public function openRunnerListPreview(string $type): void
+    {
+        abort_unless(static::canAccess(), 403);
+
+        $parameters = validator([
+            'year' => $this->selectedYear,
+            'type' => $type,
+        ], [
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'type' => ['required', Rule::in(['couple', 'family'])],
+        ])->validate();
+
+        $this->previewReportType = 'group';
+        $this->previewReportParameters = $parameters;
+        $this->previewUrl = $this->previewRunnerListUrl($parameters['type']);
+        $this->previewTitle = ucfirst($parameters['type']).' Runner List · '.$parameters['year'];
+
+        $this->dispatch('open-modal', id: 'participant-report-pdf-preview');
+    }
+
+    public function downloadPreview(): StreamedResponse
+    {
+        abort_unless(static::canAccess(), 403);
+
+        $document = match ($this->previewReportType) {
+            'age' => $this->previewAgeDocument(),
+            'group' => $this->previewGroupDocument(),
+            default => abort(404),
+        };
+
+        return response()->streamDownload(static function () use ($document): void {
+            echo $document['content'];
+        }, $document['filename'], ['Content-Type' => 'application/pdf']);
+    }
+
     public function previewReportUrl(
         string $ranking = 'all',
         ?string $gender = null,
@@ -109,5 +189,57 @@ class ParticipantReports extends Page
             'type' => $type,
             'year' => $this->selectedYear,
         ]);
+    }
+
+    /** @return array{content: string, filename: string} */
+    private function previewAgeDocument(): array
+    {
+        $parameters = validator($this->previewReportParameters, [
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'ranking' => ['required', Rule::in(['all', 'oldest', 'youngest'])],
+            'gender' => ['nullable', Rule::in(['male', 'female'])],
+            'distance' => ['nullable', Rule::in(['5km', '10km'])],
+        ])->validate();
+
+        return ParticipantReportPdf::age(
+            Auth::user(),
+            (int) $parameters['year'],
+            $parameters['ranking'],
+            $parameters['gender'] ?? null,
+            $parameters['distance'] ?? null,
+        );
+    }
+
+    /** @return array{content: string, filename: string} */
+    private function previewGroupDocument(): array
+    {
+        $parameters = validator($this->previewReportParameters, [
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'type' => ['required', Rule::in(['couple', 'family'])],
+        ])->validate();
+
+        return ParticipantReportPdf::group(
+            Auth::user(),
+            (int) $parameters['year'],
+            $parameters['type'],
+        );
+    }
+
+    private function agePreviewTitle(
+        string $ranking,
+        ?string $gender,
+        ?string $distance,
+        int $year,
+    ): string {
+        if ($ranking === 'all') {
+            return "All 8 Participant Age Reports · {$year}";
+        }
+
+        return collect([
+            'Top 10 '.ucfirst($ranking),
+            $gender ? ucfirst($gender) : null,
+            $distance ? strtoupper(str_replace('km', 'K', $distance)) : null,
+            (string) $year,
+        ])->filter()->join(' · ');
     }
 }

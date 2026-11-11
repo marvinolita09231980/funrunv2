@@ -165,6 +165,33 @@ class ParticipantAgeReportTest extends TestCase
         }
     }
 
+    public function test_view_pdf_actions_open_a_preview_modal_with_a_download_option(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($this->user('superadmin'));
+
+        $year = now()->year;
+        $page = Livewire::test(ParticipantReports::class)
+            ->call('openAgeReportPreview', 'oldest', 'female', '10km')
+            ->assertSet('previewReportType', 'age')
+            ->assertSet('previewTitle', "Top 10 Oldest · Female · 10K · {$year}")
+            ->assertSet('previewReportParameters.year', $year)
+            ->assertSet('previewReportParameters.ranking', 'oldest')
+            ->assertDispatched('open-modal', id: 'participant-report-pdf-preview')
+            ->assertSee('Download PDF')
+            ->call('downloadPreview')
+            ->assertFileDownloaded("top-10-oldest-female-10km-{$year}.pdf");
+
+        $page
+            ->call('openRunnerListPreview', 'family')
+            ->assertSet('previewReportType', 'group')
+            ->assertSet('previewTitle', "Family Runner List · {$year}")
+            ->assertSet('previewReportParameters.type', 'family')
+            ->assertDispatched('open-modal', id: 'participant-report-pdf-preview')
+            ->call('downloadPreview')
+            ->assertFileDownloaded("family-runners-{$year}.pdf");
+    }
+
     public function test_pdf_preview_routes_enforce_report_permissions(): void
     {
         $this->actingAs($this->user('focal user'));
