@@ -112,11 +112,11 @@ class ParticipantAgeReportTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         $this->actingAs($this->user('superadmin'));
         Livewire::test(ParticipantReports::class)
-            ->assertSee('Download All 8 Reports')
             ->assertSee('View All 8 Reports')
             ->assertSee('View PDF')
-            ->call('downloadReport', 'oldest', 'female', '10km')
-            ->assertFileDownloaded('top-10-oldest-female-10km-'.now()->year.'.pdf');
+            ->assertDontSee('Download All 8 Reports')
+            ->assertDontSee('Download Couple PDF')
+            ->assertDontSee('Download Family PDF');
 
         $this->actingAs($this->user('focal user'));
         $this->assertFalse(ParticipantReports::canAccess());

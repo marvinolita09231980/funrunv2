@@ -72,7 +72,6 @@
                     >
                         View All 8 Reports
                     </x-filament::button>
-                    <x-filament::button icon="heroicon-o-arrow-down-tray" wire:click="downloadReport" wire:loading.attr="disabled" wire:target="downloadReport">Download All 8 Reports</x-filament::button>
                 </div>
             </div>
             <p style="margin-top: 1rem; font-size: 0.875rem; color: #6b7280;">Rankings use birth dates. Ages are calculated as of today for the current year, or December 31 for other years. Ties are ordered by name. Reports include all categories, regardless of who registered the participants.</p>
@@ -92,9 +91,6 @@
                             icon="heroicon-o-eye"
                         >
                             View {{ $typeLabel }} PDF
-                        </x-filament::button>
-                        <x-filament::button color="gray" icon="heroicon-o-arrow-down-tray" wire:click="downloadRunnerList('{{ $type }}')" wire:loading.attr="disabled" wire:target="downloadRunnerList">
-                            Download {{ $typeLabel }} PDF
                         </x-filament::button>
                     </div>
                 @endforeach
@@ -120,7 +116,6 @@
                                     >
                                         View PDF
                                     </x-filament::button>
-                                    <x-filament::button color="gray" icon="heroicon-o-arrow-down-tray" wire:click="downloadReport('{{ $ranking }}', '{{ $gender }}', '{{ $distance }}')" wire:loading.attr="disabled" wire:target="downloadReport">Download PDF</x-filament::button>
                                 </div>
                             </div>
                         @endforeach
