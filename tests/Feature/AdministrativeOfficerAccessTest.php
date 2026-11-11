@@ -256,6 +256,72 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->assertFalse($policy->update($officer, $categoryAAllocation));
     }
 
+    public function test_officer_can_export_multiple_assigned_subcategories_without_a_letter_range(): void
+    {
+        $officer = $this->createUser(
+            name: 'Administrative Officer',
+            username: 'ao-one',
+            administeredCategory: 'CATEGORY A',
+        );
+        $officer->assignRole(Role::findByName('administrative officer'));
+
+        $officeA = $this->createSubcategory('CATEGORY A', 'Office A');
+        $officeB = $this->createSubcategory('CATEGORY A', 'Office B');
+        $outsideOffice = $this->createSubcategory('CATEGORY B', 'Outside Office');
+
+        $this->createParticipant('Office A Runner', 'CATEGORY A', 'Office A');
+        $this->createParticipant('Office B Runner', 'CATEGORY A', 'Office B');
+        $this->createParticipant('Outside Runner', 'CATEGORY B', 'Outside Office');
+
+        $this->assertSame(
+            [$officeA->getKey(), $officeB->getKey()],
+            ParticipantsTable::exportSubcategoriesForUser(
+                $officer,
+                [$officeA->getKey(), $officeB->getKey()],
+            )->pluck('id')->sort()->values()->all(),
+        );
+        $this->assertCount(
+            1,
+            ParticipantsTable::exportSubcategoriesForUser(
+                $officer,
+                [$officeA->getKey(), $outsideOffice->getKey()],
+            ),
+        );
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($officer);
+
+        Livewire::test(ListParticipants::class)
+            ->callTableAction('attendance_export', null, [
+                'subcategory' => [$officeA->getKey(), $officeB->getKey()],
+            ])
+            ->assertHasNoTableActionErrors()
+            ->assertFileDownloaded('singlet_attendance_sheet.xlsx');
+
+        Livewire::test(ListParticipants::class)
+            ->callTableAction('food_attendance_export', null, [
+                'subcategory' => [$officeA->getKey(), $officeB->getKey()],
+            ])
+            ->assertHasNoTableActionErrors()
+            ->assertFileDownloaded('food_attendance_sheet.xlsx');
+
+        Livewire::test(ListParticipants::class)
+            ->callTableAction('attendance_export', null, [
+                'subcategory' => [$officeA->getKey()],
+            ])
+            ->assertHasTableActionErrors(['letterStart', 'letterEnd']);
+
+        Livewire::test(ListParticipants::class)
+            ->callTableAction('attendance_export', null, [
+                'subcategory' => [$officeA->getKey()],
+                'letterStart' => 'A',
+                'letterEnd' => 'Z',
+            ])
+            ->assertHasNoTableActionErrors()
+            ->assertFileDownloaded('singlet_attendance_sheet.xlsx');
+
+    }
+
     public function test_ao_participant_header_deducts_ao_and_focal_registrations(): void
     {
         $officer = $this->createUser(

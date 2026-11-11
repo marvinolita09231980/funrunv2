@@ -14,6 +14,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
 use Illuminate\Support\HtmlString;
 use App\Exports\FilteredSheetExport;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -135,76 +136,23 @@ class ParticipantsTable
                     ->label('Attendance Export')
                     ->icon('heroicon-o-document-arrow-down')
                     ->visible(fn (): bool => self::canUseAttendanceExports(Auth::user()))
-                    ->action(function (array $data) {
-                            $year = date('Y');
-                            $letterStart = strtoupper($data['letterStart']);
-                            $letterEnd = strtoupper($data['letterEnd']);
-                            $subcategory = self::exportSubcategoryForUser(
-                                Auth::user(),
-                                $data['subcategory'] ?? null,
-                            );
-
-                            if (! $subcategory) {
-                                throw ValidationException::withMessages([
-                                    'subcategory' => 'Select a subcategory assigned to your account.',
-                                ]);
-                            }
-
-                            if ($letterStart > $letterEnd) {
-                                [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
-                            }
-
-                            $participants = self::participantsForExport($subcategory)
-                            ->select(
-                            'firstName', 
-                            'middleInitial', 
-                            'lastName', 
-                            'distanceCategory', 
-                            'shirtSize', 
-                            'gender',
-                            'categoryDescription'
-                            )
-                            ->where('year', $year)
-                            ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
-                            ->orderBy('lastName')
-                            ->orderBy('firstName')
-                            ->get();
-
-                        //    $participants = self::updateParticipantCount($set, $get);
-                            
-                            
-
-                            if ($participants->isEmpty()) {
-                                Notification::make()
-                                    ->danger()
-                                    ->title('No data found!')
-                                    ->body('No participants were found in this category')
-                                    ->send();
-                                return;
-                            }
-
-                            return Excel::download(
-                                new AttendanceSheetExport(
-                                    $subcategory->categoryDescription,
-                                    $subcategory->subDescription,
-                                    $letterStart,
-                                    $letterEnd,
-                                ),
-                                'singlet_attendance_sheet.xlsx'
-                            );
-                    })
+                    ->action(fn (array $data) => self::downloadAttendanceExport($data))
                    ->schema([
                         Grid::make()
                             ->columns(2)
                             ->schema([
                                 Select::make('subcategory')
-                                    ->label('Subcategory')
+                                    ->label('Subcategories')
                                     ->options(fn (): array => self::attendanceSubcategoryOptions(Auth::user()))
+                                    ->multiple()
                                     ->reactive()
                                     ->afterStateUpdated(function(callable $set,callable $get){
-                                        
+                                        if (self::hasMultipleSelectedSubcategories($get)) {
+                                            $set('letterStart', null);
+                                            $set('letterEnd', null);
+                                        }
+
                                         self::updateParticipantCount($set, $get);
-                                    
                                     })
                                     ->searchable()
                                     ->required()
@@ -224,7 +172,8 @@ class ParticipantsTable
                                     
                                     })
                                     ->searchable()
-                                    ->required()
+                                    ->required(fn (callable $get): bool => ! self::hasMultipleSelectedSubcategories($get))
+                                    ->hidden(fn (callable $get): bool => self::hasMultipleSelectedSubcategories($get))
                                     ->columns(1),
                                 Select::make("letterEnd")
                                     ->label('List to')
@@ -240,7 +189,8 @@ class ParticipantsTable
                                     
                                     })
                                     ->searchable()
-                                    ->required()
+                                    ->required(fn (callable $get): bool => ! self::hasMultipleSelectedSubcategories($get))
+                                    ->hidden(fn (callable $get): bool => self::hasMultipleSelectedSubcategories($get))
                                     ->columns(1),
                                 TextEntry ::make('participantCount')
                                     ->label('Participants Found')
@@ -255,76 +205,23 @@ class ParticipantsTable
                     ->label('Food Attendance Export')
                     ->icon('heroicon-o-document-arrow-down')
                     ->visible(fn (): bool => self::canUseAttendanceExports(Auth::user()))
-                    ->action(function (array $data) {
-                            $year = date('Y');
-                            $letterStart = strtoupper($data['letterStart']);
-                            $letterEnd = strtoupper($data['letterEnd']);
-                            $subcategory = self::exportSubcategoryForUser(
-                                Auth::user(),
-                                $data['subcategory'] ?? null,
-                            );
-
-                            if (! $subcategory) {
-                                throw ValidationException::withMessages([
-                                    'subcategory' => 'Select a subcategory assigned to your account.',
-                                ]);
-                            }
-
-                            if ($letterStart > $letterEnd) {
-                                [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
-                            }
-
-                            $participants = self::participantsForExport($subcategory)
-                            ->select(
-                            'firstName', 
-                            'middleInitial', 
-                            'lastName', 
-                            'distanceCategory', 
-                            'shirtSize', 
-                            'gender',
-                            'categoryDescription'
-                            )
-                            ->where('year', $year)
-                            ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
-                            ->orderBy('lastName')
-                            ->orderBy('firstName')
-                            ->get();
-
-                        //    $participants = self::updateParticipantCount($set, $get);
-                            
-                            
-
-                            if ($participants->isEmpty()) {
-                                Notification::make()
-                                    ->danger()
-                                    ->title('No data found!')
-                                    ->body('No participants were found in this category')
-                                    ->send();
-                                return;
-                            }
-
-                            return Excel::download(
-                                new FoodAttendanceSheetExport(
-                                    $subcategory->categoryDescription,
-                                    $subcategory->subDescription,
-                                    $letterStart,
-                                    $letterEnd,
-                                ),
-                                'food_attendance_sheet.xlsx'
-                            );
-                    })
+                    ->action(fn (array $data) => self::downloadAttendanceExport($data, food: true))
                    ->schema([
                         Grid::make()
                             ->columns(2)
                             ->schema([
                                 Select::make('subcategory')
-                                    ->label('Subcategory')
+                                    ->label('Subcategories')
                                     ->options(fn (): array => self::attendanceSubcategoryOptions(Auth::user()))
+                                    ->multiple()
                                     ->reactive()
                                     ->afterStateUpdated(function(callable $set,callable $get){
-                                        
+                                        if (self::hasMultipleSelectedSubcategories($get)) {
+                                            $set('letterStart', null);
+                                            $set('letterEnd', null);
+                                        }
+
                                         self::updateParticipantCount($set, $get);
-                                    
                                     })
                                     ->searchable()
                                     ->required()
@@ -344,7 +241,8 @@ class ParticipantsTable
                                     
                                     })
                                     ->searchable()
-                                    ->required()
+                                    ->required(fn (callable $get): bool => ! self::hasMultipleSelectedSubcategories($get))
+                                    ->hidden(fn (callable $get): bool => self::hasMultipleSelectedSubcategories($get))
                                     ->columns(1),
                                 Select::make("letterEnd")
                                     ->label('List to')
@@ -360,7 +258,8 @@ class ParticipantsTable
                                     
                                     })
                                     ->searchable()
-                                    ->required()
+                                    ->required(fn (callable $get): bool => ! self::hasMultipleSelectedSubcategories($get))
+                                    ->hidden(fn (callable $get): bool => self::hasMultipleSelectedSubcategories($get))
                                     ->columns(1),
                                 TextEntry ::make('participantCount')
                                     ->label('Participants Found')
@@ -621,73 +520,168 @@ class ParticipantsTable
         ?User $user,
         mixed $subcategoryId,
     ): ?Subcategory {
-        if (! self::canUseAttendanceExports($user) || blank($subcategoryId)) {
-            return null;
+        return self::exportSubcategoriesForUser($user, [$subcategoryId])->first();
+    }
+
+    public static function exportSubcategoriesForUser(
+        ?User $user,
+        mixed $subcategoryIds,
+    ): EloquentCollection {
+        $ids = collect(is_array($subcategoryIds) ? $subcategoryIds : [$subcategoryIds])
+            ->filter(fn (mixed $id): bool => filled($id))
+            ->unique()
+            ->values();
+
+        if (! self::canUseAttendanceExports($user) || $ids->isEmpty()) {
+            return new EloquentCollection();
         }
 
-        $query = Subcategory::reportQuery()->whereKey($subcategoryId);
+        $query = Subcategory::reportQuery()->whereIn('id', $ids->all());
 
         if ($user?->isAdministrativeOfficer()) {
             $query->whereIn('categoryDescription', $user->administeredCategoryNames());
         }
 
-        return $query->first();
+        return $query->get();
     }
 
-    private static function participantsForExport(Subcategory $subcategory): Builder
+    private static function participantsForExport(EloquentCollection $subcategories): Builder
     {
-        return Participant::query()
-            ->where('categoryDescription', $subcategory->categoryDescription)
+        return Participant::query()->where(function (Builder $query) use ($subcategories): void {
+            foreach ($subcategories as $subcategory) {
+                $query->orWhere(function (Builder $query) use ($subcategory): void {
+                    $query->where('categoryDescription', $subcategory->categoryDescription);
+
+                    if ($subcategory->categoryDescription !== 'OPEN CATEGORY') {
+                        $query->where('subDescription', $subcategory->subDescription);
+                    }
+                });
+            }
+        });
+    }
+
+    private static function downloadAttendanceExport(array $data, bool $food = false): mixed
+    {
+        $selectedIds = collect((array) ($data['subcategory'] ?? []))
+            ->filter(fn (mixed $id): bool => filled($id))
+            ->unique()
+            ->values();
+        $subcategories = self::exportSubcategoriesForUser(Auth::user(), $selectedIds->all());
+
+        if ($selectedIds->isEmpty() || $subcategories->count() !== $selectedIds->count()) {
+            throw ValidationException::withMessages([
+                'subcategory' => 'Select only subcategories assigned to your account.',
+            ]);
+        }
+
+        $multipleSubcategories = $selectedIds->count() > 1;
+        $letterStart = $multipleSubcategories
+            ? null
+            : strtoupper((string) ($data['letterStart'] ?? ''));
+        $letterEnd = $multipleSubcategories
+            ? null
+            : strtoupper((string) ($data['letterEnd'] ?? ''));
+
+        if (! $multipleSubcategories && (blank($letterStart) || blank($letterEnd))) {
+            throw ValidationException::withMessages([
+                'letterStart' => 'Select the first letter for a single subcategory.',
+                'letterEnd' => 'Select the last letter for a single subcategory.',
+            ]);
+        }
+
+        if ($letterStart && $letterEnd && $letterStart > $letterEnd) {
+            [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
+        }
+
+        $participants = self::participantsForExport($subcategories)
+            ->where('year', date('Y'))
             ->when(
-                $subcategory->categoryDescription !== 'OPEN CATEGORY',
-                fn (Builder $query): Builder => $query->where(
-                    'subDescription',
-                    $subcategory->subDescription,
+                $letterStart && $letterEnd,
+                fn (Builder $query): Builder => $query->whereRaw(
+                    'SUBSTR(UPPER(TRIM(lastName)), 1, 1) BETWEEN ? AND ?',
+                    [$letterStart, $letterEnd],
                 ),
-            );
+            )
+            ->exists();
+
+        if (! $participants) {
+            Notification::make()
+                ->danger()
+                ->title('No data found!')
+                ->body('No participants were found in the selected subcategories.')
+                ->send();
+
+            return null;
+        }
+
+        $selections = $subcategories
+            ->map(fn (Subcategory $subcategory): array => [
+                'category' => $subcategory->categoryDescription,
+                'subcategory' => $subcategory->subDescription,
+            ])
+            ->values()
+            ->all();
+
+        $export = $food
+            ? new FoodAttendanceSheetExport($selections, $letterStart, $letterEnd)
+            : new AttendanceSheetExport($selections, $letterStart, $letterEnd);
+
+        return Excel::download(
+            $export,
+            $food ? 'food_attendance_sheet.xlsx' : 'singlet_attendance_sheet.xlsx',
+        );
+    }
+
+    private static function hasMultipleSelectedSubcategories(callable $get): bool
+    {
+        return collect((array) $get('subcategory'))
+            ->filter(fn (mixed $id): bool => filled($id))
+            ->unique()
+            ->count() > 1;
     }
 
     private static function updateParticipantCount(callable $set, callable $get): int
     {
-        
         $year = date('Y');
         $letterStart = strtoupper((string) $get('letterStart'));
         $letterEnd   = strtoupper((string) $get('letterEnd'));
-        $subcategory = self::exportSubcategoryForUser(
+        $selectedIds = collect((array) $get('subcategory'))
+            ->filter(fn (mixed $id): bool => filled($id))
+            ->unique()
+            ->values();
+        $subcategories = self::exportSubcategoriesForUser(
             Auth::user(),
-            $get('subcategory'),
+            $selectedIds->all(),
         );
+        $multipleSubcategories = $selectedIds->count() > 1;
 
-      
-
-        if (! $subcategory || ! $letterStart || ! $letterEnd) {
+        if (
+            $selectedIds->isEmpty()
+            || $subcategories->count() !== $selectedIds->count()
+            || (! $multipleSubcategories && (! $letterStart || ! $letterEnd))
+        ) {
             $set('participantCount', 0);
+
             return 0;
         }
 
-        if ($letterStart > $letterEnd) {
+        if (! $multipleSubcategories && $letterStart > $letterEnd) {
             [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
         }
 
-        $count = self::participantsForExport($subcategory)
-                            ->select(
-                            'firstName', 
-                            'middleInitial', 
-                            'lastName', 
-                            'distanceCategory', 
-                            'shirtSize', 
-                            'gender',
-                            'categoryDescription'
-                            )
-                            ->where('year', $year)
-                            ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$letterStart, $letterEnd])
-                            ->orderBy('lastName')
-                            ->orderBy('firstName')
-                            ->get()
-                            ->count();
-        
-         
+        $count = self::participantsForExport($subcategories)
+            ->where('year', $year)
+            ->when(
+                ! $multipleSubcategories,
+                fn (Builder $query): Builder => $query->whereRaw(
+                    'SUBSTR(UPPER(TRIM(lastName)), 1, 1) BETWEEN ? AND ?',
+                    [$letterStart, $letterEnd],
+                ),
+            )
+            ->count();
+
         $set('participantCount', $count);
-        return  $count;
+
+        return $count;
     }
 }

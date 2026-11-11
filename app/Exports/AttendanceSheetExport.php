@@ -19,23 +19,22 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
 {
-    protected string $category;
-    protected string $subcategory; 
-    protected string $letterStart; 
-    protected string $letterEnd; 
+    /** @var array<int, array{category: string, subcategory: string}> */
+    protected array $subcategories;
+    protected ?string $letterStart;
+    protected ?string $letterEnd;
     protected string $year; 
     
-
+    /**
+     * @param  array<int, array{category: string, subcategory: string}>  $subcategories
+     */
     public function __construct(
-        string $category,
-        string $subcategory,
-        string $letterStart,
-        string $letterEnd,
+        array $subcategories,
+        ?string $letterStart = null,
+        ?string $letterEnd = null,
     )
     {
-        $this->category = $category;
-
-        $this->subcategory = $subcategory;
+        $this->subcategories = $subcategories;
 
         $this->letterStart = $letterStart;
 
@@ -67,30 +66,11 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
             
                 // === PARTICIPANT DATA ===
 
-                if ($this->letterStart > $this->letterEnd) {
+                if ($this->letterStart && $this->letterEnd && $this->letterStart > $this->letterEnd) {
                     [$this->letterStart, $this->letterEnd] = [$this->letterEnd, $this->letterStart];
                 }
-                
-                if($this->category === 'OPEN CATEGORY')
-                {
-                            $participants = Participant::select(
-                            'firstName', 
-                            'middleInitial', 
-                            'lastName', 
-                            'distanceCategory', 
-                            'shirtSize', 
-                            'gender',
-                            'categoryDescription'
-                            )
-                            ->where('categoryDescription', $this->category)->where('year', $this->year)
-                            ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
-                            ->orderBy('lastName')
-                            ->orderBy('firstName')
-                            ->get();
 
-                }
-               else{
-                        $participants = Participant::select(
+                $participants = Participant::select(
                         'firstName', 
                         'middleInitial', 
                         'lastName', 
@@ -99,14 +79,28 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                         'gender',
                         'categoryDescription'
                         )
-                        ->where('categoryDescription', $this->category)
-                        ->where('subDescription', $this->subcategory)
                         ->where('year', $this->year)
-                        ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
+                        ->where(function ($query): void {
+                            foreach ($this->subcategories as $subcategory) {
+                                $query->orWhere(function ($query) use ($subcategory): void {
+                                    $query->where('categoryDescription', $subcategory['category']);
+
+                                    if ($subcategory['category'] !== 'OPEN CATEGORY') {
+                                        $query->where('subDescription', $subcategory['subcategory']);
+                                    }
+                                });
+                            }
+                        })
+                        ->when(
+                            $this->letterStart && $this->letterEnd,
+                            fn ($query) => $query->whereRaw(
+                                'SUBSTR(UPPER(TRIM(lastName)), 1, 1) BETWEEN ? AND ?',
+                                [$this->letterStart, $this->letterEnd],
+                            ),
+                        )
                         ->orderBy('lastName')
                         ->orderBy('firstName')
                         ->get();
-               }
                 // $participants = Participant::select(
                 //     'firstName', 
                 //     'middleInitial', 
