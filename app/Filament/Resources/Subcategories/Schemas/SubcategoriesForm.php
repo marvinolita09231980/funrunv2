@@ -2,26 +2,32 @@
 
 namespace App\Filament\Resources\Subcategories\Schemas;
 
-use App\Models\User;
-use App\Models\Subcategory;
 use App\Models\CategoryAllocation;
-use Filament\Schemas\Schema;
+use App\Models\Subcategory;
+use App\Models\User;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Illuminate\Support\Facades\Auth;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class SubcategoriesForm
 {
     public static function configure(Schema $schema): Schema
     {
-         return $schema
+        return $schema
             ->components([
-                TextInput::make('categoryDescription')
+                Select::make('categoryDescription')
+                    ->label('Category Name')
+                    ->options(fn (): array => self::categoryOptions())
+                    ->searchable()
+                    ->preload()
+                    ->live()
+                    ->afterStateUpdated(fn (Set $set) => $set('username', null))
                     ->required()
-                    ->disabled(fn (): bool => Auth::user()?->isAdministrativeOfficer() ?? false)
-                    ->autocapitalize('words')
-                    ->autocomplete(),
+                    ->disabled(fn (): bool => Auth::user()?->isAdministrativeOfficer() ?? false),
                 TextInput::make('nop')
                     ->label('Maximum Participants')
                     ->numeric()
@@ -43,8 +49,8 @@ class SubcategoriesForm
                         $minimum = $record?->minimumCapacity() ?? 0;
 
                         return "Main-category allocation: {$allocation->allocated_participants}. Available for this subcategory: "
-                            . max(0, $available)
-                            . ". Minimum allowed: {$minimum}.";
+                            .max(0, $available)
+                            .". Minimum allowed: {$minimum}.";
                     })
                     ->required(),
                 TextInput::make('subDescription')
@@ -65,8 +71,16 @@ class SubcategoriesForm
                     ->searchable()
                     ->reactive()
                     ->required(fn (Get $get): bool => (int) ($get('nop') ?? 0) > 0),
-                   
+
             ]);
+    }
+
+    public static function categoryOptions(): array
+    {
+        return CategoryAllocation::query()
+            ->orderBy('categoryDescription')
+            ->pluck('categoryDescription', 'categoryDescription')
+            ->all();
     }
 
     public static function focalUserOptionsForCategory(?string $category): array
@@ -75,6 +89,27 @@ class SubcategoriesForm
             return [];
         }
 
+        return self::eligibleFocalUsersForCategory($category)
+            ->orderBy('name')
+            ->pluck('name', 'username')
+            ->all();
+    }
+
+    public static function isFocalUserEligibleForCategory(
+        ?string $username,
+        ?string $category,
+    ): bool {
+        if (blank($username) || blank($category)) {
+            return false;
+        }
+
+        return self::eligibleFocalUsersForCategory($category)
+            ->where('username', $username)
+            ->exists();
+    }
+
+    private static function eligibleFocalUsersForCategory(string $category): Builder
+    {
         return User::query()
             ->where(function ($query) use ($category): void {
                 $query
@@ -109,13 +144,6 @@ class SubcategoriesForm
                                 ),
                             );
                     });
-            })
-            ->orderBy('name')
-            ->pluck('name', 'username')
-            ->all();
+            });
     }
-
-
-   
-
 }

@@ -18,7 +18,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PotentialDuplicates extends Page implements HasTable
@@ -37,9 +36,34 @@ class PotentialDuplicates extends Page implements HasTable
 
     public bool $duplicatesReady = false;
 
+    /** @var array<int> */
+    public array $potentialDuplicateIds = [];
+
+    /** @var array<int, int> */
+    public array $potentialDuplicateCounts = [];
+
+    /** @var array{year: int, groups: int, records: int}|array{} */
+    public array $potentialDuplicateStats = [];
+
+    public ?int $potentialDuplicatesYear = null;
+
     public function loadPotentialDuplicates(): void
     {
+        $this->preparePotentialDuplicates($this->selectedYear());
         $this->duplicatesReady = true;
+    }
+
+    public function updatedTableFilters(): void
+    {
+        if ($this->getTable()->hasDeferredFilters()) {
+            $this->tableDeferredFilters = $this->tableFilters;
+        }
+
+        $this->handleTableFilterUpdates();
+
+        if ($this->duplicatesReady) {
+            $this->preparePotentialDuplicates($this->selectedYear());
+        }
     }
 
     public static function canAccess(): bool
@@ -76,9 +100,9 @@ class PotentialDuplicates extends Page implements HasTable
 
         $year = $this->selectedYear();
         $generatedAt = CarbonImmutable::now();
-        $records = self::applyPotentialDuplicateScope(
-            Participant::query()->where('year', $year),
-        )
+        $duplicateData = self::findPotentialDuplicates($year);
+        $records = Participant::query()
+            ->whereKey($duplicateData['ids'])
             ->orderBy('lastName')
             ->orderBy('birthDate')
             ->orderBy('firstName')
@@ -162,13 +186,9 @@ class PotentialDuplicates extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(
-                self::applyPotentialDuplicateScope(
-                    Participant::query()->with('creator'),
-                )->addSelect([
-                    'potential_duplicate_count' => self::matchingParticipantsQuery(),
-                ])
-            )
+            ->query(fn (): Builder => Participant::query()
+                ->with('creator')
+                ->whereKey($this->potentialDuplicateIds))
             ->columns([
                 TextColumn::make('mobile_duplicate_summary')
                     ->label('Participant for Review')
@@ -219,10 +239,7 @@ class PotentialDuplicates extends Page implements HasTable
                     ->visibleFrom('md'),
                 TextColumn::make('potential_duplicate_count')
                     ->label('Potential Duplicates')
-                    ->getStateUsing(fn (Participant $record): int => (int) (
-                        $record->potential_duplicate_count
-                        ?? self::matchingParticipantCount($record)
-                    ))
+                    ->getStateUsing(fn (Participant $record): int => $this->potentialDuplicateCounts[$record->getKey()] ?? 0)
                     ->formatStateUsing(fn (int $state): string => $state === 1
                         ? '1 related variation'
                         : "{$state} related variations")
@@ -287,31 +304,23 @@ class PotentialDuplicates extends Page implements HasTable
                     ->visible(fn (Participant $record): bool => self::canDeletePotentialDuplicate(
                         Auth::user(),
                         $record,
-                    )),
+                    ))
+                    ->after(function (): void {
+                        $this->preparePotentialDuplicates($this->selectedYear());
+                    }),
             ])
             ->emptyStateHeading('No potential duplicates found')
             ->emptyStateDescription('No high-probability non-exact participant matches were found for the selected registration year.')
             ->emptyStateIcon('heroicon-o-check-circle');
     }
 
-    public static function applyPotentialDuplicateScope(Builder $query): Builder
-    {
-        return $query->whereExists(function ($duplicateQuery): void {
-            $duplicateQuery
-                ->selectRaw('1')
-                ->from('participants as potential_duplicate')
-                ->whereColumn('potential_duplicate.year', 'participants.year')
-                ->whereColumn('potential_duplicate.birthDate', 'participants.birthDate')
-                ->whereColumn('potential_duplicate.id', '<>', 'participants.id')
-                ->whereRaw(
-                    "LOWER(REPLACE(TRIM(potential_duplicate.lastName), ' ', '')) = LOWER(REPLACE(TRIM(participants.lastName), ' ', ''))"
-                )
-                ->where(fn ($firstNameQuery) => self::applySimilarFirstNameMatch(
-                    $firstNameQuery,
-                    'potential_duplicate',
-                    'participants',
-                ));
-        });
+    public static function applyPotentialDuplicateScope(
+        Builder $query,
+        ?int $year = null,
+    ): Builder {
+        return $query->whereKey(
+            self::findPotentialDuplicates($year ?? now()->year)['ids'],
+        );
     }
 
     public static function canDeletePotentialDuplicate(
@@ -333,112 +342,130 @@ class PotentialDuplicates extends Page implements HasTable
     public function getPotentialDuplicateStats(): array
     {
         $year = $this->selectedYear();
-        $records = self::applyPotentialDuplicateScope(
-            Participant::query()->where('year', $year),
-        )->count();
+        if ($this->potentialDuplicatesYear !== $year) {
+            $this->preparePotentialDuplicates($year);
+        }
 
-        $groups = DB::query()
-            ->fromSub(
-                self::applyPotentialDuplicateScope(
-                    Participant::query()->where('year', $year),
-                )
-                    ->selectRaw(
-                        "LOWER(REPLACE(TRIM(lastName), ' ', '')) AS normalized_last_name"
-                    )
-                    ->addSelect('birthDate')
-                    ->groupByRaw(
-                        "LOWER(REPLACE(TRIM(lastName), ' ', '')), birthDate"
-                    ),
-                'potential_duplicate_groups',
-            )
-            ->count();
+        return $this->potentialDuplicateStats;
+    }
+
+    /**
+     * @return array{ids: array<int>, counts: array<int, int>, groups: int}
+     */
+    private static function findPotentialDuplicates(int $year): array
+    {
+        /** @var array<string, array<string, array{ids: array<int>, soundex: array<string, true>}>> $groups */
+        $groups = [];
+
+        foreach (Participant::query()
+            ->where('year', $year)
+            ->select(['id', 'firstName', 'lastName', 'birthDate'])
+            ->selectRaw('SOUNDEX(firstName) AS first_name_soundex')
+            ->cursor() as $participant) {
+            if (
+                $participant->firstName === null
+                || $participant->lastName === null
+                || $participant->birthDate === null
+            ) {
+                continue;
+            }
+
+            $groupKey = json_encode([
+                (string) $participant->birthDate,
+                self::normalizedName($participant->lastName),
+            ], JSON_THROW_ON_ERROR);
+            $normalizedFirstName = self::normalizedName($participant->firstName);
+            $phoneticName = (string) $participant->getAttribute('first_name_soundex');
+
+            $groups[$groupKey][$normalizedFirstName] ??= [
+                'ids' => [],
+                'soundex' => [],
+            ];
+            $groups[$groupKey][$normalizedFirstName]['ids'][] = (int) $participant->getKey();
+            $groups[$groupKey][$normalizedFirstName]['soundex'][$phoneticName] = true;
+        }
+
+        $counts = [];
+        $duplicateGroups = 0;
+
+        foreach ($groups as $variantsByFirstName) {
+            $firstNames = array_keys($variantsByFirstName);
+            $variantCount = count($firstNames);
+            $groupHasDuplicates = false;
+
+            for ($left = 0; $left < $variantCount; $left++) {
+                for ($right = $left + 1; $right < $variantCount; $right++) {
+                    $leftName = $firstNames[$left];
+                    $rightName = $firstNames[$right];
+                    $leftVariant = $variantsByFirstName[$leftName];
+                    $rightVariant = $variantsByFirstName[$rightName];
+
+                    if (! self::areFirstNameVariantsSimilar(
+                        $leftName,
+                        $rightName,
+                        $leftVariant['soundex'],
+                        $rightVariant['soundex'],
+                    )) {
+                        continue;
+                    }
+
+                    $groupHasDuplicates = true;
+                    $leftRelatedCount = count($rightVariant['ids']);
+                    $rightRelatedCount = count($leftVariant['ids']);
+
+                    foreach ($leftVariant['ids'] as $participantId) {
+                        $counts[$participantId] = ($counts[$participantId] ?? 0)
+                            + $leftRelatedCount;
+                    }
+
+                    foreach ($rightVariant['ids'] as $participantId) {
+                        $counts[$participantId] = ($counts[$participantId] ?? 0)
+                            + $rightRelatedCount;
+                    }
+                }
+            }
+
+            if ($groupHasDuplicates) {
+                $duplicateGroups++;
+            }
+        }
+
+        ksort($counts);
 
         return [
-            'year' => $year,
-            'groups' => $groups,
-            'records' => $records,
+            'ids' => array_map('intval', array_keys($counts)),
+            'counts' => $counts,
+            'groups' => $duplicateGroups,
         ];
     }
 
-    private static function matchingParticipantsQuery(): Builder
-    {
-        return Participant::query()
-            ->from('participants as matching_participant')
-            ->selectRaw('COUNT(*)')
-            ->whereColumn('matching_participant.year', 'participants.year')
-            ->whereColumn('matching_participant.birthDate', 'participants.birthDate')
-            ->whereRaw(
-                "LOWER(REPLACE(TRIM(matching_participant.lastName), ' ', '')) = LOWER(REPLACE(TRIM(participants.lastName), ' ', ''))"
-            )
-            ->where(fn ($firstNameQuery) => self::applySimilarFirstNameMatch(
-                $firstNameQuery,
-                'matching_participant',
-                'participants',
-            ));
+    /**
+     * @param  array<string, true>  $leftSoundex
+     * @param  array<string, true>  $rightSoundex
+     */
+    private static function areFirstNameVariantsSimilar(
+        string $leftName,
+        string $rightName,
+        array $leftSoundex,
+        array $rightSoundex,
+    ): bool {
+        return str_starts_with($leftName, $rightName)
+            || str_starts_with($rightName, $leftName)
+            || array_intersect_key($leftSoundex, $rightSoundex) !== [];
     }
 
-    private static function matchingParticipantCount(Participant $participant): int
+    private function preparePotentialDuplicates(int $year): void
     {
-        return Participant::query()
-            ->where('year', $participant->year)
-            ->whereDate('birthDate', $participant->birthDate)
-            ->whereRaw("LOWER(REPLACE(TRIM(lastName), ' ', '')) = ?", [
-                self::normalizedName($participant->lastName),
-            ])
-            ->where(function (Builder $query) use ($participant): void {
-                $normalizedFirstName = self::normalizedName($participant->firstName);
+        $data = self::findPotentialDuplicates($year);
 
-                $query
-                    ->whereRaw("LOWER(REPLACE(TRIM(firstName), ' ', '')) <> ?", [
-                        $normalizedFirstName,
-                    ])
-                    ->where(function (Builder $similarNameQuery) use (
-                        $normalizedFirstName,
-                        $participant,
-                    ): void {
-                        $similarNameQuery->whereRaw(
-                            "SUBSTR(LOWER(REPLACE(TRIM(firstName), ' ', '')), 1, LENGTH(?)) = ?",
-                            [$normalizedFirstName, $normalizedFirstName],
-                        )
-                            ->orWhereRaw(
-                                "SUBSTR(?, 1, LENGTH(LOWER(REPLACE(TRIM(firstName), ' ', '')))) = LOWER(REPLACE(TRIM(firstName), ' ', ''))",
-                                [$normalizedFirstName],
-                            )
-                            ->orWhereRaw('SOUNDEX(firstName) = SOUNDEX(?)', [
-                                $participant->firstName,
-                            ]);
-                    });
-            })
-            ->count();
-    }
-
-    private static function applySimilarFirstNameMatch(
-        mixed $query,
-        string $candidateTable,
-        string $participantTable,
-    ): mixed {
-        $candidateFirstName = "LOWER(REPLACE(TRIM({$candidateTable}.firstName), ' ', ''))";
-        $participantFirstName = "LOWER(REPLACE(TRIM({$participantTable}.firstName), ' ', ''))";
-
-        return $query
-            ->whereRaw("{$candidateFirstName} <> {$participantFirstName}")
-            ->where(function ($similarNameQuery) use (
-                $candidateFirstName,
-                $participantFirstName,
-                $candidateTable,
-                $participantTable,
-            ): void {
-                $similarNameQuery
-                    ->whereRaw(
-                        "SUBSTR({$candidateFirstName}, 1, LENGTH({$participantFirstName})) = {$participantFirstName}"
-                    )
-                    ->orWhereRaw(
-                        "SUBSTR({$participantFirstName}, 1, LENGTH({$candidateFirstName})) = {$candidateFirstName}"
-                    )
-                    ->orWhereRaw(
-                        "SOUNDEX({$candidateTable}.firstName) = SOUNDEX({$participantTable}.firstName)"
-                    );
-            });
+        $this->potentialDuplicateIds = $data['ids'];
+        $this->potentialDuplicateCounts = $data['counts'];
+        $this->potentialDuplicateStats = [
+            'year' => $year,
+            'groups' => $data['groups'],
+            'records' => count($data['ids']),
+        ];
+        $this->potentialDuplicatesYear = $year;
     }
 
     private static function normalizedName(?string $name): string

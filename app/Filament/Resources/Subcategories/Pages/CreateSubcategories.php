@@ -2,20 +2,16 @@
 
 namespace App\Filament\Resources\Subcategories\Pages;
 
-use App\Models\Subcategory;
+use App\Filament\Resources\Subcategories\Schemas\SubcategoriesForm;
+use App\Filament\Resources\Subcategories\SubcategoriesResource;
 use App\Models\CategoryAllocation;
-use App\Models\User;
+use App\Models\Subcategory;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
-use App\Filament\Resources\Subcategories\SubcategoriesResource;
 
 class CreateSubcategories extends CreateRecord
 {
     protected static string $resource = SubcategoriesResource::class;
-    
-
-   
-
 
     protected function beforeCreate(): void
     {
@@ -38,11 +34,12 @@ class CreateSubcategories extends CreateRecord
             ]);
         }
 
-        $focalUser = User::query()->where('username', $data['username'] ?? null)->first();
-
         if (
             ! ($capacity === 0 && blank($data['username'] ?? null))
-            && ! $focalUser?->canBeAssignedToSubcategory($data['categoryDescription'])
+            && ! SubcategoriesForm::isFocalUserEligibleForCategory(
+                $data['username'] ?? null,
+                $data['categoryDescription'],
+            )
         ) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'data.username' => 'Select an eligible focal user or Administrative Officer assigned to this main category.',
@@ -52,7 +49,7 @@ class CreateSubcategories extends CreateRecord
         $exists = Subcategory::where('categoryDescription', $data['categoryDescription'])
             ->where('subDescription', $data['subDescription'])
             ->exists();
-        
+
         if ($exists) {
             Notification::make()
                 ->warning()
@@ -60,7 +57,7 @@ class CreateSubcategories extends CreateRecord
                 ->body('This Category already exists.')
                 ->persistent()
                 ->send();
-            $this->halt(); 
+            $this->halt();
         }
 
     }
@@ -69,11 +66,9 @@ class CreateSubcategories extends CreateRecord
     {
         $data = $this->form->getState();
         Notification::make()
-        ->success()
-        ->title('Subcategory created successfully')
-        ->send();
+            ->success()
+            ->title('Subcategory created successfully')
+            ->send();
 
     }
-
-    
 }

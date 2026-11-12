@@ -8,7 +8,9 @@ use App\Models\Participant;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Mockery;
 use Spatie\Permission\Models\Role;
@@ -253,16 +255,19 @@ class PotentialDuplicatesTest extends TestCase
 
         $this->actingAs($superadmin);
         Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
             ->assertTableActionVisible('delete', $categoryARecord)
             ->assertTableActionVisible('delete', $categoryBRecord);
 
         $this->actingAs($admin);
         Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
             ->assertTableActionHidden('delete', $categoryARecord)
             ->assertTableActionHidden('delete', $categoryBRecord);
 
         $this->actingAs($officer);
         Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
             ->assertTableActionVisible('delete', $categoryARecord)
             ->assertTableActionHidden('delete', $categoryBRecord)
             ->callTableAction('delete', $categoryARecord);
@@ -292,6 +297,37 @@ class PotentialDuplicatesTest extends TestCase
             ->assertSet('duplicatesReady', true)
             ->assertDontSee('Generating potential duplicates')
             ->assertSee('High-Probability Duplicate Review');
+    }
+
+    public function test_generation_does_not_run_correlated_duplicate_self_joins(): void
+    {
+        $admin = $this->userWithRole('Duplicate Admin', 'duplicate-admin', 'admin');
+
+        $this->participant([
+            'firstName' => 'Maria Elena',
+            'lastName' => 'Santos',
+            'birthDate' => '1994-06-15',
+        ]);
+        $this->participant([
+            'firstName' => 'Maria',
+            'lastName' => 'Santos',
+            'birthDate' => '1994-06-15',
+        ]);
+
+        $queries = [];
+        DB::listen(function (QueryExecuted $query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $this->actingAs($admin);
+
+        Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates');
+
+        $this->assertFalse(collect($queries)->contains(
+            fn (string $query): bool => str_contains($query, 'potential_duplicate.')
+                || str_contains($query, 'matching_participant.'),
+        ));
     }
 
     public function test_authorized_user_can_download_printable_duplicate_report(): void
