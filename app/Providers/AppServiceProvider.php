@@ -2,11 +2,13 @@
 
 namespace App\Providers;
 
+use App\Http\Responses\LoginResponse;
 use App\Services\AuditLogger;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 // use Illuminate\Support\ServiceProvider;
-use Filament\Panel;
+use Filament\Auth\Http\Responses\Contracts\LoginResponse as LoginResponseContract;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Panel;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Event;
 
@@ -17,7 +19,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(LoginResponseContract::class, LoginResponse::class);
     }
 
     /**
