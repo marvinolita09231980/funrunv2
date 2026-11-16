@@ -302,99 +302,23 @@
         participantExists: @entangle('participantExists'),
         categoryFull: @entangle('categoryFull')
     }">
-    @php
-        $openCategoryAvailabilityPercent = $openCategoryCapacity > 0
-            ? min(100, max(0, ($openCategorySlotsRemaining / $openCategoryCapacity) * 100))
-            : 0;
-    @endphp
-
-    <section
-        wire:poll.15s="refreshOpenCategorySlots"
-        aria-live="polite"
-        @class([
-            'mb-6 overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-gray-900',
-            'border-red-200 dark:border-red-500/30' => $openCategorySlotsRemaining === 0,
-            'border-amber-200 dark:border-amber-500/30' => $openCategorySlotsRemaining > 0 && $openCategorySlotsRemaining <= 10,
-            'border-emerald-200 dark:border-emerald-500/30' => $openCategorySlotsRemaining > 10,
-        ])
-    >
-        <div @class([
-            'h-1',
-            'bg-red-500' => $openCategorySlotsRemaining === 0,
-            'bg-amber-500' => $openCategorySlotsRemaining > 0 && $openCategorySlotsRemaining <= 10,
-            'bg-emerald-500' => $openCategorySlotsRemaining > 10,
-        ])></div>
-
-        <div class="grid gap-5 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-6">
-            <div class="flex items-start gap-4">
-                <div @class([
-                    'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset',
-                    'bg-red-50 text-red-600 ring-red-200 dark:bg-red-400/10 dark:text-red-400 dark:ring-red-400/20' => $openCategorySlotsRemaining === 0,
-                    'bg-amber-50 text-amber-600 ring-amber-200 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/20' => $openCategorySlotsRemaining > 0 && $openCategorySlotsRemaining <= 10,
-                    'bg-emerald-50 text-emerald-600 ring-emerald-200 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20' => $openCategorySlotsRemaining > 10,
-                ])>
-                    <x-filament::icon icon="heroicon-o-ticket" class="h-6 w-6" />
-                </div>
-
-                <div class="min-w-0">
-                    <p class="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">
-                        {{ now()->year }} Online Registration
-                    </p>
-                    <h2 class="mt-1 text-lg font-bold tracking-tight text-gray-950 dark:text-white">
-                        Open Category Slots
-                    </h2>
-                    <p class="mt-1 text-sm leading-5 text-gray-600 dark:text-gray-300">
-                        Updated automatically as successful registrations are recorded.
-                    </p>
-                </div>
-            </div>
-
-            <div class="sm:min-w-48 sm:text-right">
-                <div class="flex items-baseline gap-2 sm:justify-end">
-                    <span @class([
-                        'text-4xl font-black tabular-nums tracking-tight',
-                        'text-red-600 dark:text-red-400' => $openCategorySlotsRemaining === 0,
-                        'text-amber-600 dark:text-amber-400' => $openCategorySlotsRemaining > 0 && $openCategorySlotsRemaining <= 10,
-                        'text-emerald-600 dark:text-emerald-400' => $openCategorySlotsRemaining > 10,
-                    ])>
-                        {{ number_format($openCategorySlotsRemaining) }}
-                    </span>
-                    <span class="text-sm font-semibold text-gray-600 dark:text-gray-300">
-                        {{ $openCategorySlotsRemaining === 1 ? 'slot' : 'slots' }} left
-                    </span>
-                </div>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    of {{ number_format($openCategoryCapacity) }} total slots
-                </p>
-            </div>
-        </div>
-
-        <div class="px-5 pb-5 sm:px-6 sm:pb-6">
-            <div
-                class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10"
-                role="progressbar"
-                aria-label="Open Category slots remaining"
-                aria-valuemin="0"
-                aria-valuemax="{{ $openCategoryCapacity }}"
-                aria-valuenow="{{ $openCategorySlotsRemaining }}"
-            >
-                <div
-                    @class([
-                        'h-full rounded-full transition-[width] duration-300',
-                        'bg-red-500' => $openCategorySlotsRemaining === 0,
-                        'bg-amber-500' => $openCategorySlotsRemaining > 0 && $openCategorySlotsRemaining <= 10,
-                        'bg-emerald-500' => $openCategorySlotsRemaining > 10,
-                    ])
-                    style="width: {{ $openCategoryAvailabilityPercent }}%"
-                ></div>
-            </div>
-        </div>
-    </section>
-
     <form
         class="p-3 border-3 border-orange-300/50 shadow-2xl rounded-2xl"
         wire:submit="create"
     >
+        <div class="mb-3 flex justify-end" wire:poll.15s="refreshOpenCategorySlots" aria-live="polite">
+            <div @class([
+                'inline-flex items-baseline gap-1.5 rounded-full border px-3 py-1.5 shadow-sm',
+                'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-400/10 dark:text-red-300' => $openCategorySlotsRemaining === 0,
+                'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-400/10 dark:text-amber-300' => $openCategorySlotsRemaining > 0 && $openCategorySlotsRemaining <= 10,
+                'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-400/10 dark:text-emerald-300' => $openCategorySlotsRemaining > 10,
+            ])>
+                <span class="text-base font-bold tabular-nums">{{ number_format($openCategorySlotsRemaining) }}</span>
+                <span class="text-xs font-semibold uppercase tracking-wide">
+                    {{ $openCategorySlotsRemaining === 1 ? 'slot' : 'slots' }} left
+                </span>
+            </div>
+        </div>
        
         @if ($errorMessage)
             <div 
