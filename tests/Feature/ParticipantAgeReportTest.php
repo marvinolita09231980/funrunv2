@@ -219,7 +219,10 @@ class ParticipantAgeReportTest extends TestCase
         $page = Livewire::test(ParticipantReports::class)
             ->call('openAgeReportPreview', 'oldest', 'male', '5km')
             ->assertSee('PreviewRunner0 Runner')
-            ->assertSee('Exclude')
+            ->assertSee('DQ')
+            ->assertDontSee('Exclude')
+            ->assertSeeHtml('data-label="Participant"')
+            ->assertSeeHtml('data-label="DQ"')
             ->call(
                 'excludePreviewParticipant',
                 $participants[0]->getKey(),
@@ -306,7 +309,7 @@ class ParticipantAgeReportTest extends TestCase
                 'male',
                 '5km',
             )
-            ->assertSee('Include back');
+            ->assertSee('Restore');
 
         $includedParticipants = $page->instance()->previewReport()['sections'][0]['participants'];
         $excludedSections = $page->instance()->previewExcludedSections();
@@ -404,7 +407,7 @@ class ParticipantAgeReportTest extends TestCase
         Livewire::test(ParticipantReports::class)
             ->call('openRunnerListPreview', 'couple')
             ->call('excludePreviewParticipant', $coupleRunner->getKey())
-            ->assertSee('Include back');
+            ->assertSee('Restore');
 
         $couple = RegistrationGroupReport::build($superadmin, now()->year, 'couple');
         $family = RegistrationGroupReport::build($superadmin, now()->year, 'family');

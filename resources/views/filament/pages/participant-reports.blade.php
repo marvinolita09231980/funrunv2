@@ -120,6 +120,119 @@
                 align-items: stretch;
                 flex-direction: column;
             }
+
+            .participant-report-preview {
+                gap: 1rem;
+                padding: 0.625rem;
+            }
+
+            .participant-report-preview-section {
+                overflow: visible;
+            }
+
+            .participant-report-preview-table-wrap {
+                overflow: visible;
+                padding: 0.75rem;
+            }
+
+            .participant-report-preview-table {
+                display: block;
+                min-width: 0;
+                font-size: 0.84rem;
+            }
+
+            .participant-report-preview-table thead {
+                display: none;
+            }
+
+            .participant-report-preview-table tbody {
+                display: grid;
+                gap: 0.75rem;
+            }
+
+            .participant-report-preview-table tr {
+                display: grid;
+                overflow: hidden;
+                border: 1px solid #dbe3ec;
+                border-radius: 0.75rem;
+                background: #fff;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+            }
+
+            .dark .participant-report-preview-table tr {
+                border-color: rgba(255, 255, 255, 0.12);
+                background: rgba(255, 255, 255, 0.04);
+            }
+
+            .participant-report-preview-table td,
+            .participant-report-preview-table .action-column {
+                display: grid;
+                width: auto;
+                grid-template-columns: minmax(6.75rem, 38%) minmax(0, 1fr);
+                gap: 0.75rem;
+                align-items: center;
+                padding: 0.65rem 0.75rem;
+                border: 0;
+                border-bottom: 1px solid #e5e7eb;
+                text-align: right;
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }
+
+            .dark .participant-report-preview-table td,
+            .dark .participant-report-preview-table .action-column {
+                border-bottom-color: rgba(255, 255, 255, 0.09);
+            }
+
+            .participant-report-preview-table td:last-child {
+                border-bottom: 0;
+            }
+
+            .participant-report-preview-table td::before {
+                content: attr(data-label);
+                color: #64748b;
+                font-size: 0.72rem;
+                font-weight: 700;
+                letter-spacing: 0.04em;
+                line-height: 1.2;
+                text-align: left;
+                text-transform: uppercase;
+            }
+
+            .dark .participant-report-preview-table td::before {
+                color: #94a3b8;
+            }
+
+            .participant-report-preview-table .action-column > * {
+                justify-self: end;
+            }
+
+            .participant-report-preview-table .group-row {
+                border: 0;
+                box-shadow: none;
+            }
+
+            .participant-report-preview-table .group-row td {
+                display: block;
+                border: 1px solid #fde68a;
+                border-radius: 0.65rem;
+                text-align: left;
+            }
+
+            .dark .participant-report-preview-table .group-row td {
+                border-color: rgba(245, 158, 11, 0.25);
+            }
+
+            .participant-report-preview-table .group-row td::before,
+            .participant-report-preview-table .empty-row td::before {
+                content: none;
+            }
+
+            .participant-report-preview-table .empty-row td {
+                display: block;
+                border: 0;
+                text-align: center;
+            }
         }
     </style>
 
@@ -213,7 +326,7 @@
                 <div>
                     <h2 id="participant-report-pdf-preview.heading" class="fi-modal-heading">{{ $previewTitle }}</h2>
                     <p class="fi-modal-description">
-                        Review the report data below. Excluding a row refreshes the list and promotes the next eligible participant when applicable. Excluded participants can be included back below.
+                        Review the report data below. Marking a row as DQ refreshes the list and promotes the next eligible participant when applicable. DQ participants can be restored below.
                     </p>
                 </div>
                 <div class="participant-report-modal-header-actions">
@@ -257,29 +370,29 @@
                                             <th>Phone Number</th>
                                             <th>Category</th>
                                             <th>Subcategory</th>
-                                            <th class="action-column">Exclude</th>
+                                            <th class="action-column">DQ</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @forelse ($section['participants'] as $participant)
                                             <tr wire:key="age-preview-{{ $section['ranking'] }}-{{ $section['gender'] }}-{{ $section['distance'] }}-{{ $participant['participant_id'] }}">
-                                                <td>{{ $participant['rank'] }}</td>
-                                                <td>{{ $participant['name'] }}</td>
-                                                <td>{{ $participant['birth_date'] }}</td>
-                                                <td>{{ $participant['age'] }}</td>
-                                                <td>{{ $participant['phone_number'] }}</td>
-                                                <td>{{ $participant['category'] }}</td>
-                                                <td>{{ $participant['subcategory'] }}</td>
-                                                <td class="action-column">
+                                                <td data-label="Rank">{{ $participant['rank'] }}</td>
+                                                <td data-label="Participant">{{ $participant['name'] }}</td>
+                                                <td data-label="Birth Date">{{ $participant['birth_date'] }}</td>
+                                                <td data-label="Age">{{ $participant['age'] }}</td>
+                                                <td data-label="Phone Number">{{ $participant['phone_number'] }}</td>
+                                                <td data-label="Category">{{ $participant['category'] }}</td>
+                                                <td data-label="Subcategory">{{ $participant['subcategory'] }}</td>
+                                                <td class="action-column" data-label="DQ">
                                                     <x-filament::button
                                                         type="button"
                                                         size="xs"
                                                         color="danger"
                                                         outlined
                                                         icon="heroicon-m-x-mark"
-                                                        aria-label="Remove {{ $participant['name'] }} from report"
+                                                        aria-label="Mark {{ $participant['name'] }} as DQ"
                                                         wire:click="excludePreviewParticipant({{ $participant['participant_id'] }}, '{{ $section['ranking'] }}', '{{ $section['gender'] }}', '{{ $section['distance'] }}')"
-                                                        wire:confirm="Remove {{ $participant['name'] }} from this report?"
+                                                        wire:confirm="Mark {{ $participant['name'] }} as DQ for this report?"
                                                         wire:loading.attr="disabled"
                                                         wire:target="excludePreviewParticipant"
                                                     >
@@ -288,7 +401,7 @@
                                                 </td>
                                             </tr>
                                         @empty
-                                            <tr><td colspan="8">No eligible participants registered in this group.</td></tr>
+                                            <tr class="empty-row"><td colspan="8">No eligible participants registered in this group.</td></tr>
                                         @endforelse
                                     </tbody>
                                 </table>
@@ -313,7 +426,7 @@
                                         <th>Gender</th>
                                         <th>Distance</th>
                                         <th>Shirt Size</th>
-                                        <th class="action-column">Exclude</th>
+                                        <th class="action-column">DQ</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -325,23 +438,23 @@
                                         </tr>
                                         @foreach ($group['members'] as $member)
                                             <tr wire:key="group-preview-{{ $member['participant_id'] }}">
-                                                <td>{{ $loop->iteration }}</td>
-                                                <td>{{ $member['name'] }}</td>
-                                                <td>{{ $member['birth_date'] }}</td>
-                                                <td>{{ $member['phone_number'] }}</td>
-                                                <td>{{ $member['gender'] }}</td>
-                                                <td>{{ $member['distance'] }}</td>
-                                                <td>{{ $member['shirt_size'] }}</td>
-                                                <td class="action-column">
+                                                <td data-label="No.">{{ $loop->iteration }}</td>
+                                                <td data-label="Runner">{{ $member['name'] }}</td>
+                                                <td data-label="Birth Date">{{ $member['birth_date'] }}</td>
+                                                <td data-label="Phone Number">{{ $member['phone_number'] }}</td>
+                                                <td data-label="Gender">{{ $member['gender'] }}</td>
+                                                <td data-label="Distance">{{ $member['distance'] }}</td>
+                                                <td data-label="Shirt Size">{{ $member['shirt_size'] }}</td>
+                                                <td class="action-column" data-label="DQ">
                                                     <x-filament::button
                                                         type="button"
                                                         size="xs"
                                                         color="danger"
                                                         outlined
                                                         icon="heroicon-m-x-mark"
-                                                        aria-label="Remove {{ $member['name'] }} from report"
+                                                        aria-label="Mark {{ $member['name'] }} as DQ"
                                                         wire:click="excludePreviewParticipant({{ $member['participant_id'] }})"
-                                                        wire:confirm="Remove {{ $member['name'] }} from this report?"
+                                                        wire:confirm="Mark {{ $member['name'] }} as DQ for this report?"
                                                         wire:loading.attr="disabled"
                                                         wire:target="excludePreviewParticipant"
                                                     >
@@ -351,7 +464,7 @@
                                             </tr>
                                         @endforeach
                                     @empty
-                                        <tr><td colspan="8">No runners are available for this report.</td></tr>
+                                        <tr class="empty-row"><td colspan="8">No runners are available for this report.</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>
@@ -363,7 +476,7 @@
                 @foreach ($excludedPreviewSections as $excludedSection)
                     <section class="participant-report-preview-section">
                         <h3 class="participant-report-preview-heading is-excluded">
-                            Excluded · {{ $excludedSection['title'] }} · {{ count($excludedSection['participants']) }} participant(s)
+                            DQ · {{ $excludedSection['title'] }} · {{ count($excludedSection['participants']) }} participant(s)
                         </h3>
                         <div class="participant-report-preview-table-wrap">
                             <table class="participant-report-preview-table">
@@ -375,19 +488,19 @@
                                         <th>Phone Number</th>
                                         <th>Category</th>
                                         <th>Subcategory</th>
-                                        <th class="action-column">Include Back</th>
+                                        <th class="action-column">Restore</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach ($excludedSection['participants'] as $participant)
                                         <tr wire:key="excluded-preview-{{ $excludedSection['report_key'] }}-{{ $participant['participant_id'] }}">
-                                            <td>{{ $participant['name'] }}</td>
-                                            <td>{{ $participant['birth_date'] }}</td>
-                                            <td>{{ $participant['age'] }}</td>
-                                            <td>{{ $participant['phone_number'] }}</td>
-                                            <td>{{ $participant['category'] }}</td>
-                                            <td>{{ $participant['subcategory'] }}</td>
-                                            <td class="action-column">
+                                            <td data-label="Participant">{{ $participant['name'] }}</td>
+                                            <td data-label="Birth Date">{{ $participant['birth_date'] }}</td>
+                                            <td data-label="Age">{{ $participant['age'] }}</td>
+                                            <td data-label="Phone Number">{{ $participant['phone_number'] }}</td>
+                                            <td data-label="Category">{{ $participant['category'] }}</td>
+                                            <td data-label="Subcategory">{{ $participant['subcategory'] }}</td>
+                                            <td class="action-column" data-label="Restore">
                                                 <x-filament::button
                                                     type="button"
                                                     size="xs"
@@ -397,7 +510,7 @@
                                                     wire:loading.attr="disabled"
                                                     wire:target="includePreviewParticipant"
                                                 >
-                                                    Include back
+                                                    Restore
                                                 </x-filament::button>
                                             </td>
                                         </tr>

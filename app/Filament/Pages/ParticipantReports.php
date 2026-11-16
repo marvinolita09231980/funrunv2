@@ -260,8 +260,8 @@ class ParticipantReports extends Page
 
         Notification::make()
             ->success()
-            ->title('Participant excluded')
-            ->body("{$participant->firstName} {$participant->lastName} was removed from this report. The preview has been refreshed.")
+            ->title('Participant marked as DQ')
+            ->body("{$participant->firstName} {$participant->lastName} was marked as DQ for this report. The preview has been refreshed.")
             ->send();
     }
 
