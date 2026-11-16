@@ -6,6 +6,7 @@ use App\Models\CategoryAllocation;
 use App\Models\Participant;
 use App\Models\RegistrationSetting;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -42,6 +43,12 @@ class RegisterForm extends Page implements HasSchemas
     protected string $view = 'filament.participant.pages.register-form';
 
     public array $data = [];
+
+    public array $receiptLookup = [
+        'firstName' => '',
+        'lastName' => '',
+        'birthDate' => '',
+    ];
 
     public ?string $errorMessage = null;
 
@@ -905,7 +912,9 @@ class RegisterForm extends Page implements HasSchemas
     {
         $firstName = trim((string) ($this->data['firstName'] ?? ''));
         $lastName = trim((string) ($this->data['lastName'] ?? ''));
-        $birthDate = $this->data['birthDate'] ?? null;
+        $birthDate = $this->normalizedIdentityBirthDate(
+            $this->data['birthDate'] ?? null,
+        );
 
         $wasDuplicate = $this->participantExists;
 
@@ -938,7 +947,7 @@ class RegisterForm extends Page implements HasSchemas
             $this->categoryFull = false;
         }
 
-        if ($firstName === '' || $lastName === '' || blank($birthDate)) {
+        if ($firstName === '' || $lastName === '' || ! $birthDate) {
             return false;
         }
 
@@ -946,7 +955,7 @@ class RegisterForm extends Page implements HasSchemas
             ->where('year', now()->year)
             ->where('firstName', $firstName)
             ->where('lastName', $lastName)
-            ->where('birthDate', $birthDate)
+            ->whereDate('birthDate', $birthDate)
             ->first();
 
         if (! $participant) {
@@ -954,6 +963,12 @@ class RegisterForm extends Page implements HasSchemas
         }
 
         $this->participantExists = true;
+
+        $this->receiptLookup = [
+            'firstName' => $firstName,
+            'lastName' => $lastName,
+            'birthDate' => $birthDate,
+        ];
 
         // Fill the remaining fields without saving any changes.
         foreach ($fieldsToFill as $field) {
@@ -1059,15 +1074,67 @@ class RegisterForm extends Page implements HasSchemas
 
     public function viewExistingParticipant(): void
     {
-        // Refresh the information from the database before opening.
-        $this->checkParticipantExists();
+        $this->resetErrorBag([
+            'receiptLookup.firstName',
+            'receiptLookup.lastName',
+            'receiptLookup.birthDate',
+            'receiptLookup.registration',
+        ]);
+
+        $validated = $this->validate([
+            'receiptLookup.firstName' => ['required', 'string', 'max:255'],
+            'receiptLookup.lastName' => ['required', 'string', 'max:255'],
+            'receiptLookup.birthDate' => ['required', 'date', 'before_or_equal:today'],
+        ], [
+            'receiptLookup.firstName.required' => 'Enter your first name.',
+            'receiptLookup.lastName.required' => 'Enter your last name.',
+            'receiptLookup.birthDate.required' => 'Enter your birth date.',
+            'receiptLookup.birthDate.before_or_equal' => 'Birth date cannot be in the future.',
+        ]);
+
+        $firstName = trim($validated['receiptLookup']['firstName']);
+        $lastName = trim($validated['receiptLookup']['lastName']);
+        $birthDate = $this->normalizedIdentityBirthDate(
+            $validated['receiptLookup']['birthDate'],
+        );
+
+        $participant = $birthDate
+            ? Participant::query()
+                ->where('year', now()->year)
+                ->where('firstName', $firstName)
+                ->where('lastName', $lastName)
+                ->whereDate('birthDate', $birthDate)
+                ->first()
+            : null;
+
+        if (! $participant) {
+            $this->addError(
+                'receiptLookup.registration',
+                'No current-year registration matches these details.',
+            );
+
+            Notification::make()
+                ->title('Registration not found')
+                ->body('No current-year registration matches that first name, last name, and birth date.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->registrationSuccessful = false;
+        $this->setParticipantModalData($participant);
+        $this->dispatch('close-modal', id: 'receipt-lookup');
+        $this->dispatch('open-modal', id: 'participant-existing');
     }
 
     public function downloadRegistrationReceipt(): ?StreamedResponse
     {
-        $participant = $this->receiptParticipantId
-            ? Participant::query()->find($this->receiptParticipantId)
-            : null;
+        $participant = $this->registrationSuccessful
+            ? ($this->receiptParticipantId
+                ? Participant::query()->find($this->receiptParticipantId)
+                : null)
+            : $this->validatedExistingReceiptParticipant();
 
         if (! $participant) {
             Notification::make()
@@ -1118,6 +1185,49 @@ class RegisterForm extends Page implements HasSchemas
             "registration-receipt-{$primaryParticipant->year}-{$primaryParticipant->id}.pdf",
             ['Content-Type' => 'application/pdf']
         );
+    }
+
+    private function validatedExistingReceiptParticipant(): ?Participant
+    {
+        $firstName = trim((string) ($this->receiptLookup['firstName'] ?? ''));
+        $lastName = trim((string) ($this->receiptLookup['lastName'] ?? ''));
+        $birthDate = $this->receiptLookup['birthDate'] ?? null;
+
+        if (
+            ! $this->receiptParticipantId
+            || $firstName === ''
+            || $lastName === ''
+            || blank($birthDate)
+        ) {
+            return null;
+        }
+
+        $birthDate = $this->normalizedIdentityBirthDate($birthDate);
+
+        if (! $birthDate) {
+            return null;
+        }
+
+        return Participant::query()
+            ->whereKey($this->receiptParticipantId)
+            ->where('year', now()->year)
+            ->where('firstName', $firstName)
+            ->where('lastName', $lastName)
+            ->whereDate('birthDate', $birthDate)
+            ->first();
+    }
+
+    private function normalizedIdentityBirthDate(mixed $birthDate): ?string
+    {
+        if (blank($birthDate)) {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse((string) $birthDate)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function registrationParticipantsFor(Participant $participant): EloquentCollection

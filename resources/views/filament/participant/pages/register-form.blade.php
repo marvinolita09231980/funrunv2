@@ -24,8 +24,280 @@
             </div>
         </div>
     </section>
-@else
-<div  x-data="{
+@endif
+
+    <section @class([
+        'mb-6 rounded-2xl border border-gray-200 bg-white shadow-lg shadow-gray-950/5 dark:border-white/10 dark:bg-gray-900 dark:shadow-black/20',
+        'mt-6' => ! $registrationEnabled,
+    ])>
+        <div class="h-1 rounded-t-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-red-500"></div>
+
+        <div class="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div class="min-w-0">
+                <div class="flex items-start gap-4">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-200 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/20">
+                        <x-filament::icon icon="heroicon-o-document-text" class="h-6 w-6" />
+                    </div>
+
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <p class="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">
+                                Already registered?
+                            </p>
+
+                            <div
+                                class="relative"
+                                x-data="{ open: false, pinned: false }"
+                                x-on:mouseenter="open = true"
+                                x-on:mouseleave="if (! pinned) open = false"
+                                x-on:click.outside="open = false; pinned = false"
+                                x-on:keydown.escape.window="open = false; pinned = false"
+                            >
+                                <button
+                                    type="button"
+                                    class="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition hover:bg-amber-50 hover:text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:hover:bg-amber-400/10 dark:hover:text-amber-400 dark:focus:ring-offset-gray-900"
+                                    aria-label="How receipt lookup works"
+                                    aria-controls="receipt-lookup-help"
+                                    x-bind:aria-expanded="open.toString()"
+                                    x-on:click="pinned = ! pinned; open = pinned"
+                                    x-on:focus="open = true"
+                                    x-on:blur="if (! pinned) open = false"
+                                >
+                                    <x-filament::icon icon="heroicon-o-information-circle" class="h-5 w-5" />
+                                </button>
+
+                                <div
+                                    id="receipt-lookup-help"
+                                    role="status"
+                                    aria-live="polite"
+                                    x-cloak
+                                    x-show="open"
+                                    class="fixed z-[100] w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-2xl shadow-gray-950/15 dark:border-white/10 dark:shadow-black/40"
+                                    style="position: fixed; left: 50%; top: 1rem; z-index: 100; transform: translateX(-50%); background-color: #ffffff; opacity: 1;"
+                                >
+                                    <div class="h-1 bg-gradient-to-r from-amber-400 via-orange-500 to-red-500"></div>
+                                    <div class="flex items-start gap-3 p-4">
+                                        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400">
+                                            <x-filament::icon icon="heroicon-o-information-circle" class="h-5 w-5" />
+                                        </div>
+
+                                        <div class="min-w-0 flex-1">
+                                            <p class="text-sm font-semibold normal-case tracking-normal text-gray-950 dark:text-white">
+                                                How receipt lookup works
+                                            </p>
+                                            <p class="mt-1.5 text-sm normal-case leading-5 tracking-normal text-gray-600 dark:text-gray-300">
+                                                Use the same personal details entered during registration to securely find your record.
+                                            </p>
+                                            <div role="list" class="mt-3 space-y-2.5 text-sm normal-case tracking-normal text-gray-600 dark:text-gray-300">
+                                                @foreach ([
+                                                    'Enter your full name',
+                                                    'Provide your birth date',
+                                                    'View or save the PDF',
+                                                ] as $step)
+                                                    <div role="listitem" class="flex items-center gap-2.5">
+                                                        <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-700 dark:bg-amber-400/15 dark:text-amber-300">
+                                                            {{ $loop->iteration }}
+                                                        </span>
+                                                        <span>{{ $step }}</span>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:hover:bg-white/10 dark:hover:text-gray-200"
+                                            aria-label="Close receipt information"
+                                            x-on:click.stop="open = false; pinned = false"
+                                        >
+                                            <x-filament::icon icon="heroicon-m-x-mark" class="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <h2 class="mt-1 text-lg font-bold tracking-tight text-gray-950 dark:text-white sm:text-xl">
+                            Retrieve your registration receipt
+                        </h2>
+                        <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-600 dark:text-gray-300">
+                            Access a copy of your current-year registration receipt.
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="border-t border-gray-200 pt-5 dark:border-white/10 lg:w-64 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+                <x-filament::button
+                    type="button"
+                    color="primary"
+                    size="lg"
+                    icon="heroicon-o-magnifying-glass"
+                    class="w-full justify-center"
+                    x-on:click="$dispatch('open-modal', { id: 'receipt-lookup' })"
+                >
+                    View / Download Receipt
+                </x-filament::button>
+
+                <p class="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-gray-500 dark:text-gray-400">
+                    <x-filament::icon icon="heroicon-m-lock-closed" class="h-3.5 w-3.5 shrink-0" />
+                    Secure identity verification
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <x-filament::modal id="receipt-lookup" width="md" alignment="center">
+        <x-slot name="heading">
+            Find your receipt
+        </x-slot>
+
+        <x-slot name="description">
+            Verify your identity to access your {{ now()->year }} registration receipt.
+        </x-slot>
+
+        <form wire:submit="viewExistingParticipant" class="space-y-5">
+            <div class="overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 dark:border-amber-400/20 dark:from-amber-400/10 dark:to-orange-400/5">
+                <div class="flex items-start gap-3 p-4">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-amber-600 shadow-sm ring-1 ring-amber-200 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/20">
+                        <x-filament::icon icon="heroicon-o-shield-check" class="h-5 w-5" />
+                    </div>
+
+                    <div class="min-w-0">
+                        <p class="text-sm font-semibold text-gray-950 dark:text-white">
+                            Secure identity verification
+                        </p>
+                        <p class="mt-1 text-sm leading-5 text-gray-600 dark:text-gray-300">
+                            Use the exact name and birth date entered during registration. Only current-year records can be retrieved.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-4">
+                <p class="text-sm font-semibold text-gray-950 dark:text-white">
+                    Personal details
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                    All fields are required
+                </p>
+            </div>
+
+            <div class="space-y-4">
+                <label class="block" for="receipt-first-name">
+                    <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                        First name <span class="text-danger-500" aria-hidden="true">*</span>
+                    </span>
+                    <x-filament::input.wrapper
+                        prefix-icon="heroicon-m-user"
+                        :valid="! $errors->has('receiptLookup.firstName')"
+                    >
+                        <x-filament::input
+                            id="receipt-first-name"
+                            type="text"
+                            wire:model="receiptLookup.firstName"
+                            autocomplete="given-name"
+                            placeholder="First name"
+                            autofocus
+                        />
+                    </x-filament::input.wrapper>
+                    @error('receiptLookup.firstName')
+                        <p class="mt-1.5 text-sm text-danger-600 dark:text-danger-400">{{ $message }}</p>
+                    @enderror
+                </label>
+
+                <label class="block" for="receipt-last-name">
+                    <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                        Last name <span class="text-danger-500" aria-hidden="true">*</span>
+                    </span>
+                    <x-filament::input.wrapper
+                        prefix-icon="heroicon-m-user"
+                        :valid="! $errors->has('receiptLookup.lastName')"
+                    >
+                        <x-filament::input
+                            id="receipt-last-name"
+                            type="text"
+                            wire:model="receiptLookup.lastName"
+                            autocomplete="family-name"
+                            placeholder="Last name"
+                        />
+                    </x-filament::input.wrapper>
+                    @error('receiptLookup.lastName')
+                        <p class="mt-1.5 text-sm text-danger-600 dark:text-danger-400">{{ $message }}</p>
+                    @enderror
+                </label>
+            </div>
+
+            <label class="block" for="receipt-birth-date">
+                <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    Birth date <span class="text-danger-500" aria-hidden="true">*</span>
+                </span>
+                <x-filament::input.wrapper
+                    prefix-icon="heroicon-m-calendar-days"
+                    :valid="! $errors->has('receiptLookup.birthDate')"
+                >
+                    <x-filament::input
+                        id="receipt-birth-date"
+                        type="date"
+                        wire:model="receiptLookup.birthDate"
+                        max="{{ now()->toDateString() }}"
+                        autocomplete="bday"
+                    />
+                </x-filament::input.wrapper>
+                @error('receiptLookup.birthDate')
+                    <p class="mt-1.5 text-sm text-danger-600 dark:text-danger-400">{{ $message }}</p>
+                @enderror
+            </label>
+
+            @error('receiptLookup.registration')
+                <div role="alert" class="flex items-start gap-3 rounded-xl border border-danger-200 bg-danger-50 p-3.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-300">
+                    <x-filament::icon icon="heroicon-o-exclamation-circle" class="h-5 w-5 shrink-0" />
+                    <div>
+                        <p class="font-semibold">Registration not found</p>
+                        <p class="mt-0.5 leading-5">{{ $message }}</p>
+                    </div>
+                </div>
+            @enderror
+
+            <p class="flex items-center gap-2 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                <x-filament::icon icon="heroicon-m-lock-closed" class="h-4 w-4 shrink-0" />
+                Your details are used only to locate your registration.
+            </p>
+
+            <div class="grid grid-cols-1 gap-3 border-t border-gray-200 pt-5 dark:border-white/10 sm:grid-cols-2">
+                <x-filament::button
+                    type="button"
+                    color="gray"
+                    outlined
+                    size="lg"
+                    class="w-full justify-center"
+                    x-on:click="$dispatch('close-modal', { id: 'receipt-lookup' })"
+                >
+                    Cancel
+                </x-filament::button>
+
+                <x-filament::button
+                    type="submit"
+                    color="primary"
+                    icon="heroicon-o-magnifying-glass"
+                    size="lg"
+                    class="w-full justify-center"
+                    wire:loading.attr="disabled"
+                    wire:target="viewExistingParticipant"
+                >
+                    <span wire:loading.remove wire:target="viewExistingParticipant">
+                        Find Registration
+                    </span>
+                    <span wire:loading wire:target="viewExistingParticipant">
+                        Checking...
+                    </span>
+                </x-filament::button>
+            </div>
+        </form>
+    </x-filament::modal>
+
+@if ($registrationEnabled)
+    <div x-data="{
         agreed: @entangle('data.waiver'),
         participantExists: @entangle('participantExists'),
         categoryFull: @entangle('categoryFull')
@@ -121,23 +393,11 @@
                 >
                     {{ $participantExists ? 'Already Exists' : ($categoryFull ? 'Slots Full' : 'Register') }}
                 </x-filament::button>
-
-                @if ($participantExists)
-                    <x-filament::button
-                        type="button"
-                        color="primary"
-                        outlined
-                        icon="heroicon-o-eye"
-                        wire:click="viewExistingParticipant"
-                        wire:loading.attr="disabled"
-                        wire:target="viewExistingParticipant, data"
-                    >
-                        View Info
-                    </x-filament::button>
-                @endif
             </div>
         </div>
     </form>
+    </div>
+@endif
 
     <x-filament::modal id="already-exists" alignment="center" width="md">
         <div class="flex flex-col items-center justify-center space-y-6 p-8">
@@ -559,6 +819,4 @@
         </div>
    
     </x-filament::modal>
-</div>
-@endif
 </x-filament-panels::page>

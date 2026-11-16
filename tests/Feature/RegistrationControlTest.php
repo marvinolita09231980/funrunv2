@@ -111,6 +111,8 @@ class RegistrationControlTest extends TestCase
         Livewire::test(RegisterForm::class)
             ->assertSet('registrationEnabled', false)
             ->assertSee('Registration Temporarily Closed')
+            ->assertSee('View / Download Receipt')
+            ->assertSee('Find your receipt')
             ->assertDontSee('Personal Information')
             ->call('create');
 

@@ -42,7 +42,18 @@ class RegisterFormTest extends TestCase
             ->assertSee('Contact number')
             ->assertSee('Category')
             ->assertSee('Description')
-            ->assertSee('Distance category');
+            ->assertSee('Distance category')
+            ->assertSee('Already registered?')
+            ->assertSee('How receipt lookup works')
+            ->assertSee('Use the same personal details entered during registration to securely find your record.')
+            ->assertSee('Enter your full name')
+            ->assertSee('Provide your birth date')
+            ->assertSee('View or save the PDF')
+            ->assertSee('View / Download Receipt')
+            ->assertSeeInOrder([
+                'Already registered?',
+                'Personal Information',
+            ]);
     }
 
     public function test_open_category_uses_its_main_allocation_without_a_subcategory(): void
@@ -215,11 +226,22 @@ class RegisterFormTest extends TestCase
             'couple' => true,
         ]);
 
-        Livewire::test(RegisterForm::class)
+        $component = Livewire::test(RegisterForm::class)
             ->set('data.firstName', 'Primary')
             ->set('data.lastName', 'Runner')
             ->set('data.birthDate', '1990-01-01')
             ->assertSet('participantExists', true)
+            ->assertSet('receiptParticipantId', $primaryParticipant->getKey())
+            ->assertSet('data.firstName', 'Primary')
+            ->assertSet('data.lastName', 'Runner')
+            ->assertSet(
+                'data.birthDate',
+                fn (mixed $birthDate): bool => str_starts_with(
+                    (string) $birthDate,
+                    '1990-01-01',
+                ),
+            )
+            ->assertSee('View / Download Receipt')
             ->assertSee('Additional Participants')
             ->assertSeeHtml('1.&nbsp;')
             ->assertSee('Additional A. Runner')
@@ -250,12 +272,118 @@ class RegisterFormTest extends TestCase
             })
             ->andReturn($pdfDocument);
 
-        $component = Livewire::test(RegisterForm::class);
-        $component->instance()->receiptParticipantId = $primaryParticipant->getKey();
-
         $response = $component->instance()->downloadRegistrationReceipt();
 
         $this->assertNotNull($response);
+    }
+
+    public function test_existing_receipt_download_revalidates_name_and_birth_date(): void
+    {
+        $participant = Participant::query()->create([
+            'year' => now()->year,
+            'participantNumber' => '1',
+            'firstName' => 'Verified',
+            'lastName' => 'Runner',
+            'categoryDescription' => 'OPEN CATEGORY',
+            'subDescription' => 'Individual',
+            'shirtSize' => 'large',
+            'birthDate' => '1990-01-01',
+            'gender' => 'male',
+            'waiver' => true,
+            'distanceCategory' => '5km',
+            'referenceNumber' => '0',
+            'address' => 'Verified address',
+            'contactNumber' => '09987654321',
+            'created_by' => 'opencategory',
+        ]);
+
+        foreach ([
+            ['firstName' => 'Wrong', 'lastName' => 'Runner', 'birthDate' => '1990-01-01'],
+            ['firstName' => 'Verified', 'lastName' => 'Wrong', 'birthDate' => '1990-01-01'],
+            ['firstName' => 'Verified', 'lastName' => 'Runner', 'birthDate' => '1991-01-01'],
+        ] as $identity) {
+            $component = Livewire::test(RegisterForm::class);
+            $component->instance()->receiptParticipantId = $participant->getKey();
+            $component->instance()->receiptLookup = $identity;
+
+            $this->assertNull($component->instance()->downloadRegistrationReceipt());
+        }
+    }
+
+    public function test_receipt_lookup_requires_all_three_identity_fields(): void
+    {
+        Livewire::test(RegisterForm::class)
+            ->call('viewExistingParticipant')
+            ->assertHasErrors([
+                'receiptLookup.firstName',
+                'receiptLookup.lastName',
+                'receiptLookup.birthDate',
+            ]);
+    }
+
+    public function test_receipt_lookup_uses_its_modal_fields_without_changing_registration_fields(): void
+    {
+        $participant = Participant::query()->create([
+            'year' => now()->year,
+            'participantNumber' => '1',
+            'firstName' => 'Modal',
+            'lastName' => 'Runner',
+            'categoryDescription' => 'OPEN CATEGORY',
+            'subDescription' => 'Individual',
+            'shirtSize' => 'large',
+            'birthDate' => '1990-01-01',
+            'gender' => 'male',
+            'waiver' => true,
+            'distanceCategory' => '5km',
+            'referenceNumber' => '0',
+            'address' => 'Modal address',
+            'contactNumber' => '09987654321',
+            'created_by' => 'opencategory',
+        ]);
+
+        Livewire::test(RegisterForm::class)
+            ->set('receiptLookup.firstName', 'Modal')
+            ->set('receiptLookup.lastName', 'Runner')
+            ->set('receiptLookup.birthDate', '1990-01-01')
+            ->call('viewExistingParticipant')
+            ->assertHasNoErrors()
+            ->assertSet('receiptParticipantId', $participant->getKey())
+            ->assertSet('existingParticipant.name', 'Modal Runner')
+            ->assertSet('data.firstName', null)
+            ->assertSet('data.lastName', null)
+            ->assertDispatched('close-modal', id: 'receipt-lookup')
+            ->assertDispatched('open-modal', id: 'participant-existing');
+    }
+
+    public function test_receipt_lookup_does_not_validate_a_previous_year_registration(): void
+    {
+        Participant::query()->create([
+            'year' => now()->subYear()->year,
+            'participantNumber' => '1',
+            'firstName' => 'Previous',
+            'lastName' => 'Runner',
+            'categoryDescription' => 'OPEN CATEGORY',
+            'subDescription' => 'Individual',
+            'shirtSize' => 'large',
+            'birthDate' => '1990-01-01',
+            'gender' => 'male',
+            'waiver' => true,
+            'distanceCategory' => '5km',
+            'referenceNumber' => '0',
+            'address' => 'Previous address',
+            'contactNumber' => '09987654321',
+            'created_by' => 'opencategory',
+        ]);
+
+        Livewire::test(RegisterForm::class)
+            ->set('receiptLookup.firstName', 'Previous')
+            ->set('receiptLookup.lastName', 'Runner')
+            ->set('receiptLookup.birthDate', '1990-01-01')
+            ->call('viewExistingParticipant')
+            ->assertHasErrors(['receiptLookup.registration'])
+            ->assertSet('receiptParticipantId', null)
+            ->assertSet('existingParticipant', null)
+            ->assertNotDispatched('open-modal', id: 'participant-existing');
     }
 
     public function test_non_open_category_duplicate_shows_creator_contact_without_receipt(): void
@@ -296,7 +424,7 @@ class RegisterFormTest extends TestCase
             ->assertSee('This participant was added by Maria Recorder.')
             ->assertSee('Please contact this person')
             ->assertSee('09171234567')
-            ->assertDontSee('Download Receipt');
+            ->assertDontSee('Preparing Receipt...');
 
         $component->instance()->receiptParticipantId = $participant->getKey();
 
