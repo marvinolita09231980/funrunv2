@@ -8,6 +8,7 @@ use App\Filament\Pages\ParticipantReports;
 use App\Filament\Pages\PotentialDuplicates;
 use App\Filament\Pages\RegistrationControl;
 use App\Filament\Pages\ShirtSizes;
+use App\Filament\Resources\Awards\AwardResource;
 use App\Filament\Resources\CategoryAllocations\CategoryAllocationResource;
 use App\Filament\Resources\Finishers\FinisherResource;
 use App\Filament\Resources\Participants\ParticipantResource;
@@ -44,6 +45,7 @@ class NavigationGroupingTest extends TestCase
 
         $this->assertSame('Event Operations', CategoryAllocationResource::getNavigationGroup());
         $this->assertSame('Event Operations', SubcategoriesResource::getNavigationGroup());
+        $this->assertSame('Event Operations', AwardResource::getNavigationGroup());
         $this->assertSame('Event Operations', FinisherResource::getNavigationGroup());
 
         $this->assertSame('Reports', ShirtSizes::getNavigationGroup());
@@ -69,8 +71,12 @@ class NavigationGroupingTest extends TestCase
             CategoryAllocationResource::getNavigationSort(),
         );
         $this->assertLessThan(
-            FinisherResource::getNavigationSort(),
+            AwardResource::getNavigationSort(),
             SubcategoriesResource::getNavigationSort(),
+        );
+        $this->assertLessThan(
+            FinisherResource::getNavigationSort(),
+            AwardResource::getNavigationSort(),
         );
         $this->assertLessThan(
             ParticipantReports::getNavigationSort(),

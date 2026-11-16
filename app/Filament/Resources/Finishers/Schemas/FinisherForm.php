@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Finishers\Schemas;
 
+use App\Models\Award;
 use App\Models\Finisher;
 use App\Models\Participant;
 use Filament\Schemas\Schema;
@@ -132,11 +133,24 @@ class FinisherForm
                         ->default(
                             now('Asia/Manila')->format('h:i A')
                         ),
-                        TextInput::make('finisher_rank')
-                        ->label('Rank')
-                        ->numeric()          
-                        ->minValue(1)        
-                        ->maxValue(99999),
+                        Select::make('award_id')
+                            ->label('Award')
+                            ->placeholder('No award')
+                            ->options(function (?Finisher $record): array {
+                                return Award::query()
+                                    ->where(function ($query) use ($record): void {
+                                        $query->where('is_active', true);
+
+                                        if ($record?->award_id) {
+                                            $query->orWhereKey($record->award_id);
+                                        }
+                                    })
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->all();
+                            })
+                            ->searchable()
+                            ->preload(),
                  ])->columns(3),   
                  Fieldset::make('Runner Info')
                   ->schema([

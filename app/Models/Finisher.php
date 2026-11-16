@@ -22,11 +22,17 @@ class Finisher extends Model
         'finish_time',
         'created_by',
         'finisher_rank',
+        'award_id',
     ];
 
     public function participant(): BelongsTo
     {
         return $this->belongsTo(Participant::class, 'participants_id');
+    }
+
+    public function award(): BelongsTo
+    {
+        return $this->belongsTo(Award::class);
     }
      
     public function getRankAttribute()

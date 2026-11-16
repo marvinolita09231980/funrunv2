@@ -11,7 +11,6 @@ use Filament\Actions\EditAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\Layout\Grid;
 use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\SelectFilter;
@@ -22,7 +21,7 @@ class FinishersTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('participant'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['participant', 'award']))
             ->columns([
                 Stack::make([
                     TextColumn::make('finisher_name')
@@ -37,24 +36,21 @@ class FinishersTable
                         ->weight('bold')
                         ->searchable(['firstName', 'lastName'])
                         ->wrap(),
-                    Grid::make(['default' => 2])
-                        ->schema([
-                            TextColumn::make('racebib')
-                                ->label('Race Bib')
-                                ->prefix('Bib: ')
-                                ->searchable()
-                                ->weight('bold'),
-                            TextColumn::make('finisher_rank')
-                                ->label('Rank')
-                                ->prefix('Rank: ')
-                                ->placeholder('Rank: —')
-                                ->sortable(),
-                        ]),
+                    TextColumn::make('racebib')
+                        ->label('Race Bib')
+                        ->prefix('Bib: ')
+                        ->searchable()
+                        ->weight('bold'),
                     TextColumn::make('distanceCategory')
                         ->label('Distance')
                         ->formatStateUsing(fn (?string $state): string => Participant::distanceLabel($state))
                         ->badge()
                         ->color('info'),
+                    TextColumn::make('award.name')
+                        ->label('Award')
+                        ->prefix('Award: ')
+                        ->placeholder('Award: —')
+                        ->wrap(),
                     TextColumn::make('participant.year')
                         ->label('Year')
                         ->prefix('Event year: ')

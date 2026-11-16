@@ -11,7 +11,7 @@
                     Application Audit Trail
                 </h2>
                 <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-                    Review edits and deletions across participants, users, allocations, subcategories, finishers, feedback, and registration settings. Passwords and security tokens are always redacted.
+                    Review edits and deletions across participants, users, allocations, subcategories, awards, finishers, feedback, and registration settings. Passwords and security tokens are always redacted.
                 </p>
             </div>
         </section>

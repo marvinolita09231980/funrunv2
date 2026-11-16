@@ -3,10 +3,12 @@
 namespace App\Filament\Resources\Finishers\Pages;
 
 use App\Filament\Resources\Finishers\FinisherResource;
+use App\Models\Award;
 use App\Models\Finisher;
 use App\Models\Participant;
 use Carbon\Carbon;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
 use Filament\Notifications\Notification;
@@ -173,34 +175,16 @@ class CreateFinisher extends Page implements HasTable
                                 };
                             })
                             ->required(),
-                        TextInput::make('finisher_rank')
-                            ->label('Finisher Rank')
-                            ->helperText('The runner’s finishing position (ikapila siya ni-finish).')
-                            ->numeric()
-                            ->minValue(1)
-                            ->maxValue(99999)
-                            ->rule(function (Participant $record): callable {
-                                return function (string $attribute, mixed $value, callable $fail) use ($record): void {
-                                    if (blank($value)) {
-                                        return;
-                                    }
-
-                                    $rankExists = Finisher::query()
-                                        ->where('distanceCategory', $record->distanceCategory)
-                                        ->where('finisher_rank', $value)
-                                        ->whereIn(
-                                            'participants_id',
-                                            Participant::query()
-                                                ->select('id')
-                                                ->where('year', $record->year)
-                                        )
-                                        ->exists();
-
-                                    if ($rankExists) {
-                                        $fail("Rank {$value} is already recorded for " . Participant::distanceLabel($record->distanceCategory) . '.');
-                                    }
-                                };
-                            }),
+                        Select::make('award_id')
+                            ->label('Award')
+                            ->placeholder('No award')
+                            ->options(fn (): array => Award::query()
+                                ->where('is_active', true)
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all())
+                            ->searchable()
+                            ->preload(),
                         TimePicker::make('finish_time')
                             ->label('Finish Time')
                             ->seconds(true)
@@ -229,7 +213,7 @@ class CreateFinisher extends Page implements HasTable
                             'birthDate' => $record->birthDate,
                             'distanceCategory' => $record->distanceCategory,
                             'racebib' => $data['racebib'],
-                            'finisher_rank' => $data['finisher_rank'] ?? null,
+                            'award_id' => $data['award_id'] ?? null,
                             'finish_time' => Carbon::now('Asia/Manila')->format('Y-m-d') . ' ' . $data['finish_time'],
                             'created_by' => Auth::user()->username,
                         ]);

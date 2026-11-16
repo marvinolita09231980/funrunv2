@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\Award;
 use App\Models\CategoryAllocation;
 use App\Models\Feedback;
 use App\Models\Finisher;
@@ -133,6 +134,7 @@ class AuditLogger
                 $model->subDescription,
             ])->filter()->join(' — '),
             $model instanceof CategoryAllocation => (string) $model->categoryDescription,
+            $model instanceof Award => (string) $model->name,
             $model instanceof Feedback => (string) ($model->full_name
                 ?? collect([$model->firstName, $model->lastName])->filter()->join(' ')),
             $model instanceof OverallAllocation => 'Overall Participant Allocation',

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\Award;
 use App\Models\AuditLog;
 use App\Models\CategoryAllocation;
 use App\Models\Feedback;
@@ -148,6 +149,7 @@ class AuditLogs extends Page implements HasTable
         return [
             Participant::class => 'Participant',
             Finisher::class => 'Finisher',
+            Award::class => 'Award',
             User::class => 'User',
             Subcategory::class => 'Subcategory',
             CategoryAllocation::class => 'Category Allocation',
