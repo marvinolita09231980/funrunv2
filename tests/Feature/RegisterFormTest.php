@@ -32,7 +32,12 @@ class RegisterFormTest extends TestCase
     public function test_registration_form_displays_its_base_fields(): void
     {
         Livewire::test(RegisterForm::class)
+            ->assertSet('openCategoryCapacity', 100)
+            ->assertSet('openCategorySlotsRemaining', 100)
             ->assertSee('Personal Information')
+            ->assertSee('Open Category Slots')
+            ->assertSee('slots left')
+            ->assertSee('Updated automatically as successful registrations are recorded.')
             ->assertSee('First name')
             ->assertSee('Last name')
             ->assertSee('Birth date')
@@ -79,7 +84,9 @@ class RegisterFormTest extends TestCase
             ->set('data.distanceCategory', '5km')
             ->set('data.waiver', true)
             ->call('create')
-            ->assertHasNoErrors();
+            ->assertHasNoErrors()
+            ->assertSet('openCategorySlotsRemaining', 0)
+            ->assertSet('categoryFull', true);
 
         $this->assertDatabaseHas('participants', [
             'firstName' => 'Open',

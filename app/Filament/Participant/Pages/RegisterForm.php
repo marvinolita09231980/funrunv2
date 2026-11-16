@@ -56,6 +56,10 @@ class RegisterForm extends Page implements HasSchemas
 
     public bool $categoryFull = false;
 
+    public int $openCategorySlotsRemaining = 0;
+
+    public int $openCategoryCapacity = 0;
+
     public ?array $existingParticipant = null;
 
     public bool $registrationSuccessful = false;
@@ -486,6 +490,8 @@ class RegisterForm extends Page implements HasSchemas
 
         if (! $allocation) {
             $this->categoryFull = true;
+            $this->openCategoryCapacity = 0;
+            $this->openCategorySlotsRemaining = 0;
 
             return;
         }
@@ -495,7 +501,17 @@ class RegisterForm extends Page implements HasSchemas
             ->where('year', now()->year)
             ->count();
 
-        $this->categoryFull = $registeredCount >= (int) $allocation->allocated_participants;
+        $this->openCategoryCapacity = (int) $allocation->allocated_participants;
+        $this->openCategorySlotsRemaining = max(
+            0,
+            $this->openCategoryCapacity - $registeredCount,
+        );
+        $this->categoryFull = $this->openCategorySlotsRemaining === 0;
+    }
+
+    public function refreshOpenCategorySlots(): void
+    {
+        $this->updateCategoryAvailability('OPEN CATEGORY');
     }
 
     public function checkRegistrationAvailability(): void
@@ -656,7 +672,7 @@ class RegisterForm extends Page implements HasSchemas
             $this->dispatch('open-modal', id: 'participant-existing');
 
             $this->participantExists = false;
-            $this->categoryFull = false;
+            $this->refreshOpenCategorySlots();
             $this->form->fill([
                 'waiver' => false,
             ]);
