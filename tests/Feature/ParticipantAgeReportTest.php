@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\ParticipantReports;
 use App\Models\CategoryAllocation;
+use App\Models\Finisher;
 use App\Models\Participant;
 use App\Models\ParticipantReportExclusion;
 use App\Models\Subcategory;
 use App\Models\User;
 use App\Services\ParticipantAgeReport;
 use App\Services\RegistrationGroupReport;
+use App\Services\SpecialFinisherReport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use BezhanSalleh\FilamentShield\Facades\FilamentShield;
 use Filament\Facades\Filament;
@@ -286,6 +288,129 @@ class ParticipantAgeReportTest extends TestCase
             ->assertDispatched('open-modal', id: 'participant-report-pdf-preview')
             ->call('downloadPreview')
             ->assertFileDownloaded("top-10-all-integrated-{$year}.pdf");
+    }
+
+    public function test_padac_and_rpwuds_top_ten_finishers_are_separated_by_gender(): void
+    {
+        $viewer = $this->user('superadmin');
+        $year = now()->year;
+
+        for ($index = 0; $index < 12; $index++) {
+            $participant = $this->participant([
+                'firstName' => "PadacMale{$index}",
+                'gender' => 'male',
+                'categoryDescription' => match ($index % 3) {
+                    0 => 'PADAC MEMBERS',
+                    1 => 'PNP',
+                    default => 'ONA',
+                },
+                'subDescription' => $index % 3 === 2 ? 'PDEA' : '',
+            ]);
+            $this->finisher($participant, sprintf('%d-11-17 06:%02d:00', $year, $index), "5{$index}001");
+        }
+
+        $padacFemale = $this->participant([
+            'firstName' => 'PadacFemale',
+            'gender' => 'female',
+            'categoryDescription' => 'PADAC',
+        ]);
+        $this->finisher($padacFemale, "{$year}-11-17 06:30:00", '50090');
+
+        $rpwudsMale = $this->participant([
+            'firstName' => 'RpwudsMale',
+            'gender' => 'male',
+            'rpwuds' => true,
+        ]);
+        $this->finisher($rpwudsMale, "{$year}-11-17 06:20:00", '50091');
+
+        $rpwudsFemale = $this->participant([
+            'firstName' => 'RpwudsFemale',
+            'gender' => 'female',
+            'rpwuds' => true,
+        ]);
+        $this->finisher($rpwudsFemale, "{$year}-11-17 06:21:00", '50092');
+
+        $notAFinisher = $this->participant([
+            'firstName' => 'RegisteredOnly',
+            'gender' => 'male',
+            'categoryDescription' => 'PADAC MEMBERS',
+        ]);
+
+        $padacMaleReport = SpecialFinisherReport::build($viewer, $year, 'padac', 'male');
+        $padacFemaleReport = SpecialFinisherReport::build($viewer, $year, 'padac', 'female');
+        $rpwudsMaleReport = SpecialFinisherReport::build($viewer, $year, 'rpwuds', 'male');
+        $rpwudsFemaleReport = SpecialFinisherReport::build($viewer, $year, 'rpwuds', 'female');
+
+        $this->assertCount(10, $padacMaleReport['finishers']);
+        $this->assertSame('PadacMale0 Runner', $padacMaleReport['finishers'][0]['name']);
+        $this->assertSame('PadacMale9 Runner', $padacMaleReport['finishers'][9]['name']);
+        $this->assertSame(range(1, 10), array_column($padacMaleReport['finishers'], 'rank'));
+        $this->assertSame(['PadacFemale Runner'], array_column($padacFemaleReport['finishers'], 'name'));
+        $this->assertSame(['RpwudsMale Runner'], array_column($rpwudsMaleReport['finishers'], 'name'));
+        $this->assertSame(['RpwudsFemale Runner'], array_column($rpwudsFemaleReport['finishers'], 'name'));
+        $this->assertNotContains($notAFinisher->getKey(), array_column($padacMaleReport['finishers'], 'participant_id'));
+    }
+
+    public function test_special_finisher_reports_can_be_previewed_downloaded_and_dqed(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $superadmin = $this->user('superadmin');
+        $this->actingAs($superadmin);
+        $year = now()->year;
+        $finishers = collect();
+
+        for ($index = 0; $index < 11; $index++) {
+            $participant = $this->participant([
+                'firstName' => "Special{$index}",
+                'gender' => 'female',
+                'rpwuds' => true,
+            ]);
+            $finishers->push($this->finisher(
+                $participant,
+                sprintf('%d-11-17 07:%02d:00', $year, $index),
+                "5{$index}101",
+            ));
+        }
+
+        $page = Livewire::test(ParticipantReports::class)
+            ->assertSee('Top 10 PADAC & RPWUDS Finishers')
+            ->assertSee('PADAC · Male')
+            ->assertSee('RPWUDS · Female')
+            ->call('openFinisherReportPreview', 'rpwuds', 'female')
+            ->assertSet('previewReportType', 'finisher')
+            ->assertSet('previewReportParameters.type', 'rpwuds')
+            ->assertSet('previewReportParameters.gender', 'female')
+            ->assertSet('previewTitle', "Top 10 RPWUDS Female Finishers · {$year}")
+            ->assertSee('Special0 Runner')
+            ->assertDontSee('Special10 Runner')
+            ->call(
+                'excludeFinisherPreviewParticipant',
+                $finishers[0]->participants_id,
+                'rpwuds',
+                'female',
+            )
+            ->assertHasNoErrors()
+            ->assertSee('Special10 Runner')
+            ->call('downloadPreview')
+            ->assertFileDownloaded("top-10-rpwuds-female-finishers-{$year}.pdf");
+
+        $this->assertDatabaseHas('participant_report_exclusions', [
+            'participant_id' => $finishers[0]->participants_id,
+            'year' => $year,
+            'report_key' => ParticipantReportExclusion::finisherKey('rpwuds', 'female'),
+        ]);
+
+        $this->get(route('participant-reports.preview.finishers', [
+            'type' => 'rpwuds',
+            'year' => $year,
+            'gender' => 'female',
+        ]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader(
+                'Content-Disposition',
+                "inline; filename=\"top-10-rpwuds-female-finishers-{$year}.pdf\"",
+            );
     }
 
     public function test_participants_can_be_excluded_directly_from_the_interactive_preview(): void
@@ -662,5 +787,23 @@ class ParticipantAgeReportTest extends TestCase
             'distanceCategory' => '5km', 'referenceNumber' => '0', 'address' => 'Test address',
             'contactNumber' => '09123456789', 'created_by' => 'opencategory',
         ], $attributes));
+    }
+
+    private function finisher(Participant $participant, string $finishTime, string $raceBib): Finisher
+    {
+        return Finisher::create([
+            'participants_id' => $participant->getKey(),
+            'firstName' => $participant->firstName,
+            'lastName' => $participant->lastName,
+            'middleInitial' => $participant->middleInitial,
+            'categoryDescription' => $participant->categoryDescription,
+            'subDescription' => $participant->subDescription,
+            'gender' => $participant->gender,
+            'birthDate' => $participant->birthDate,
+            'distanceCategory' => $participant->distanceCategory,
+            'racebib' => $raceBib,
+            'finish_time' => $finishTime,
+            'created_by' => 'test-recorder',
+        ]);
     }
 }

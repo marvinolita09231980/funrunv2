@@ -34,6 +34,45 @@ class Finisher extends Model
     {
         return $this->belongsTo(Award::class);
     }
+
+    public static function awardHolder(mixed $awardId, ?int $exceptFinisherId = null): ?self
+    {
+        if (blank($awardId)) {
+            return null;
+        }
+
+        return self::query()
+            ->where('award_id', $awardId)
+            ->when(
+                $exceptFinisherId,
+                fn ($query): mixed => $query->whereKeyNot($exceptFinisherId),
+            )
+            ->orderBy('id')
+            ->first();
+    }
+
+    public function getRunnerNameAttribute(): string
+    {
+        return collect([
+            $this->firstName,
+            filled($this->middleInitial)
+                ? rtrim((string) $this->middleInitial, '.').'.'
+                : null,
+            $this->lastName,
+        ])->filter()->join(' ');
+    }
+
+    public static function raceBibPrefixForDistance(?string $distance): ?string
+    {
+        $normalized = strtolower((string) preg_replace('/\s+/', '', trim((string) $distance)));
+
+        return match ($normalized) {
+            '3k', '3km' => '3',
+            '5k', '5km' => '5',
+            '10k', '10km' => '1',
+            default => null,
+        };
+    }
      
     public function getRankAttribute()
     {

@@ -7,6 +7,7 @@ use App\Models\Award;
 use App\Models\Finisher;
 use App\Models\Participant;
 use App\Models\User;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -34,6 +35,57 @@ class FinisherAwardTest extends TestCase
             'Youngest Male 10K Winner',
             'Youngest Male 5K Winner',
         ], Award::query()->orderBy('name')->pluck('name')->all());
+
+        $this->assertSame(
+            4,
+            Award::query()
+                ->where('category', Award::CATEGORY_TOP_FINISHERS)
+                ->count(),
+        );
+        $this->assertSame(
+            8,
+            Award::query()
+                ->where('category', Award::CATEGORY_SPECIAL_AWARDS)
+                ->count(),
+        );
+        $this->assertSame(
+            6,
+            Award::query()
+                ->where('distance_category', Award::DISTANCE_5KM)
+                ->count(),
+        );
+        $this->assertSame(
+            6,
+            Award::query()
+                ->where('distance_category', Award::DISTANCE_10KM)
+                ->count(),
+        );
+    }
+
+    public function test_awards_are_grouped_by_category_for_finisher_recording(): void
+    {
+        $options = Award::groupedOptions();
+
+        $this->assertSame([
+            Award::CATEGORY_TOP_FINISHERS,
+            Award::CATEGORY_SPECIAL_AWARDS,
+        ], array_keys($options));
+        $this->assertContains('5K Finisher Male', $options[Award::CATEGORY_TOP_FINISHERS]);
+        $this->assertContains('Youngest Female 5K Winner', $options[Award::CATEGORY_SPECIAL_AWARDS]);
+
+        $fiveKilometerOptions = collect(Award::groupedOptions(
+            distanceCategory: '5km',
+        ))->flatten()->all();
+
+        $this->assertContains('5K Finisher Male', $fiveKilometerOptions);
+        $this->assertNotContains('10K Finisher Male', $fiveKilometerOptions);
+    }
+
+    public function test_race_bib_prefixes_follow_the_registered_distance(): void
+    {
+        $this->assertSame('3', Finisher::raceBibPrefixForDistance('3km'));
+        $this->assertSame('5', Finisher::raceBibPrefixForDistance('5Km'));
+        $this->assertSame('1', Finisher::raceBibPrefixForDistance('10K'));
     }
 
     public function test_active_award_can_be_selected_when_recording_a_finisher(): void
@@ -61,15 +113,63 @@ class FinisherAwardTest extends TestCase
 
         $award = Award::query()->create([
             'name' => 'Champion',
+            'category' => Award::CATEGORY_TOP_FINISHERS,
+            'distance_category' => Award::DISTANCE_5KM,
+            'is_active' => true,
+        ]);
+        $wrongDistanceAward = Award::query()->create([
+            'name' => '10Km Champion',
+            'category' => Award::CATEGORY_TOP_FINISHERS,
+            'distance_category' => Award::DISTANCE_10KM,
             'is_active' => true,
         ]);
         $participant = $this->participant();
 
-        Livewire::test(CreateFinisher::class)
+        $component = Livewire::test(CreateFinisher::class)
             ->filterTable('runner_name', ['last_name' => 'Runner'])
-            ->mountTableAction('recordRunner', $participant)
+            ->assertTableActionExists(
+                'recordRunner',
+                fn (Action $action): bool => ! $action->isModalClosedByClickingAway(),
+                $participant,
+            )
+            ->mountTableAction('recordRunner', $participant);
+
+        $component->assertTableActionDataSet([
+            'racebib' => '5',
+        ]);
+
+        $component
             ->setTableActionData([
                 'racebib' => '5001',
+                'award_id' => $award->getKey(),
+                'finish_time' => '01:02:03',
+            ])
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors(['racebib']);
+
+        $component
+            ->setTableActionData([
+                'racebib' => '10001',
+                'award_id' => $award->getKey(),
+                'finish_time' => '01:02:03',
+            ])
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors(['racebib']);
+
+        $component
+            ->setTableActionData([
+                'racebib' => '50001',
+                'award_id' => $wrongDistanceAward->getKey(),
+                'finish_time' => '01:02:03',
+            ])
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors(['award_id']);
+
+        $this->assertDatabaseCount('finishers', 0);
+
+        $component
+            ->setTableActionData([
+                'racebib' => '50001',
                 'award_id' => $award->getKey(),
                 'finish_time' => '01:02:03',
             ])
@@ -81,6 +181,41 @@ class FinisherAwardTest extends TestCase
         $this->assertSame($award->getKey(), $finisher->award_id);
         $this->assertTrue($finisher->award->is($award));
         $this->assertSame('Champion', $finisher->award->name);
+
+        $secondParticipant = $this->participant([
+            'participantNumber' => '2',
+            'firstName' => 'Second',
+            'lastName' => 'Runner',
+        ]);
+
+        $transferComponent = Livewire::test(CreateFinisher::class)
+            ->filterTable('runner_name', ['last_name' => 'Runner'])
+            ->mountTableAction('recordRunner', $secondParticipant)
+            ->setTableActionData([
+                'racebib' => '50003',
+                'award_id' => $award->getKey(),
+                'finish_time' => '01:03:00',
+            ])
+            ->assertSet('mountedActions.0.data.award_id', $award->getKey())
+            ->assertSet('mountedActions.0.data.reassign_award', false)
+            ->assertNotified('Award has a current winner')
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors(['award_id']);
+
+        $this->assertDatabaseCount('finishers', 1);
+        $this->assertSame($finisher->getKey(), Finisher::awardHolder($award->getKey())?->getKey());
+
+        $transferComponent
+            ->set('mountedActions.0.data.reassign_award', true)
+            ->callMountedTableAction()
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseCount('finishers', 2);
+        $this->assertNull($finisher->refresh()->award_id);
+        $this->assertSame(
+            $secondParticipant->getKey(),
+            Finisher::awardHolder($award->getKey())?->participants_id,
+        );
     }
 
     public function test_used_award_retains_its_finisher_relationship(): void
@@ -99,7 +234,7 @@ class FinisherAwardTest extends TestCase
             'gender' => $participant->gender,
             'birthDate' => $participant->birthDate,
             'distanceCategory' => $participant->distanceCategory,
-            'racebib' => '5002',
+            'racebib' => '50002',
             'finish_time' => now(),
             'award_id' => $award->getKey(),
             'created_by' => 'test-recorder',
@@ -109,9 +244,9 @@ class FinisherAwardTest extends TestCase
         $this->assertSame('Top Finisher', $finisher->award->name);
     }
 
-    private function participant(): Participant
+    private function participant(array $attributes = []): Participant
     {
-        return Participant::query()->create([
+        return Participant::query()->create(array_merge([
             'year' => now()->year,
             'participantNumber' => '1',
             'firstName' => 'Awarded',
@@ -128,6 +263,6 @@ class FinisherAwardTest extends TestCase
             'address' => 'Test address',
             'contactNumber' => '09123456789',
             'created_by' => 'opencategory',
-        ]);
+        ], $attributes));
     }
 }

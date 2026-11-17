@@ -40,4 +40,9 @@ class ParticipantReportExclusion extends Model
     {
         return "group.{$type}";
     }
+
+    public static function finisherKey(string $type, string $gender): string
+    {
+        return "finisher.{$type}.{$gender}";
+    }
 }

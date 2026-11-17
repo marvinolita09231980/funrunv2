@@ -301,6 +301,32 @@
             </div>
         </x-filament::section>
 
+        <x-filament::section heading="Top 10 PADAC & RPWUDS Finishers" description="Recorded finishers for the selected year, ranked by earliest finish time and separated into Male and Female reports.">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem;">
+                @foreach (['padac' => 'PADAC', 'rpwuds' => 'RPWUDS'] as $type => $typeLabel)
+                    @foreach (['male' => 'Male', 'female' => 'Female'] as $gender => $genderLabel)
+                        <div style="padding: 1.25rem; border: 1px solid #9ca3af55; border-radius: 0.75rem; display: grid; gap: 1rem;">
+                            <div>
+                                <h3 style="font-weight: 600;">{{ $typeLabel }} · {{ $genderLabel }}</h3>
+                                <p style="font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem;">Top 10 recorded finishers</p>
+                            </div>
+                            <x-filament::button
+                                type="button"
+                                wire:click="openFinisherReportPreview('{{ $type }}', '{{ $gender }}')"
+                                wire:loading.attr="disabled"
+                                wire:target="openFinisherReportPreview"
+                                color="gray"
+                                outlined
+                                icon="heroicon-o-eye"
+                            >
+                                Preview Report
+                            </x-filament::button>
+                        </div>
+                    @endforeach
+                @endforeach
+            </div>
+        </x-filament::section>
+
         @foreach (['oldest' => 'Oldest', 'youngest' => 'Youngest'] as $ranking => $label)
             <x-filament::section :heading="'Top 10 '.$label.' Participants'" :description="'Individual PDF reports for '.$selectedYear.'.'">
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem;">
@@ -430,6 +456,61 @@
                     @empty
                         <div>No age-report sections are available.</div>
                     @endforelse
+                @elseif ($previewReportType === 'finisher')
+                    <section class="participant-report-preview-section">
+                        <h3 class="participant-report-preview-heading">
+                            {{ $reportPreview['title'] ?? 'Top 10 Finishers' }} · {{ count($reportPreview['finishers'] ?? []) }} finisher(s)
+                        </h3>
+                        <div class="participant-report-preview-table-wrap">
+                            <table class="participant-report-preview-table">
+                                <thead>
+                                    <tr>
+                                        <th>Rank</th>
+                                        <th>Race Bib</th>
+                                        <th>Finisher</th>
+                                        <th>Gender</th>
+                                        <th>Distance</th>
+                                        <th>Finish Time</th>
+                                        <th>Category</th>
+                                        <th>Subcategory</th>
+                                        <th class="action-column">DQ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse ($reportPreview['finishers'] ?? [] as $finisher)
+                                        <tr wire:key="finisher-preview-{{ $reportPreview['type'] }}-{{ $reportPreview['gender'] }}-{{ $finisher['participant_id'] }}">
+                                            <td data-label="Rank">{{ $finisher['rank'] }}</td>
+                                            <td data-label="Race Bib">{{ $finisher['race_bib'] }}</td>
+                                            <td data-label="Finisher">{{ $finisher['name'] }}</td>
+                                            <td data-label="Gender">{{ $finisher['gender'] }}</td>
+                                            <td data-label="Distance">{{ $finisher['distance'] }}</td>
+                                            <td data-label="Finish Time">{{ $finisher['finish_time'] }}</td>
+                                            <td data-label="Category">{{ $finisher['category'] }}</td>
+                                            <td data-label="Subcategory">{{ $finisher['subcategory'] }}</td>
+                                            <td class="action-column" data-label="DQ">
+                                                <x-filament::button
+                                                    type="button"
+                                                    size="xs"
+                                                    color="danger"
+                                                    outlined
+                                                    icon="heroicon-m-x-mark"
+                                                    aria-label="Mark {{ $finisher['name'] }} as DQ"
+                                                    wire:click="excludeFinisherPreviewParticipant({{ $finisher['participant_id'] }}, '{{ $reportPreview['type'] }}', '{{ $reportPreview['gender'] }}')"
+                                                    wire:confirm="Mark {{ $finisher['name'] }} as DQ for this report?"
+                                                    wire:loading.attr="disabled"
+                                                    wire:target="excludeFinisherPreviewParticipant"
+                                                >
+                                                    <span aria-hidden="true" style="display: block; width: 0; height: 0; overflow: hidden;">&nbsp;</span>
+                                                </x-filament::button>
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr class="empty-row"><td colspan="9">No eligible finishers are recorded for this report.</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
                 @elseif ($previewReportType === 'group')
                     <section class="participant-report-preview-section">
                         <h3 class="participant-report-preview-heading">
