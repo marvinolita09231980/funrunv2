@@ -409,8 +409,20 @@ class FeedbackForm extends Page implements HasSchemas
             'standAlone' => 'true',
             'output' => 'pdf',
             'name' => $fullName,
-            'distance' => Participant::distanceLabel($participant->distanceCategory),
+            'distance' => self::certificateDistanceLabel($participant->distanceCategory),
         ], '', '&', PHP_QUERY_RFC3986);
+    }
+
+    private static function certificateDistanceLabel(?string $distance): string
+    {
+        $normalized = strtolower((string) preg_replace('/\s+/', '', trim((string) $distance)));
+
+        return match ($normalized) {
+            '3k', '3km' => '3K',
+            '5k', '5km' => '5K',
+            '10k', '10km' => '10K',
+            default => '',
+        };
     }
 
     public static function findParticipant(callable $get, callable $set): bool

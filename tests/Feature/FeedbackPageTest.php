@@ -147,11 +147,19 @@ class FeedbackPageTest extends TestCase
             ->assertSet('data.feedback_exists', true)
             ->set('data.distanceCategory', '5km');
 
-        $certificateUrl = $component->instance()->certificateUrl();
-        parse_str((string) parse_url((string) $certificateUrl, PHP_URL_QUERY), $parameters);
+        foreach ([
+            '3km' => '3K',
+            '5km' => '5K',
+            '10km' => '10K',
+        ] as $storedDistance => $certificateDistance) {
+            $participant->update(['distanceCategory' => $storedDistance]);
 
-        $this->assertSame('Feedback Q. Runner', $parameters['name'] ?? null);
-        $this->assertSame('10KM', $parameters['distance'] ?? null);
+            $certificateUrl = $component->instance()->certificateUrl();
+            parse_str((string) parse_url((string) $certificateUrl, PHP_URL_QUERY), $parameters);
+
+            $this->assertSame('Feedback Q. Runner', $parameters['name'] ?? null);
+            $this->assertSame($certificateDistance, $parameters['distance'] ?? null);
+        }
     }
 
     public function test_existing_feedback_can_be_validated_separately_for_certificate_download(): void
@@ -172,7 +180,7 @@ class FeedbackPageTest extends TestCase
         parse_str((string) parse_url((string) $certificateUrl, PHP_URL_QUERY), $parameters);
 
         $this->assertSame('Feedback Runner', $parameters['name'] ?? null);
-        $this->assertSame('5KM', $parameters['distance'] ?? null);
+        $this->assertSame('5K', $parameters['distance'] ?? null);
     }
 
     public function test_certificate_lookup_rejects_feedback_from_a_previous_year(): void
