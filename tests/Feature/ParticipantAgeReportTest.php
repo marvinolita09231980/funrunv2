@@ -82,6 +82,71 @@ class ParticipantAgeReportTest extends TestCase
         $this->assertStringContainsString('09123456789', $html);
     }
 
+    public function test_integrated_reports_rank_male_and_female_together_across_all_categories(): void
+    {
+        $admin = $this->user('admin');
+
+        for ($index = 0; $index < 6; $index++) {
+            $this->participant([
+                'firstName' => "Male{$index}",
+                'gender' => 'male',
+                'categoryDescription' => 'CATEGORY A',
+                'distanceCategory' => '5km',
+                'birthDate' => (1960 + $index).'-01-01',
+            ]);
+            $this->participant([
+                'firstName' => "Female{$index}",
+                'gender' => 'female',
+                'categoryDescription' => 'CATEGORY B',
+                'distanceCategory' => '5km',
+                'birthDate' => (1970 + $index).'-01-01',
+            ]);
+        }
+
+        $integrated = ParticipantAgeReport::build(
+            $admin,
+            now()->year,
+            'oldest',
+            'integrated',
+            '5km',
+        );
+
+        $this->assertCount(1, $integrated['sections']);
+        $this->assertSame('integrated', $integrated['sections'][0]['gender']);
+        $this->assertSame('Top 10 Oldest Male & Female — 5K', $integrated['sections'][0]['title']);
+        $this->assertCount(10, $integrated['sections'][0]['participants']);
+        $this->assertSame(
+            ['CATEGORY A', 'CATEGORY B'],
+            collect($integrated['sections'][0]['participants'])
+                ->pluck('category')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all(),
+        );
+        $this->assertSame(
+            ['Female', 'Male'],
+            collect($integrated['sections'][0]['participants'])
+                ->pluck('gender')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all(),
+        );
+
+        $allIntegrated = ParticipantAgeReport::build(
+            $admin,
+            now()->year,
+            gender: 'integrated',
+        );
+
+        $this->assertCount(4, $allIntegrated['sections']);
+        $this->assertSame(
+            ['integrated'],
+            collect($allIntegrated['sections'])->pluck('gender')->unique()->values()->all(),
+        );
+    }
+
     public function test_ao_reports_include_all_categories_and_direct_registrations(): void
     {
         $officer = $this->user('administrative officer');
@@ -118,7 +183,10 @@ class ParticipantAgeReportTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         $this->actingAs($this->user('superadmin'));
         Livewire::test(ParticipantReports::class)
-            ->assertSee('View All 8 Reports')
+            ->assertSet('genderGrouping', 'separate')
+            ->assertSee('Separate Male and Female')
+            ->assertSee('Integrated Male and Female')
+            ->assertSee('View All 8 Separate Reports')
             ->assertSee('Preview Report')
             ->assertSee('Preview Couple Report')
             ->assertDontSee('Manage Exclusions')
@@ -138,6 +206,7 @@ class ParticipantAgeReportTest extends TestCase
         $ageReports = [
             ['ranking' => 'all'],
             ['ranking' => 'oldest', 'gender' => 'female', 'distance' => '10km'],
+            ['ranking' => 'youngest', 'gender' => 'integrated', 'distance' => '5km'],
         ];
 
         foreach ($ageReports as $parameters) {
@@ -198,6 +267,25 @@ class ParticipantAgeReportTest extends TestCase
             ->assertDispatched('open-modal', id: 'participant-report-pdf-preview')
             ->call('downloadPreview')
             ->assertFileDownloaded("family-runners-{$year}.pdf");
+    }
+
+    public function test_user_can_preview_and_download_integrated_gender_reports(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($this->user('superadmin'));
+
+        $year = now()->year;
+
+        Livewire::test(ParticipantReports::class)
+            ->set('genderGrouping', 'integrated')
+            ->assertSee('View All 4 Integrated Reports')
+            ->call('openSelectedAgeReportPreview')
+            ->assertSet('previewReportType', 'age')
+            ->assertSet('previewReportParameters.gender', 'integrated')
+            ->assertSet('previewTitle', "All 4 Integrated Participant Age Reports · {$year}")
+            ->assertDispatched('open-modal', id: 'participant-report-pdf-preview')
+            ->call('downloadPreview')
+            ->assertFileDownloaded("top-10-all-integrated-{$year}.pdf");
     }
 
     public function test_participants_can_be_excluded_directly_from_the_interactive_preview(): void
@@ -263,6 +351,54 @@ class ParticipantAgeReportTest extends TestCase
             'year' => now()->year,
             'report_key' => ParticipantReportExclusion::groupKey('couple'),
             'excluded_by' => $superadmin->getKey(),
+        ]);
+    }
+
+    public function test_integrated_report_dq_is_independent_and_promotes_the_next_runner(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $superadmin = $this->user('superadmin');
+        $this->actingAs($superadmin);
+
+        $participants = collect();
+
+        for ($index = 0; $index < 11; $index++) {
+            $participants->push($this->participant([
+                'firstName' => "Integrated{$index}",
+                'gender' => $index % 2 === 0 ? 'male' : 'female',
+                'distanceCategory' => '5km',
+                'birthDate' => (1960 + $index).'-01-01',
+            ]));
+        }
+
+        $page = Livewire::test(ParticipantReports::class)
+            ->call('openAgeReportPreview', 'oldest', 'integrated', '5km')
+            ->call(
+                'excludePreviewParticipant',
+                $participants[0]->getKey(),
+                'oldest',
+                'integrated',
+                '5km',
+            )
+            ->assertHasNoErrors();
+
+        $names = array_column(
+            $page->instance()->previewReport()['sections'][0]['participants'],
+            'name',
+        );
+
+        $this->assertCount(10, $names);
+        $this->assertNotContains('Integrated0 Runner', $names);
+        $this->assertContains('Integrated10 Runner', $names);
+        $this->assertDatabaseHas('participant_report_exclusions', [
+            'participant_id' => $participants[0]->getKey(),
+            'year' => now()->year,
+            'report_key' => ParticipantReportExclusion::ageKey('oldest', 'integrated', '5km'),
+        ]);
+        $this->assertDatabaseMissing('participant_report_exclusions', [
+            'participant_id' => $participants[0]->getKey(),
+            'year' => now()->year,
+            'report_key' => ParticipantReportExclusion::ageKey('oldest', 'male', '5km'),
         ]);
     }
 

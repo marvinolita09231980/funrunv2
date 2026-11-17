@@ -18,7 +18,7 @@ class ParticipantReportPdfController extends Controller
         $validated = validator($request->query(), [
             'year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'ranking' => ['required', Rule::in(['all', 'oldest', 'youngest'])],
-            'gender' => ['nullable', Rule::in(['male', 'female'])],
+            'gender' => ['nullable', Rule::in(['male', 'female', 'integrated'])],
             'distance' => ['nullable', Rule::in(['5km', '10km'])],
         ])->validate();
 

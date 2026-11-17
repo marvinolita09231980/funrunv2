@@ -36,6 +36,8 @@ class ParticipantReports extends Page
 
     public int $selectedYear;
 
+    public string $genderGrouping = 'separate';
+
     public ?string $previewUrl = null;
 
     public string $previewTitle = 'Participant Report Preview';
@@ -69,7 +71,7 @@ class ParticipantReports extends Page
         validator(['year' => $this->selectedYear, 'ranking' => $ranking, 'gender' => $gender, 'distance' => $distance], [
             'year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'ranking' => ['required', Rule::in(['all', 'oldest', 'youngest'])],
-            'gender' => ['nullable', Rule::in(['male', 'female'])],
+            'gender' => ['nullable', Rule::in(['male', 'female', 'integrated'])],
             'distance' => ['nullable', Rule::in(['5km', '10km'])],
         ])->validate();
 
@@ -120,7 +122,7 @@ class ParticipantReports extends Page
         ], [
             'year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'ranking' => ['required', Rule::in(['all', 'oldest', 'youngest'])],
-            'gender' => ['nullable', Rule::in(['male', 'female'])],
+            'gender' => ['nullable', Rule::in(['male', 'female', 'integrated'])],
             'distance' => ['nullable', Rule::in(['5km', '10km'])],
         ])->validate();
 
@@ -139,6 +141,17 @@ class ParticipantReports extends Page
         );
 
         $this->dispatch('open-modal', id: 'participant-report-pdf-preview');
+    }
+
+    public function openSelectedAgeReportPreview(): void
+    {
+        validator(['genderGrouping' => $this->genderGrouping], [
+            'genderGrouping' => ['required', Rule::in(['separate', 'integrated'])],
+        ])->validate();
+
+        $this->openAgeReportPreview(
+            gender: $this->genderGrouping === 'integrated' ? 'integrated' : null,
+        );
     }
 
     public function openRunnerListPreview(string $type): void
@@ -206,7 +219,7 @@ class ParticipantReports extends Page
             ], [
                 'year' => ['required', 'integer', 'min:2000', 'max:2100'],
                 'ranking' => ['required', Rule::in(['oldest', 'youngest'])],
-                'gender' => ['required', Rule::in(['male', 'female'])],
+                'gender' => ['required', Rule::in(['male', 'female', 'integrated'])],
                 'distance' => ['required', Rule::in(['5km', '10km'])],
             ])->validate();
 
@@ -313,6 +326,11 @@ class ParticipantReports extends Page
                             && CarbonImmutable::parse($participant->birthDate)->lessThanOrEqualTo($asOf)
                                 ? (int) CarbonImmutable::parse($participant->birthDate)->diffInYears($asOf)
                                 : 'Not recorded',
+                        'gender' => match (strtolower(trim((string) $participant->gender))) {
+                            'm', 'male' => 'Male',
+                            'f', 'female' => 'Female',
+                            default => ucfirst(trim((string) $participant->gender)),
+                        },
                         'phone_number' => $participant->contactNumber ?: 'Not provided',
                         'category' => $participant->categoryDescription,
                         'subcategory' => $participant->subDescription ?: 'No subcategory',
@@ -401,7 +419,7 @@ class ParticipantReports extends Page
         $parameters = validator($this->previewReportParameters, [
             'year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'ranking' => ['required', Rule::in(['all', 'oldest', 'youngest'])],
-            'gender' => ['nullable', Rule::in(['male', 'female'])],
+            'gender' => ['nullable', Rule::in(['male', 'female', 'integrated'])],
             'distance' => ['nullable', Rule::in(['5km', '10km'])],
         ])->validate();
 
@@ -436,12 +454,16 @@ class ParticipantReports extends Page
         int $year,
     ): string {
         if ($ranking === 'all') {
-            return "All 8 Participant Age Reports · {$year}";
+            return $gender === 'integrated'
+                ? "All 4 Integrated Participant Age Reports · {$year}"
+                : "All 8 Separate Participant Age Reports · {$year}";
         }
 
         return collect([
             'Top 10 '.ucfirst($ranking),
-            $gender ? ucfirst($gender) : null,
+            $gender === 'integrated'
+                ? 'Male & Female'
+                : ($gender ? ucfirst($gender) : null),
             $distance ? strtoupper(str_replace('km', 'K', $distance)) : null,
             (string) $year,
         ])->filter()->join(' · ');
@@ -474,14 +496,14 @@ class ParticipantReports extends Page
             foreach ($genders as $gender) {
                 foreach ($distances as $distance) {
                     if (! in_array($ranking, ['oldest', 'youngest'], true)
-                        || ! in_array($gender, ['male', 'female'], true)
+                        || ! in_array($gender, ['male', 'female', 'integrated'], true)
                         || ! in_array($distance, ['5km', '10km'], true)) {
                         continue;
                     }
 
                     $definitions[ParticipantReportExclusion::ageKey($ranking, $gender, $distance)] = collect([
                         'Top 10 '.ucfirst($ranking),
-                        ucfirst($gender),
+                        $gender === 'integrated' ? 'Male & Female' : ucfirst($gender),
                         strtoupper(str_replace('km', 'K', $distance)),
                     ])->join(' · ');
                 }

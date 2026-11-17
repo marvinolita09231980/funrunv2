@@ -49,6 +49,11 @@ class FeedbackPageTest extends TestCase
             'Feedback Form - PADAC Furn Run 2026',
             $browserTitle,
         );
+
+        $response->assertSee('Already submitted?');
+        $response->assertSee('Download certificate');
+        $response->assertSee('flex-wrap: nowrap', false);
+        $response->assertSee('flex: 0 0 1rem', false);
     }
 
     public function test_feedback_requires_a_participant_registered_in_the_current_year(): void
@@ -127,6 +132,62 @@ class FeedbackPageTest extends TestCase
             'firstName' => $participant->firstName,
             'lastName' => $participant->lastName,
         ]);
+    }
+
+    public function test_certificate_uses_the_validated_current_year_participants_distance(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('feedback'));
+        $participant = $this->participant([
+            'middleInitial' => 'Q',
+            'distanceCategory' => '10km',
+        ]);
+        $this->feedback($participant);
+
+        $component = $this->feedbackComponent($participant)
+            ->assertSet('data.feedback_exists', true)
+            ->set('data.distanceCategory', '5km');
+
+        $certificateUrl = $component->instance()->certificateUrl();
+        parse_str((string) parse_url((string) $certificateUrl, PHP_URL_QUERY), $parameters);
+
+        $this->assertSame('Feedback Q. Runner', $parameters['name'] ?? null);
+        $this->assertSame('10KM', $parameters['distance'] ?? null);
+    }
+
+    public function test_existing_feedback_can_be_validated_separately_for_certificate_download(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('feedback'));
+        $participant = $this->participant(['distanceCategory' => '5km']);
+        $this->feedback($participant);
+
+        $component = Livewire::test(FeedbackForm::class)
+            ->set('certificateLookup.firstName', $participant->firstName)
+            ->set('certificateLookup.lastName', $participant->lastName)
+            ->set('certificateLookup.birthDate', '1990-01-01')
+            ->call('findCertificate')
+            ->assertHasNoErrors()
+            ->assertSet('certificateParticipantId', $participant->getKey());
+
+        $certificateUrl = $component->instance()->certificateLookupUrl();
+        parse_str((string) parse_url((string) $certificateUrl, PHP_URL_QUERY), $parameters);
+
+        $this->assertSame('Feedback Runner', $parameters['name'] ?? null);
+        $this->assertSame('5KM', $parameters['distance'] ?? null);
+    }
+
+    public function test_certificate_lookup_rejects_feedback_from_a_previous_year(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('feedback'));
+        $participant = $this->participant();
+        $this->feedback($participant, ['year' => $this->currentYear() - 1]);
+
+        Livewire::test(FeedbackForm::class)
+            ->set('certificateLookup.firstName', $participant->firstName)
+            ->set('certificateLookup.lastName', $participant->lastName)
+            ->set('certificateLookup.birthDate', '1990-01-01')
+            ->call('findCertificate')
+            ->assertHasErrors(['certificateLookup.feedback'])
+            ->assertSet('certificateParticipantId', null);
     }
 
     private function feedbackComponent(Participant $participant)

@@ -19,6 +19,7 @@ use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Locked;
 use Throwable;
 
 class FeedbackForm extends Page implements HasSchemas
@@ -26,6 +27,16 @@ class FeedbackForm extends Page implements HasSchemas
     use InteractsWithSchemas;
 
     public ?array $data = [];
+
+    public array $certificateLookup = [
+        'firstName' => '',
+        'lastName' => '',
+        'birthDate' => '',
+    ];
+
+    #[Locked]
+    public ?int $certificateParticipantId = null;
+
     public ?string $errorMessage = null;
 
     protected string $view = 'filament.feedback.pages.feedback-form';
@@ -250,6 +261,156 @@ class FeedbackForm extends Page implements HasSchemas
                 errorMessage: $this->errorMessage,
             );
         }
+    }
+
+    public function certificateUrl(): ?string
+    {
+        if (! (bool) ($this->data['feedback_exists'] ?? false)) {
+            return null;
+        }
+
+        $year = self::currentEventYear();
+        $firstName = trim((string) ($this->data['firstName'] ?? ''));
+        $lastName = trim((string) ($this->data['lastName'] ?? ''));
+        $birthDate = self::normalizeBirthDate($this->data['birthDate'] ?? null);
+
+        if ($firstName === '' || $lastName === '' || ! $birthDate) {
+            return null;
+        }
+
+        $participant = Participant::query()
+            ->where('year', $year)
+            ->where('firstName', $firstName)
+            ->where('lastName', $lastName)
+            ->whereDate('birthDate', $birthDate)
+            ->first();
+
+        if (! $participant || ! self::feedbackForParticipant($participant, $year)) {
+            return null;
+        }
+
+        return self::certificateUrlForParticipant($participant);
+    }
+
+    public function openCertificateLookup(): void
+    {
+        $this->certificateLookup = [
+            'firstName' => '',
+            'lastName' => '',
+            'birthDate' => '',
+        ];
+        $this->certificateParticipantId = null;
+        $this->resetErrorBag([
+            'certificateLookup.firstName',
+            'certificateLookup.lastName',
+            'certificateLookup.birthDate',
+            'certificateLookup.feedback',
+        ]);
+        $this->dispatch('open-modal', id: 'certificate-lookup');
+    }
+
+    public function findCertificate(): void
+    {
+        $this->certificateParticipantId = null;
+        $this->resetErrorBag([
+            'certificateLookup.firstName',
+            'certificateLookup.lastName',
+            'certificateLookup.birthDate',
+            'certificateLookup.feedback',
+        ]);
+
+        $validated = $this->validate([
+            'certificateLookup.firstName' => ['required', 'string', 'max:255'],
+            'certificateLookup.lastName' => ['required', 'string', 'max:255'],
+            'certificateLookup.birthDate' => ['required', 'date', 'before_or_equal:today'],
+        ], [
+            'certificateLookup.firstName.required' => 'Enter your first name.',
+            'certificateLookup.lastName.required' => 'Enter your last name.',
+            'certificateLookup.birthDate.required' => 'Enter your birth date.',
+            'certificateLookup.birthDate.before_or_equal' => 'Birth date cannot be in the future.',
+        ]);
+
+        $year = self::currentEventYear();
+        $firstName = trim($validated['certificateLookup']['firstName']);
+        $lastName = trim($validated['certificateLookup']['lastName']);
+        $birthDate = self::normalizeBirthDate($validated['certificateLookup']['birthDate']);
+
+        $participant = $birthDate
+            ? Participant::query()
+                ->where('year', $year)
+                ->where('firstName', $firstName)
+                ->where('lastName', $lastName)
+                ->whereDate('birthDate', $birthDate)
+                ->first()
+            : null;
+
+        if (! $participant || ! self::feedbackForParticipant($participant, $year)) {
+            $this->addError(
+                'certificateLookup.feedback',
+                "No {$year} feedback submission matches these details.",
+            );
+
+            return;
+        }
+
+        $this->certificateParticipantId = (int) $participant->getKey();
+    }
+
+    public function certificateLookupUrl(): ?string
+    {
+        $participant = $this->validatedCertificateLookupParticipant();
+
+        return $participant
+            ? self::certificateUrlForParticipant($participant)
+            : null;
+    }
+
+    private function validatedCertificateLookupParticipant(): ?Participant
+    {
+        $firstName = trim((string) ($this->certificateLookup['firstName'] ?? ''));
+        $lastName = trim((string) ($this->certificateLookup['lastName'] ?? ''));
+        $birthDate = self::normalizeBirthDate($this->certificateLookup['birthDate'] ?? null);
+        $year = self::currentEventYear();
+
+        if (! $this->certificateParticipantId || $firstName === '' || $lastName === '' || ! $birthDate) {
+            return null;
+        }
+
+        $participant = Participant::query()
+            ->whereKey($this->certificateParticipantId)
+            ->where('year', $year)
+            ->where('firstName', $firstName)
+            ->where('lastName', $lastName)
+            ->whereDate('birthDate', $birthDate)
+            ->first();
+
+        if (! $participant || ! self::feedbackForParticipant($participant, $year)) {
+            return null;
+        }
+
+        return $participant;
+    }
+
+    private static function certificateUrlForParticipant(Participant $participant): string
+    {
+        $fullName = collect([
+            $participant->firstName,
+            filled($participant->middleInitial)
+                ? rtrim((string) $participant->middleInitial, '.').'.'
+                : null,
+            $participant->lastName,
+        ])->filter()->join(' ');
+
+        return 'https://paps.davaodeoro.gov.ph/jasperserver/flow.html?'.http_build_query([
+            'pp' => 'u=Jamshasadid|r=Manager|o=EMEA,Sales|pa1=Sweden',
+            '_flowId' => 'viewReportFlow',
+            'ParentFolderUri' => '/reports/marvin_reports',
+            'reportUnit' => '/reports/marvin_reports/kontrun_certificate',
+            'standAlone' => 'true',
+            'output' => 'pdf',
+            'name' => $fullName,
+            'distance' => Participant::distanceLabel($participant->distanceCategory),
+        ], '', '&', PHP_QUERY_RFC3986);
     }
 
     public static function findParticipant(callable $get, callable $set): bool

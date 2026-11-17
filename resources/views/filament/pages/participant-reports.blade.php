@@ -237,32 +237,48 @@
     </style>
 
     <div style="display: grid; gap: 1.5rem;">
-        <x-filament::section heading="Participant Age Reports" description="Download the top 10 oldest and youngest participants by gender and race distance.">
+        <x-filament::section heading="Participant Age Reports" description="Preview the top 10 oldest and youngest participants using separate or integrated gender rankings.">
             <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; justify-content: space-between;">
-                <label style="display: grid; gap: 0.5rem; min-width: 10rem;">
-                    <span>Registration year</span>
-                    <x-filament::input.wrapper>
-                        <x-filament::input.select wire:model.live="selectedYear" aria-label="Registration year">
-                            @foreach ($this->years() as $year)
-                                <option value="{{ $year }}">{{ $year }}</option>
-                            @endforeach
-                        </x-filament::input.select>
-                    </x-filament::input.wrapper>
-                </label>
+                <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: end;">
+                    <label style="display: grid; gap: 0.5rem; min-width: 10rem;">
+                        <span>Registration year</span>
+                        <x-filament::input.wrapper>
+                            <x-filament::input.select wire:model.live="selectedYear" aria-label="Registration year">
+                                @foreach ($this->years() as $year)
+                                    <option value="{{ $year }}">{{ $year }}</option>
+                                @endforeach
+                            </x-filament::input.select>
+                        </x-filament::input.wrapper>
+                    </label>
+
+                    <label style="display: grid; gap: 0.5rem; min-width: 16rem;">
+                        <span>Gender grouping</span>
+                        <x-filament::input.wrapper>
+                            <x-filament::input.select wire:model.live="genderGrouping" aria-label="Gender grouping">
+                                <option value="separate">Separate Male and Female</option>
+                                <option value="integrated">Integrated Male and Female</option>
+                            </x-filament::input.select>
+                        </x-filament::input.wrapper>
+                    </label>
+                </div>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
                     <x-filament::button
                         type="button"
-                        wire:click="openAgeReportPreview"
+                        wire:click="openSelectedAgeReportPreview"
                         wire:loading.attr="disabled"
-                        wire:target="openAgeReportPreview"
+                        wire:target="openSelectedAgeReportPreview"
                         color="gray"
                         icon="heroicon-o-eye"
                     >
-                        View All 8 Reports
+                        {{ $genderGrouping === 'integrated'
+                            ? 'View All 4 Integrated Reports'
+                            : 'View All 8 Separate Reports' }}
                     </x-filament::button>
                 </div>
             </div>
-            <p style="margin-top: 1rem; font-size: 0.875rem; color: #6b7280;">Rankings use birth dates. Ages are calculated as of today for the current year, or December 31 for other years. Ties are ordered by name. Reports include all categories, regardless of who registered the participants.</p>
+            <p style="margin-top: 1rem; font-size: 0.875rem; color: #6b7280;">
+                Rankings use birth dates. Integrated mode ranks male and female participants together for each race distance. Reports include all categories, regardless of who registered the participants.
+            </p>
         </x-filament::section>
 
         <x-filament::section heading="Couple & Family Runner Lists" description="All categories for the selected year, grouped by registration reference, regardless of who entered the runners.">
@@ -288,7 +304,9 @@
         @foreach (['oldest' => 'Oldest', 'youngest' => 'Youngest'] as $ranking => $label)
             <x-filament::section :heading="'Top 10 '.$label.' Participants'" :description="'Individual PDF reports for '.$selectedYear.'.'">
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem;">
-                    @foreach (['male' => 'Male', 'female' => 'Female'] as $gender => $genderLabel)
+                    @foreach ($genderGrouping === 'integrated'
+                        ? ['integrated' => 'Male & Female']
+                        : ['male' => 'Male', 'female' => 'Female'] as $gender => $genderLabel)
                         @foreach (['5km' => '5K', '10km' => '10K'] as $distance => $distanceLabel)
                             <div style="padding: 1.25rem; border: 1px solid #9ca3af55; border-radius: 0.75rem; display: grid; gap: 1rem;">
                                 <div><h3 style="font-weight: 600;">{{ $genderLabel }} · {{ $distanceLabel }}</h3><p style="font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem;">10 {{ $ranking }} registered participants</p></div>
@@ -367,6 +385,7 @@
                                             <th>Participant</th>
                                             <th>Birth Date</th>
                                             <th>Age</th>
+                                            <th>Gender</th>
                                             <th>Phone Number</th>
                                             <th>Category</th>
                                             <th>Subcategory</th>
@@ -380,6 +399,7 @@
                                                 <td data-label="Participant">{{ $participant['name'] }}</td>
                                                 <td data-label="Birth Date">{{ $participant['birth_date'] }}</td>
                                                 <td data-label="Age">{{ $participant['age'] }}</td>
+                                                <td data-label="Gender">{{ $participant['gender'] }}</td>
                                                 <td data-label="Phone Number">{{ $participant['phone_number'] }}</td>
                                                 <td data-label="Category">{{ $participant['category'] }}</td>
                                                 <td data-label="Subcategory">{{ $participant['subcategory'] }}</td>
@@ -401,7 +421,7 @@
                                                 </td>
                                             </tr>
                                         @empty
-                                            <tr class="empty-row"><td colspan="8">No eligible participants registered in this group.</td></tr>
+                                            <tr class="empty-row"><td colspan="9">No eligible participants registered in this group.</td></tr>
                                         @endforelse
                                     </tbody>
                                 </table>
@@ -485,6 +505,7 @@
                                         <th>Participant</th>
                                         <th>Birth Date</th>
                                         <th>Age</th>
+                                        <th>Gender</th>
                                         <th>Phone Number</th>
                                         <th>Category</th>
                                         <th>Subcategory</th>
@@ -497,6 +518,7 @@
                                             <td data-label="Participant">{{ $participant['name'] }}</td>
                                             <td data-label="Birth Date">{{ $participant['birth_date'] }}</td>
                                             <td data-label="Age">{{ $participant['age'] }}</td>
+                                            <td data-label="Gender">{{ $participant['gender'] }}</td>
                                             <td data-label="Phone Number">{{ $participant['phone_number'] }}</td>
                                             <td data-label="Category">{{ $participant['category'] }}</td>
                                             <td data-label="Subcategory">{{ $participant['subcategory'] }}</td>

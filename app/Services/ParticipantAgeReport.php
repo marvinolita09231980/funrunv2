@@ -22,7 +22,11 @@ class ParticipantAgeReport
                 continue;
             }
 
-            foreach (['male' => 'Male', 'female' => 'Female'] as $sex => $genderLabel) {
+            $genderGroups = $gender === 'integrated'
+                ? ['integrated' => 'Male & Female']
+                : ['male' => 'Male', 'female' => 'Female'];
+
+            foreach ($genderGroups as $sex => $genderLabel) {
                 foreach (['5km' => '5K', '10km' => '10K'] as $race => $distanceLabel) {
                     if (($gender !== null && $gender !== $sex) || ($distance !== null && $distance !== $race)) {
                         continue;
@@ -45,6 +49,11 @@ class ParticipantAgeReport
                             'name' => trim(implode(' ', array_filter([$participant->firstName, $participant->middleInitial, $participant->lastName]))),
                             'birth_date' => CarbonImmutable::parse($participant->birthDate)->format('m/d/Y'),
                             'age' => (int) CarbonImmutable::parse($participant->birthDate)->diffInYears($asOf),
+                            'gender' => match (strtolower(trim((string) $participant->gender))) {
+                                'm', 'male' => 'Male',
+                                'f', 'female' => 'Female',
+                                default => ucfirst(trim((string) $participant->gender)),
+                            },
                             'phone_number' => filled($participant->contactNumber)
                                 ? trim((string) $participant->contactNumber)
                                 : 'Not provided',
@@ -83,9 +92,12 @@ class ParticipantAgeReport
 
         return Participant::query()
             ->where('year', $year)
-            ->whereRaw(
-                'LOWER(TRIM(gender)) IN (?, ?)',
-                [$gender, $gender === 'male' ? 'm' : 'f'],
+            ->when(
+                $gender !== 'integrated',
+                fn (Builder $query): Builder => $query->whereRaw(
+                    'LOWER(TRIM(gender)) IN (?, ?)',
+                    [$gender, $gender === 'male' ? 'm' : 'f'],
+                ),
             )
             ->whereRaw(
                 "REPLACE(LOWER(TRIM(distanceCategory)), ' ', '') IN (?, ?)",

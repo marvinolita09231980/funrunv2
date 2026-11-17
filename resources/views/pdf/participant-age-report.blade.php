@@ -14,7 +14,7 @@
         th { background: #1f2937; color: white; }
         tr:nth-child(even) { background: #f8fafc; }
         tr { page-break-inside: avoid; }
-        .rank { width: 4%; } .name { width: 20%; } .date { width: 10%; } .age { width: 5%; } .phone { width: 13%; } .category { width: 17%; } .subcategory { width: 21%; } .time { width: 10%; }
+        .rank { width: 4%; } .name { width: 18%; } .date { width: 9%; } .age { width: 5%; } .gender { width: 8%; } .phone { width: 12%; } .category { width: 14%; } .subcategory { width: 20%; } .time { width: 10%; }
         .section + .section { page-break-before: always; }
         .note { font-size: 9px; color: #64748b; margin-top: 14px; }
     </style>
@@ -26,12 +26,12 @@
             <div class="meta">Registration year: {{ $report['year'] }} · Age as of: {{ $report['as_of'] }}<br>Coverage: {{ $report['scope'] }}<br>Generated: {{ $report['generated_at'] }}</div>
             <h2>{{ $section['title'] }}</h2>
             <table>
-                <thead><tr><th class="rank">Rank</th><th class="name">Participant</th><th class="date">Birth Date</th><th class="age">Age</th><th class="phone">Phone Number</th><th class="category">Category</th><th class="subcategory">Subcategory</th><th class="time">Time</th></tr></thead>
+                <thead><tr><th class="rank">Rank</th><th class="name">Participant</th><th class="date">Birth Date</th><th class="age">Age</th><th class="gender">Gender</th><th class="phone">Phone Number</th><th class="category">Category</th><th class="subcategory">Subcategory</th><th class="time">Time</th></tr></thead>
                 <tbody>
                     @forelse ($section['participants'] as $participant)
-                        <tr><td>{{ $participant['rank'] }}</td><td>{{ $participant['name'] }}</td><td>{{ $participant['birth_date'] }}</td><td>{{ $participant['age'] }}</td><td>{{ $participant['phone_number'] }}</td><td>{{ $participant['category'] }}</td><td>{{ $participant['subcategory'] }}</td><td></td></tr>
+                        <tr><td>{{ $participant['rank'] }}</td><td>{{ $participant['name'] }}</td><td>{{ $participant['birth_date'] }}</td><td>{{ $participant['age'] }}</td><td>{{ $participant['gender'] }}</td><td>{{ $participant['phone_number'] }}</td><td>{{ $participant['category'] }}</td><td>{{ $participant['subcategory'] }}</td><td></td></tr>
                     @empty
-                        <tr><td colspan="8">No eligible participants registered in this group.</td></tr>
+                        <tr><td colspan="9">No eligible participants registered in this group.</td></tr>
                     @endforelse
                 </tbody>
             </table>
