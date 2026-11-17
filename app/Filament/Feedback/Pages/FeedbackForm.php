@@ -3,21 +3,23 @@
 namespace App\Filament\Feedback\Pages;
 
 use App\Models\Feedback;
-use Filament\Pages\Page;
 use App\Models\Participant;
-use Filament\Schemas\Schema;
-use Filament\Facades\Filament;
+use Carbon\CarbonImmutable;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Notifications\Notification;
 use Filament\Forms\Components\DatePicker;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
 use Filament\Schemas\Components\Fieldset;
-use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Components\Utilities\Get;
-use Illuminate\Validation\ValidationException;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
+use Filament\Schemas\Contracts\HasSchemas;
+use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class FeedbackForm extends Page implements HasSchemas
 {
@@ -36,10 +38,8 @@ class FeedbackForm extends Page implements HasSchemas
     public function mount(): void
     {
         $this->form->fill([
-              'feedback_exists' => false
-         ]);
-
-        $this->form->fill();
+            'feedback_exists' => false,
+        ]);
     }
     
 
@@ -153,120 +153,210 @@ class FeedbackForm extends Page implements HasSchemas
            ])
            ->statePath('data');
     }
-    public function create()
+    public function create(): void
     {
         $this->validate();
-       
-        $notifmessage = "";
+
+        $year = self::currentEventYear();
+        $firstName = trim((string) ($this->data['firstName'] ?? ''));
+        $lastName = trim((string) ($this->data['lastName'] ?? ''));
+        $birthDate = self::normalizeBirthDate($this->data['birthDate'] ?? null);
+
+        if (! $birthDate) {
+            throw ValidationException::withMessages([
+                'data.birthDate' => 'Enter a valid birth date.',
+            ]);
+        }
+
         try {
-            $this->data['year'] = date('Y');
+            DB::transaction(function () use ($year, $firstName, $lastName, $birthDate): void {
+                $participant = Participant::query()
+                    ->where('year', $year)
+                    ->where('firstName', $firstName)
+                    ->where('lastName', $lastName)
+                    ->whereDate('birthDate', $birthDate)
+                    ->lockForUpdate()
+                    ->first();
 
-           $this->data['full_name'] = $this->data['firstName'] . ' ' . $this->data['lastName'];
-           
-            $participant = Participant::where('year', $this->data['year'])
-                ->where('firstName', $this->data['firstName'])
-                ->where('lastName', $this->data['lastName'])
-                ->whereDate('birthDate', $this->data['birthDate'])
-                ->first();
+                if (! $participant) {
+                    throw ValidationException::withMessages([
+                        'data.firstName' => "No {$year} registered participant matches these details.",
+                    ]);
+                }
 
-             $dataToSave = collect($this->data)
-                ->except(['feedback_exists']) // remove unwanted fields
-                ->toArray();
+                if (self::feedbackForParticipant($participant, $year)) {
+                    throw ValidationException::withMessages([
+                        'data.firstName' => "Feedback has already been submitted for this participant in {$year}.",
+                    ]);
+                }
 
-           
+                $dataToSave = collect($this->data)
+                    ->except(['feedback_exists'])
+                    ->merge([
+                        'year' => $year,
+                        'participantNumber' => $participant->participantNumber,
+                        'firstName' => $participant->firstName,
+                        'lastName' => $participant->lastName,
+                        'birthDate' => CarbonImmutable::parse((string) $participant->birthDate)->toDateString(),
+                        'full_name' => trim(collect([
+                            $participant->firstName,
+                            filled($participant->middleInitial)
+                                ? rtrim((string) $participant->middleInitial, '.').'.'
+                                : null,
+                            $participant->lastName,
+                        ])->filter()->join(' ')),
+                    ])
+                    ->toArray();
 
-            if(!$participant)
-            {
-                 throw ValidationException::withMessages([
-                'Not found!' => 'No participant matches the details you entered.',
-                ]);
-            }
-            
-            $feedback = Feedback::where('year', $this->data['year'])
-                ->where('firstName', $this->data['firstName'])
-                ->where('lastName', $this->data['lastName'])
-                ->whereDate('birthDate', $this->data['birthDate'])
-                ->first();
-               
-            
-            if ($feedback) {
-                $feedback->update($dataToSave);
-                $notifmessage = "Record updated successfully.";
-            } else {
-                Feedback::create($dataToSave);
-                $notifmessage =  "Record created successfully.";
-            }
+                Feedback::query()->create($dataToSave);
+            });
+
+            $this->data['year'] = $year;
+            $this->data['feedback_exists'] = true;
+            $this->errorMessage = null;
 
             Notification::make()
                 ->success()
-                ->title('Success Message')
-                ->body($notifmessage)
+                ->title('Feedback submitted')
+                ->body("Your feedback for {$year} has been recorded successfully.")
                 ->send();
+        } catch (ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first()
+                ?? 'The feedback could not be submitted.';
 
-            $participant = Participant::where('year', $this->data['year'])
-                ->where('firstName', $this->data['firstName'])
-                ->where('lastName', $this->data['lastName'])
-                ->whereDate('birthDate', $this->data['birthDate'])
-                ->first();
-              
+            if (str_contains($message, 'already been submitted')) {
+                $this->data['feedback_exists'] = true;
 
+                Notification::make()
+                    ->warning()
+                    ->title('Feedback already submitted')
+                    ->body($message)
+                    ->send();
+            } else {
+                Notification::make()
+                    ->danger()
+                    ->title('Participant not found')
+                    ->body($message)
+                    ->send();
+            }
 
-        } catch (\Throwable $th) {
-            
-            $this->errorMessage = $th->getMessage();
-            $this->dispatch('open-modal', id: 'not-found', errorMessage: $this->errorMessage);
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->errorMessage = 'An unexpected error occurred. Please try again.';
+            $this->dispatch(
+                'open-modal',
+                id: 'not-found',
+                errorMessage: $this->errorMessage,
+            );
         }
     }
 
-    public static function findParticipant(Callable $get, Callable $set):bool
+    public static function findParticipant(callable $get, callable $set): bool
     {
-        $year = date('Y');
-        $first = $get('firstName');
-        $last = $get('lastName');
-        $birth = $get('birthDate');
+        $year = self::currentEventYear();
+        $firstName = trim((string) $get('firstName'));
+        $lastName = trim((string) $get('lastName'));
+        $birthDate = self::normalizeBirthDate($get('birthDate'));
 
-        if (! $first || ! $last || ! $birth) {
+        if ($firstName === '' || $lastName === '' || ! $birthDate) {
+            self::clearExistingFeedbackState($get, $set);
+
             return false;
         }
 
-       
-        $feedback = Feedback::where('year', $year)
-            ->where('firstName', $first)
-            ->where('lastName', $last)
-            ->where('birthDate', $birth)
+        $participant = Participant::query()
+            ->where('year', $year)
+            ->where('firstName', $firstName)
+            ->where('lastName', $lastName)
+            ->whereDate('birthDate', $birthDate)
             ->first();
 
-        if ($feedback) {
-            $set('rate', $feedback->rate);
-            $set('aware_of_funrun', $feedback->aware_of_funrun);
-            $set('aware_of_funrun_other', $feedback->aware_of_funrun_other);
-            $set('inspired', $feedback->inspired);
-            $set('inspired_other', $feedback->inspired_other);
-            $set('raise_awareness', $feedback->raise_awareness);
-            $set('contribute_to_your_understanding', $feedback->contribute_to_your_understanding);
-            $set('encouraged_healthy_lifestyle', $feedback->encouraged_healthy_lifestyle);
-            $set('which_part_enjoy', $feedback->which_part_enjoy);
-            $set('recommendation', $feedback->recommendation);
-            $set('feedback_exists', true);
-        }
-        else{
-             $set('feedback_exists', false);
-        }
-        // else{
-        //     $set('rate', null);
-        //     $set('aware_of_funrun', null);
-        //     $set('aware_of_funrun_other', null);
-        //     $set('inspired', null);
-        //     $set('inspired_other', null);
-        //     $set('raise_awareness', null);
-        //     $set('contribute_to_your_understanding', null);
-        //     $set('encouraged_healthy_lifestyle', null);
-        //     $set('which_part_enjoy', null);
-        //     $set('recommendation', null);
-        //     $set('feedback_exists', false);
-        // }
+        if (! $participant) {
+            self::clearExistingFeedbackState($get, $set);
 
-        return (bool) $feedback; 
+            return false;
+        }
+
+        $feedback = self::feedbackForParticipant($participant, $year);
+
+        if (! $feedback) {
+            self::clearExistingFeedbackState($get, $set);
+
+            return false;
+        }
+
+        foreach ([
+            'rate',
+            'aware_of_funrun',
+            'aware_of_funrun_other',
+            'inspired',
+            'inspired_other',
+            'raise_awareness',
+            'contribute_to_your_understanding',
+            'encouraged_healthy_lifestyle',
+            'which_part_enjoy',
+            'recommendation',
+        ] as $field) {
+            $set($field, $feedback->getAttribute($field));
+        }
+
+        $set('feedback_exists', true);
+
+        return true;
+    }
+
+    private static function feedbackForParticipant(Participant $participant, int $year): ?Feedback
+    {
+        return Feedback::query()
+            ->where('year', $year)
+            ->where('firstName', $participant->firstName)
+            ->where('lastName', $participant->lastName)
+            ->whereDate('birthDate', $participant->birthDate)
+            ->first();
+    }
+
+    private static function clearExistingFeedbackState(callable $get, callable $set): void
+    {
+        $wasExistingFeedback = (bool) $get('feedback_exists');
+        $set('feedback_exists', false);
+
+        if (! $wasExistingFeedback) {
+            return;
+        }
+
+        foreach ([
+            'rate',
+            'aware_of_funrun',
+            'aware_of_funrun_other',
+            'inspired',
+            'inspired_other',
+            'raise_awareness',
+            'contribute_to_your_understanding',
+            'encouraged_healthy_lifestyle',
+            'which_part_enjoy',
+            'recommendation',
+        ] as $field) {
+            $set($field, null);
+        }
+    }
+
+    private static function normalizeBirthDate(mixed $birthDate): ?string
+    {
+        if (blank($birthDate)) {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse((string) $birthDate)->toDateString();
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private static function currentEventYear(): int
+    {
+        return (int) now('Asia/Manila')->year;
     }
 
 
