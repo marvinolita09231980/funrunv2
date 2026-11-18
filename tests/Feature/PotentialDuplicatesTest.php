@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Exports\AttendanceSheetExport;
+use App\Exports\FilteredSheetExport;
 use App\Exports\FoodAttendanceSheetExport;
 use App\Filament\Pages\PotentialDuplicates;
 use App\Models\CategoryAllocation;
@@ -504,6 +505,32 @@ class PotentialDuplicatesTest extends TestCase
             ], $exportedIds);
             $this->assertNotContains($outsideSelection->getKey(), $exportedIds);
         }
+
+        $filteredData = [
+            'year' => now()->year,
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+        ];
+        $deduplicatedFilteredIds = (new FilteredSheetExport([
+            ...$filteredData,
+            'excludeDuplicates' => true,
+        ]))->participantsForSheet()->pluck('id')->all();
+        $completeFilteredIds = (new FilteredSheetExport([
+            ...$filteredData,
+            'excludeDuplicates' => false,
+        ]))->participantsForSheet()->pluck('id')->all();
+
+        $this->assertEqualsCanonicalizing([
+            $onlyEligibleMatch->getKey(),
+            $keptDuplicate->getKey(),
+            $uniqueParticipant->getKey(),
+        ], $deduplicatedFilteredIds);
+        $this->assertEqualsCanonicalizing([
+            $onlyEligibleMatch->getKey(),
+            $keptDuplicate->getKey(),
+            $excludedDuplicate->getKey(),
+            $uniqueParticipant->getKey(),
+        ], $completeFilteredIds);
     }
 
 

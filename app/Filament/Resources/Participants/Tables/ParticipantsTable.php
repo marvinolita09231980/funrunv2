@@ -501,6 +501,11 @@ class ParticipantsTable
                                         false => 'No',
                                     ])
                                     ->columnSpan(1),
+                                Toggle::make('excludeDuplicates')
+                                    ->label('Exclude potential duplicates')
+                                    ->helperText('Keep the earliest eligible registration from each duplicate group.')
+                                    ->default(true)
+                                    ->columnSpanFull(),
                                 Select::make('order_by_column')
                                     ->label('Order By Column')
                                     ->options([

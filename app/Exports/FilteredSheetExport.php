@@ -2,8 +2,10 @@
 
 namespace App\Exports;
 
+use App\Filament\Pages\PotentialDuplicates;
 use Carbon\Carbon;
 use App\Models\Participant;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Events\AfterSheet;
@@ -33,6 +35,7 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
         protected ?string $pwd = null;
         protected ?string $order_by_column = null;
         protected ?string $order_by_desc_asc = null;
+        protected bool $excludeDuplicates = true;
 
     public function __construct(array $data)
     {
@@ -45,6 +48,7 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
         $this->pwd                  = $data['pwd'] ?? null;
         $this->order_by_column      = $data['order_by_column'] ?? null;
         $this->order_by_desc_asc    = $data['order_by_desc_asc'] ?? 'ASC';
+        $this->excludeDuplicates    = (bool) ($data['excludeDuplicates'] ?? true);
     }
 
     public function headings(): array
@@ -64,6 +68,57 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
         ];
     }
 
+    public function participantsForSheet(): Collection
+    {
+        $participants = Participant::select(
+            'id',
+            'firstName',
+            'middleInitial',
+            'lastName',
+            'distanceCategory',
+            'shirtSize',
+            'gender',
+            'categoryDescription',
+            'subDescription',
+            'birthDate',
+            'contactNumber',
+        )
+            ->when($this->year, fn ($query, $year) => $query->where('year', $year))
+            ->when($this->distanceCategory, fn ($query, $distanceCategory) => $query->where('distanceCategory', $distanceCategory))
+            ->when($this->categoryDescription, fn ($query, $categoryDescription) => $query->where('categoryDescription', $categoryDescription))
+            ->when($this->subDescription, fn ($query, $subDescription) => $query->where('subDescription', $subDescription))
+            ->when($this->gender, fn ($query, $gender) => $query->where('gender', $gender))
+            ->when($this->pwd !== null, fn ($query, $pwd) => $query->where('pwd', $pwd))
+            ->when($this->order_by_column, function ($query): void {
+                $allowed = [
+                    'firstName',
+                    'middleInitial',
+                    'lastName',
+                    'distanceCategory',
+                    'shirtSize',
+                    'gender',
+                    'categoryDescription',
+                    'subDescription',
+                    'birthDate',
+                    'contactNumber',
+                ];
+
+                if (in_array($this->order_by_column, $allowed, true)) {
+                    $query->orderByRaw("TRIM({$this->order_by_column}) ".($this->order_by_desc_asc ?? 'ASC'));
+                }
+            })
+            ->get();
+
+        $excludedParticipantIds = $this->excludeDuplicates
+            ? PotentialDuplicates::duplicateParticipantIdsToExclude(
+                (int) $this->year,
+                $participants->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+            )
+            : [];
+
+        return $participants->whereNotIn('id', $excludedParticipantIds)->values();
+    }
+
     public function registerEvents(): array
     {
         return [
@@ -75,43 +130,7 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
                 $category = $this->subcategory;
 
 
-                 $participants = Participant::select(
-                        'firstName', 
-                        'middleInitial', 
-                        'lastName', 
-                        'distanceCategory', 
-                        'shirtSize', 
-                        'gender',
-                        'categoryDescription',
-                        'subDescription',
-                        'birthDate',
-                        'contactNumber'
-                    )
-                    ->when($this->year, fn($query, $year) => $query->where('year', $year))
-                    ->when($this->distanceCategory, fn($query, $distanceCategory) => $query->where('distanceCategory', $distanceCategory))
-                    ->when($this->categoryDescription, fn($query, $categoryDescription) => $query->where('categoryDescription', $categoryDescription))
-                    ->when($this->subDescription, fn($query, $subDescription) => $query->where('subDescription', $subDescription))
-                    ->when($this->gender, fn($query, $gender) => $query->where('gender', $gender))
-                    ->when($this->pwd !== null, fn($query, $pwd) => $query->where('pwd', $pwd)) // if you have pwd field
-                    // ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
-                    ->when($this->order_by_column, function ($query) {
-                        $allowed = [
-                            'firstName',
-                            'middleInitial',
-                            'lastName',
-                            'distanceCategory',
-                            'shirtSize',
-                            'gender',
-                            'categoryDescription',
-                            'subDescription',
-                            'birthDate',
-                            'contactNumber',
-                        ];
-                        if (in_array($this->order_by_column, $allowed)) {
-                            $query->orderByRaw("TRIM($this->order_by_column) " . ($this->order_by_desc_asc ?? 'ASC'));
-                        }
-                    })
-                    ->get();
+                 $participants = $this->participantsForSheet();
                 
                 
 
