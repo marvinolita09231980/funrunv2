@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Exports\AttendanceSheetExport;
+use App\Exports\FoodAttendanceSheetExport;
 use App\Filament\Pages\PotentialDuplicates;
 use App\Models\CategoryAllocation;
 use App\Models\Participant;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -103,7 +106,7 @@ class PotentialDuplicatesTest extends TestCase
 
         $this->actingAs($admin);
 
-        Livewire::test(PotentialDuplicates::class)
+        $component = Livewire::test(PotentialDuplicates::class)
             ->call('loadPotentialDuplicates')
             ->assertCanSeeTableRecords([
                 $firstDuplicate,
@@ -118,12 +121,44 @@ class PotentialDuplicatesTest extends TestCase
             ->assertTableColumnStateSet('potential_duplicate_count', 1, $differentBirthDate)
             ->assertTableColumnStateSet('potential_duplicate_count', 1, $exactOnlyFirst)
             ->assertTableColumnStateSet('potential_duplicate_count', 1, $exactOnlySecond)
+            ->assertTableColumnStateSet('duplicate_group', '┌─ Duplicate Group 1', $firstDuplicate)
+            ->assertTableColumnStateSet('duplicate_group', '├─ Duplicate Group 1', $secondDuplicate)
+            ->assertTableColumnStateSet('duplicate_group', '└─ Duplicate Group 1', $differentBirthDate)
+            ->assertTableColumnStateSet('duplicate_group', '┌─ Duplicate Group 2', $exactOnlyFirst)
+            ->assertTableColumnStateSet('duplicate_group', '└─ Duplicate Group 2', $exactOnlySecond)
             ->assertSee('Phone 09171111111')
             ->assertSee('High-Probability Groups')
             ->assertSee('Records for Review')
             ->assertSee('High Probability')
             ->assertSee('CATEGORY A')
-            ->assertSee('CATEGORY B');
+            ->assertSee('CATEGORY B')
+            ->assertSee('Relationship brackets connect records that belong to the same potential duplicate group.')
+            ->assertSeeHtml('data-duplicate-bracket="top"')
+            ->assertSeeHtml('data-duplicate-bracket="bottom"')
+            ->assertTableActionExists(
+                'review',
+                fn (Action $action): bool => $action->getModalWidth() === '7xl'
+                    && ! $action->isModalClosedByClickingAway(),
+                $firstDuplicate,
+            );
+
+        $table = $component->instance()->getTable();
+        $this->assertNull($table->getContentGrid());
+        $this->assertNull($table->getGrouping());
+
+        $reviewAction = $table->getAction('review')->getClone()->record($firstDuplicate);
+        $comparisonHtml = $reviewAction->getModalContent()->render();
+
+        $this->assertTrue($reviewAction->shouldOpenModal());
+        $this->assertSame('Compare Duplicate Group 1', $reviewAction->getModalHeading());
+        $this->assertStringContainsString('Santos, Maria Elena', $comparisonHtml);
+        $this->assertStringContainsString('data-comparison-participant="'.$firstDuplicate->getKey().'"', $comparisonHtml);
+        $this->assertStringContainsString('data-comparison-participant="'.$secondDuplicate->getKey().'"', $comparisonHtml);
+        $this->assertStringContainsString('data-comparison-participant="'.$differentBirthDate->getKey().'"', $comparisonHtml);
+        $this->assertStringContainsString('June 15, 1994', $comparisonHtml);
+        $this->assertStringContainsString('June 15, 1995', $comparisonHtml);
+        $this->assertStringContainsString('data-duplicate-comparison', $comparisonHtml);
+        $this->assertStringContainsString('grid-template-columns: repeat(2, minmax(0, 1fr))', $comparisonHtml);
     }
 
     public function test_page_detects_shortened_initialed_and_phonetically_misspelled_first_names(): void
@@ -397,6 +432,80 @@ class PotentialDuplicatesTest extends TestCase
             (string) $response->headers->get('Content-Disposition'),
         );
     }
+
+    public function test_food_and_singlet_attendance_exports_keep_one_eligible_record_per_duplicate_group(): void
+    {
+        $outsideSelection = $this->participant([
+            'firstName' => 'Scoped',
+            'lastName' => 'Runner',
+            'birthDate' => '1980-01-01',
+            'categoryDescription' => 'OUTSIDE CATEGORY',
+            'subDescription' => 'Outside Office',
+        ]);
+        $onlyEligibleMatch = $this->participant([
+            'firstName' => ' SCOPED ',
+            'lastName' => 'RUNNER',
+            'birthDate' => '1990-01-01',
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+        ]);
+        $keptDuplicate = $this->participant([
+            'firstName' => 'Duplicate',
+            'lastName' => 'Participant',
+            'birthDate' => '1991-02-02',
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+        ]);
+        $excludedDuplicate = $this->participant([
+            'firstName' => 'DUPLICATE',
+            'lastName' => 'PARTICIPANT',
+            'birthDate' => '1998-08-08',
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+        ]);
+        $uniqueParticipant = $this->participant([
+            'firstName' => 'Unique',
+            'lastName' => 'Entrant',
+            'birthDate' => '1993-03-03',
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+        ]);
+        $selection = [[
+            'category' => 'CATEGORY A',
+            'subcategory' => 'Office A',
+        ]];
+
+        foreach ([
+            new AttendanceSheetExport($selection, 'A', 'Z'),
+            new FoodAttendanceSheetExport($selection, 'A', 'Z'),
+        ] as $export) {
+            $exportedIds = $export->participantsForSheet()->pluck('id')->all();
+
+            $this->assertEqualsCanonicalizing([
+                $onlyEligibleMatch->getKey(),
+                $keptDuplicate->getKey(),
+                $uniqueParticipant->getKey(),
+            ], $exportedIds);
+            $this->assertNotContains($outsideSelection->getKey(), $exportedIds);
+            $this->assertNotContains($excludedDuplicate->getKey(), $exportedIds);
+        }
+
+        foreach ([
+            new AttendanceSheetExport($selection, 'A', 'Z', excludeDuplicates: false),
+            new FoodAttendanceSheetExport($selection, 'A', 'Z', excludeDuplicates: false),
+        ] as $export) {
+            $exportedIds = $export->participantsForSheet()->pluck('id')->all();
+
+            $this->assertEqualsCanonicalizing([
+                $onlyEligibleMatch->getKey(),
+                $keptDuplicate->getKey(),
+                $excludedDuplicate->getKey(),
+                $uniqueParticipant->getKey(),
+            ], $exportedIds);
+            $this->assertNotContains($outsideSelection->getKey(), $exportedIds);
+        }
+    }
+
 
     private function userWithRole(string $name, string $username, string $roleName): User
     {

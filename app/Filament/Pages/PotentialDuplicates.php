@@ -18,6 +18,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\HtmlString;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PotentialDuplicates extends Page implements HasTable
@@ -41,6 +42,18 @@ class PotentialDuplicates extends Page implements HasTable
 
     /** @var array<int, int> */
     public array $potentialDuplicateCounts = [];
+
+    /** @var array<int, string> */
+    public array $potentialDuplicateGroupKeys = [];
+
+    /** @var array<string, int> */
+    public array $potentialDuplicateGroupSizes = [];
+
+    /** @var array<int, int> */
+    public array $potentialDuplicateGroupPositions = [];
+
+    /** @var array<int, int> */
+    public array $potentialDuplicateOrder = [];
 
     /** @var array{year: int, groups: int, records: int}|array{} */
     public array $potentialDuplicateStats = [];
@@ -187,7 +200,13 @@ class PotentialDuplicates extends Page implements HasTable
         return $table
             ->query(fn (): Builder => Participant::query()
                 ->with('creator')
-                ->whereKey($this->potentialDuplicateIds))
+                ->whereKey($this->potentialDuplicateIds)
+                ->when(
+                    $this->potentialDuplicateOrder !== [],
+                    fn (Builder $query): Builder => $query->orderByRaw(
+                        $this->potentialDuplicateOrderSql(),
+                    ),
+                ))
             ->columns([
                 TextColumn::make('mobile_duplicate_summary')
                     ->label('Participant for Review')
@@ -199,6 +218,7 @@ class PotentialDuplicates extends Page implements HasTable
                             : null,
                     ])->filter()->join(' '))
                     ->description(fn (Participant $record): string => collect([
+                        $this->potentialDuplicateGroupMarker($record),
                         filled($record->birthDate)
                             ? \Carbon\Carbon::parse($record->birthDate)->format('M j, Y')
                             : null,
@@ -211,6 +231,17 @@ class PotentialDuplicates extends Page implements HasTable
                     ->weight('bold')
                     ->wrap()
                     ->hiddenFrom('md'),
+                TextColumn::make('duplicate_group')
+                    ->label('Relationship')
+                    ->getStateUsing(fn (Participant $record): string => $this->potentialDuplicateGroupMarker($record))
+                    ->formatStateUsing(fn (string $state, Participant $record): HtmlString => $this->potentialDuplicateGroupBracket(
+                        $state,
+                        $record,
+                    ))
+                    ->fontFamily('mono')
+                    ->weight('bold')
+                    ->color('warning')
+                    ->visibleFrom('md'),
                 TextColumn::make('participant_name')
                     ->label('Participant')
                     ->getStateUsing(fn (Participant $record): string => collect([
@@ -270,8 +301,9 @@ class PotentialDuplicates extends Page implements HasTable
                     ->selectablePlaceholder(false),
             ])
             ->deferFilters(false)
+            ->paginated(false)
             ->heading('Participant Records for Review')
-            ->description('Compare the highlighted records carefully before correcting, moving, or deleting any registration.')
+            ->description('Relationship brackets connect records that belong to the same potential duplicate group.')
             ->defaultSort('lastName')
             ->striped()
             ->recordUrl(null)
@@ -280,15 +312,19 @@ class PotentialDuplicates extends Page implements HasTable
                     ->label('Review')
                     ->icon('heroicon-o-eye')
                     ->iconButton()
-                    ->tooltip('Review participant')
-                    ->url(fn (Participant $record): string => ParticipantResource::getUrl(
-                        'edit',
-                        ['record' => $record],
+                    ->tooltip('Compare duplicate records')
+                    ->modalHeading(fn (Participant $record): string => 'Compare Duplicate Group '
+                        .$this->potentialDuplicateGroupNumber($record))
+                    ->modalDescription('Review the participant details side by side before editing or deleting a registration.')
+                    ->modalWidth('7xl')
+                    ->closeModalByClickingAway(false)
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Close')
+                    ->modalContent(fn (Participant $record) => view(
+                        'filament.pages.partials.potential-duplicate-comparison',
+                        ['participants' => $this->potentialDuplicateGroupParticipants($record)],
                     ))
-                    ->visible(fn (Participant $record): bool => Auth::user()?->can(
-                        'update',
-                        $record,
-                    ) ?? false),
+                    ->action(fn (): null => null),
                 DeleteAction::make()
                     ->label('Delete')
                     ->iconButton()
@@ -322,6 +358,24 @@ class PotentialDuplicates extends Page implements HasTable
         );
     }
 
+    /**
+     * Return later duplicate records to omit while retaining the earliest
+     * eligible participant from each relationship group.
+     *
+     * @param  array<int>|null  $eligibleParticipantIds
+     * @return array<int>
+     */
+    public static function duplicateParticipantIdsToExclude(
+        int $year,
+        ?array $eligibleParticipantIds = null,
+    ): array {
+        return collect(self::findPotentialDuplicates($year, $eligibleParticipantIds)['components'])
+            ->flatMap(fn (array $participantIds): array => array_slice($participantIds, 1))
+            ->map(fn (int|string $participantId): int => (int) $participantId)
+            ->values()
+            ->all();
+    }
+
     public static function canDeletePotentialDuplicate(
         ?User $user,
         Participant $participant,
@@ -351,7 +405,10 @@ class PotentialDuplicates extends Page implements HasTable
     /**
      * @return array{ids: array<int>, counts: array<int, int>, groups: int, components: array<int, array<int>>}
      */
-    private static function findPotentialDuplicates(int $year): array
+    private static function findPotentialDuplicates(
+        int $year,
+        ?array $eligibleParticipantIds = null,
+    ): array
     {
         /** @var array<string, array<string, array{ids: array<int>, soundex: array<string, true>}>> $birthDateGroups */
         $birthDateGroups = [];
@@ -360,6 +417,10 @@ class PotentialDuplicates extends Page implements HasTable
 
         foreach (Participant::query()
             ->where('year', $year)
+            ->when(
+                $eligibleParticipantIds !== null,
+                fn (Builder $query): Builder => $query->whereKey($eligibleParticipantIds),
+            )
             ->select(['id', 'firstName', 'lastName', 'birthDate'])
             ->selectRaw('SOUNDEX(firstName) AS first_name_soundex')
             ->cursor() as $participant) {
@@ -512,12 +573,124 @@ class PotentialDuplicates extends Page implements HasTable
 
         $this->potentialDuplicateIds = $data['ids'];
         $this->potentialDuplicateCounts = $data['counts'];
+        $this->potentialDuplicateGroupKeys = [];
+        $this->potentialDuplicateGroupSizes = [];
+        $this->potentialDuplicateGroupPositions = [];
+        $this->potentialDuplicateOrder = [];
+
+        $position = 0;
+        foreach ($data['components'] as $index => $participantIds) {
+            $groupKey = 'duplicate-group-'.($index + 1);
+            $this->potentialDuplicateGroupSizes[$groupKey] = count($participantIds);
+
+            foreach ($participantIds as $groupPosition => $participantId) {
+                $this->potentialDuplicateGroupKeys[$participantId] = $groupKey;
+                $this->potentialDuplicateGroupPositions[$participantId] = $groupPosition;
+                $this->potentialDuplicateOrder[$participantId] = $position++;
+            }
+        }
         $this->potentialDuplicateStats = [
             'year' => $year,
             'groups' => $data['groups'],
             'records' => count($data['ids']),
         ];
         $this->potentialDuplicatesYear = $year;
+    }
+
+    private function potentialDuplicateOrderSql(): string
+    {
+        $cases = collect($this->potentialDuplicateOrder)
+            ->map(fn (int $position, int|string $participantId): string => sprintf(
+                'WHEN %d THEN %d',
+                (int) $participantId,
+                $position,
+            ))
+            ->implode(' ');
+
+        return "CASE participants.id {$cases} ELSE ".count($this->potentialDuplicateOrder).' END';
+    }
+
+    private function potentialDuplicateGroupMarker(Participant $participant): string
+    {
+        $participantId = (int) $participant->getKey();
+        $groupKey = $this->potentialDuplicateGroupKeys[$participantId] ?? null;
+        $groupSize = $groupKey ? ($this->potentialDuplicateGroupSizes[$groupKey] ?? 1) : 1;
+        $position = $this->potentialDuplicateGroupPositions[$participantId] ?? 0;
+        $groupNumber = $groupKey
+            ? (int) str($groupKey)->afterLast('-')->toString()
+            : 0;
+
+        $symbol = match (true) {
+            $groupSize <= 1 => '•',
+            $position === 0 => '┌─',
+            $position === $groupSize - 1 => '└─',
+            default => '├─',
+        };
+
+        return "{$symbol} Duplicate Group {$groupNumber}";
+    }
+
+    private function potentialDuplicateGroupNumber(Participant $participant): int
+    {
+        $groupKey = $this->potentialDuplicateGroupKeys[$participant->getKey()] ?? null;
+
+        return $groupKey
+            ? (int) str($groupKey)->afterLast('-')->toString()
+            : 0;
+    }
+
+    private function potentialDuplicateGroupParticipants(Participant $participant): \Illuminate\Support\Collection
+    {
+        $groupKey = $this->potentialDuplicateGroupKeys[$participant->getKey()] ?? null;
+        $participantIds = collect($this->potentialDuplicateGroupKeys)
+            ->filter(fn (string $candidateGroupKey): bool => $candidateGroupKey === $groupKey)
+            ->keys()
+            ->map(fn (int|string $participantId): int => (int) $participantId)
+            ->all();
+
+        return Participant::query()
+            ->with('creator')
+            ->whereKey($participantIds)
+            ->get()
+            ->sortBy(fn (Participant $groupParticipant): int => $this->potentialDuplicateGroupPositions[$groupParticipant->getKey()] ?? PHP_INT_MAX)
+            ->values();
+    }
+
+    private function potentialDuplicateGroupBracket(string $state, Participant $participant): HtmlString
+    {
+        $participantId = (int) $participant->getKey();
+        $groupKey = $this->potentialDuplicateGroupKeys[$participantId] ?? null;
+        $groupSize = $groupKey ? ($this->potentialDuplicateGroupSizes[$groupKey] ?? 1) : 1;
+        $groupNumber = $groupKey
+            ? (int) str($groupKey)->afterLast('-')->toString()
+            : 0;
+        $position = match (true) {
+            str_starts_with($state, '┌') => 'top',
+            str_starts_with($state, '├') => 'middle',
+            str_starts_with($state, '└') => 'bottom',
+            default => 'single',
+        };
+        $verticalLine = match ($position) {
+            'top' => 'top:50%; bottom:-1.25rem;',
+            'middle' => 'top:-1.25rem; bottom:-1.25rem;',
+            'bottom' => 'top:-1.25rem; bottom:50%;',
+            default => null,
+        };
+        $indicator = $position === 'single'
+            ? '<span aria-hidden="true" style="position:absolute; left:0.18rem; top:50%; width:0.45rem; border-top:2px solid currentColor;"></span>'
+            : '<span aria-hidden="true" style="position:absolute; left:0.4rem; '.$verticalLine.' border-left:2px solid currentColor;"></span>'
+                .'<span aria-hidden="true" style="position:absolute; left:0.4rem; top:50%; width:0.75rem; border-top:2px solid currentColor;"></span>';
+        $recordLabel = $groupSize === 1 ? '1 record' : "{$groupSize} records";
+
+        return new HtmlString(
+            '<div data-duplicate-bracket="'.$position.'" aria-label="Duplicate Group '.$groupNumber.', '.$recordLabel.'" style="position:relative; display:flex; min-height:3rem; align-items:center;">'
+                .$indicator
+                .'<span style="display:flex; flex-direction:column; margin-left:1.7rem; line-height:1.25;">'
+                    .'<span>Group '.$groupNumber.'</span>'
+                    .'<span style="font-family:inherit; font-size:0.72rem; font-weight:500; opacity:0.72;">'.$recordLabel.'</span>'
+                .'</span>'
+            .'</div>',
+        );
     }
 
     private static function normalizedName(?string $name): string

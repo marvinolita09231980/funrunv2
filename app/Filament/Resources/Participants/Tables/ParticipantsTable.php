@@ -14,6 +14,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
 use Illuminate\Support\HtmlString;
 use App\Exports\FilteredSheetExport;
+use App\Filament\Pages\PotentialDuplicates;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -21,6 +22,7 @@ use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use App\Exports\AttendanceSheetExport;
 use Filament\Actions\DeleteBulkAction;
@@ -235,6 +237,14 @@ class ParticipantsTable
                                     ->required()
                                     ->columnSpanFull(),
 
+                                Toggle::make('excludeDuplicates')
+                                    ->label('Exclude potential duplicates')
+                                    ->helperText('Keep the earliest eligible registration from each duplicate group.')
+                                    ->default(true)
+                                    ->live()
+                                    ->afterStateUpdated(fn (callable $set, callable $get) => self::updateParticipantCount($set, $get))
+                                    ->columnSpanFull(),
+
                                 Select::make('letterStart')
                                     ->label('List from')
                                     ->options(
@@ -302,6 +312,14 @@ class ParticipantsTable
                                     })
                                     ->searchable()
                                     ->required()
+                                    ->columnSpanFull(),
+
+                                Toggle::make('excludeDuplicates')
+                                    ->label('Exclude potential duplicates')
+                                    ->helperText('Keep the earliest eligible registration from each duplicate group.')
+                                    ->default(true)
+                                    ->live()
+                                    ->afterStateUpdated(fn (callable $set, callable $get) => self::updateParticipantCount($set, $get))
                                     ->columnSpanFull(),
 
                                 Select::make('letterStart')
@@ -738,10 +756,11 @@ class ParticipantsTable
             ])
             ->values()
             ->all();
+        $excludeDuplicates = (bool) ($data['excludeDuplicates'] ?? true);
 
         $export = $food
-            ? new FoodAttendanceSheetExport($selections, $letterStart, $letterEnd)
-            : new AttendanceSheetExport($selections, $letterStart, $letterEnd);
+            ? new FoodAttendanceSheetExport($selections, $letterStart, $letterEnd, $excludeDuplicates)
+            : new AttendanceSheetExport($selections, $letterStart, $letterEnd, $excludeDuplicates);
 
         return Excel::download(
             $export,
@@ -786,7 +805,7 @@ class ParticipantsTable
             [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
         }
 
-        $count = self::participantsForExport($subcategories)
+        $eligibleParticipantIds = self::participantsForExport($subcategories)
             ->where('year', $year)
             ->when(
                 ! $multipleSubcategories,
@@ -795,7 +814,16 @@ class ParticipantsTable
                     [$letterStart, $letterEnd],
                 ),
             )
-            ->count();
+            ->pluck('id')
+            ->map(fn (int|string $participantId): int => (int) $participantId)
+            ->all();
+        $excludedParticipantIds = (bool) ($get('excludeDuplicates') ?? true)
+            ? PotentialDuplicates::duplicateParticipantIdsToExclude(
+                (int) $year,
+                $eligibleParticipantIds,
+            )
+            : [];
+        $count = count($eligibleParticipantIds) - count($excludedParticipantIds);
 
         $set('participantCount', $count);
 

@@ -2,7 +2,9 @@
 
 namespace App\Exports;
 
+use App\Filament\Pages\PotentialDuplicates;
 use App\Models\Participant;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Events\AfterSheet;
@@ -24,6 +26,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
     protected ?string $letterStart;
     protected ?string $letterEnd;
     protected string $year; 
+    protected bool $excludeDuplicates;
     protected array $agencyCodes = [
     "PROVINCIAL GOVERNOR'S OFFICE" => 'PGO',
     "PROVINCIAL ADMINISTRATOR'S OFFICE" => 'PAO',
@@ -54,6 +57,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
         array $subcategories,
         ?string $letterStart = null,
         ?string $letterEnd = null,
+        bool $excludeDuplicates = true,
     )
     {
         $this->subcategories = $subcategories;
@@ -61,6 +65,8 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
         $this->letterStart = $letterStart;
 
         $this->letterEnd = $letterEnd;
+
+        $this->excludeDuplicates = $excludeDuplicates;
 
         $this->year = date('Y');
     }
@@ -81,6 +87,56 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
         ];
     }
 
+    public function participantsForSheet(): Collection
+    {
+        if ($this->letterStart && $this->letterEnd && $this->letterStart > $this->letterEnd) {
+            [$this->letterStart, $this->letterEnd] = [$this->letterEnd, $this->letterStart];
+        }
+
+        $participants = Participant::select(
+            'id',
+            'firstName',
+            'middleInitial',
+            'lastName',
+            'distanceCategory',
+            'shirtSize',
+            'gender',
+            'categoryDescription',
+            'subDescription',
+        )
+            ->where('year', $this->year)
+            ->where(function ($query): void {
+                foreach ($this->subcategories as $subcategory) {
+                    $query->orWhere(function ($query) use ($subcategory): void {
+                        $query->where('categoryDescription', $subcategory['category']);
+
+                        if ($subcategory['category'] !== 'OPEN CATEGORY') {
+                            $query->where('subDescription', $subcategory['subcategory']);
+                        }
+                    });
+                }
+            })
+            ->when(
+                $this->letterStart && $this->letterEnd,
+                fn ($query) => $query->whereRaw(
+                    'SUBSTR(UPPER(TRIM(lastName)), 1, 1) BETWEEN ? AND ?',
+                    [$this->letterStart, $this->letterEnd],
+                ),
+            )
+            ->orderBy('lastName')
+            ->orderBy('firstName')
+            ->get();
+
+        $excludedParticipantIds = $this->excludeDuplicates
+            ? PotentialDuplicates::duplicateParticipantIdsToExclude(
+                (int) $this->year,
+                $participants->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+            )
+            : [];
+
+        return $participants->whereNotIn('id', $excludedParticipantIds)->values();
+    }
+
     public function registerEvents(): array
     {
         return [
@@ -89,42 +145,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
             
                 // === PARTICIPANT DATA ===
 
-                if ($this->letterStart && $this->letterEnd && $this->letterStart > $this->letterEnd) {
-                    [$this->letterStart, $this->letterEnd] = [$this->letterEnd, $this->letterStart];
-                }
-
-                $participants = Participant::select(
-                        'firstName', 
-                        'middleInitial', 
-                        'lastName', 
-                        'distanceCategory', 
-                        'shirtSize', 
-                        'gender',
-                        'categoryDescription',
-                        'subDescription'
-                        )
-                        ->where('year', $this->year)
-                        ->where(function ($query): void {
-                            foreach ($this->subcategories as $subcategory) {
-                                $query->orWhere(function ($query) use ($subcategory): void {
-                                    $query->where('categoryDescription', $subcategory['category']);
-
-                                    if ($subcategory['category'] !== 'OPEN CATEGORY') {
-                                        $query->where('subDescription', $subcategory['subcategory']);
-                                    }
-                                });
-                            }
-                        })
-                        ->when(
-                            $this->letterStart && $this->letterEnd,
-                            fn ($query) => $query->whereRaw(
-                                'SUBSTR(UPPER(TRIM(lastName)), 1, 1) BETWEEN ? AND ?',
-                                [$this->letterStart, $this->letterEnd],
-                            ),
-                        )
-                        ->orderBy('lastName')
-                        ->orderBy('firstName')
-                        ->get();
+                $participants = $this->participantsForSheet();
 
                 // $participants = Participant::select(
                 // 'firstName', 
