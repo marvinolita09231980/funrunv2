@@ -138,24 +138,23 @@ class PotentialDuplicates extends Page implements HasTable
                     'subcategory' => filled($participant->subDescription)
                         ? trim((string) $participant->subDescription)
                         : 'Not provided',
-                    'group_key' => implode('|', [
-                        self::normalizedName($participant->lastName),
-                        (string) $participant->birthDate,
-                    ]),
                 ];
-            });
+            })
+            ->keyBy('id');
 
-        $groups = $records
-            ->groupBy('group_key')
-            ->map(fn ($group): array => [
-                'birth_date' => $group->first()['birth_date'],
-                'last_name' => trim((string) str($group->first()['name'])->before(',')),
-                'records' => $group->map(fn (array $record): array => collect($record)
-                    ->except('group_key')
-                    ->all())
-                    ->values()
-                    ->all(),
-            ])
+        $groups = collect($duplicateData['components'])
+            ->map(function (array $participantIds) use ($records): array {
+                $group = $records->only($participantIds)->values();
+                $birthDates = $group->pluck('birth_date')->unique()->values();
+
+                return [
+                    'birth_date' => $birthDates->count() === 1
+                        ? $birthDates->first()
+                        : 'Varies',
+                    'last_name' => trim((string) str($group->first()['name'])->before(',')),
+                    'records' => $group->all(),
+                ];
+            })
             ->values()
             ->all();
 
@@ -246,7 +245,7 @@ class PotentialDuplicates extends Page implements HasTable
                     ->description('High Probability')
                     ->badge()
                     ->color('warning')
-                    ->tooltip('Same year, birth date, and last name with a similar but non-exact first name.'),
+                    ->tooltip('Same exact name within the year, even with different birthdates, or the same birthdate and last name with a similar first name.'),
                 TextColumn::make('categoryDescription')
                     ->label('Registration')
                     ->description(fn (Participant $record): string => filled($record->subDescription)
@@ -310,7 +309,7 @@ class PotentialDuplicates extends Page implements HasTable
                     }),
             ])
             ->emptyStateHeading('No potential duplicates found')
-            ->emptyStateDescription('No high-probability non-exact participant matches were found for the selected registration year.')
+            ->emptyStateDescription('No exact-name or high-probability participant matches were found for the selected registration year.')
             ->emptyStateIcon('heroicon-o-check-circle');
     }
 
@@ -350,12 +349,14 @@ class PotentialDuplicates extends Page implements HasTable
     }
 
     /**
-     * @return array{ids: array<int>, counts: array<int, int>, groups: int}
+     * @return array{ids: array<int>, counts: array<int, int>, groups: int, components: array<int, array<int>>}
      */
     private static function findPotentialDuplicates(int $year): array
     {
-        /** @var array<string, array<string, array{ids: array<int>, soundex: array<string, true>}>> $groups */
-        $groups = [];
+        /** @var array<string, array<string, array{ids: array<int>, soundex: array<string, true>}>> $birthDateGroups */
+        $birthDateGroups = [];
+        /** @var array<string, array<int>> $exactNameGroups */
+        $exactNameGroups = [];
 
         foreach (Participant::query()
             ->where('year', $year)
@@ -365,33 +366,65 @@ class PotentialDuplicates extends Page implements HasTable
             if (
                 $participant->firstName === null
                 || $participant->lastName === null
-                || $participant->birthDate === null
             ) {
                 continue;
             }
 
-            $groupKey = json_encode([
-                (string) $participant->birthDate,
-                self::normalizedName($participant->lastName),
-            ], JSON_THROW_ON_ERROR);
             $normalizedFirstName = self::normalizedName($participant->firstName);
+            $normalizedLastName = self::normalizedName($participant->lastName);
+
+            if ($normalizedFirstName === '' || $normalizedLastName === '') {
+                continue;
+            }
+
+            $exactNameKey = json_encode([
+                $normalizedLastName,
+                $normalizedFirstName,
+            ], JSON_THROW_ON_ERROR);
+            $exactNameGroups[$exactNameKey][] = (int) $participant->getKey();
+
+            if ($participant->birthDate === null) {
+                continue;
+            }
+
+            $birthDateGroupKey = json_encode([
+                (string) $participant->birthDate,
+                $normalizedLastName,
+            ], JSON_THROW_ON_ERROR);
             $phoneticName = (string) $participant->getAttribute('first_name_soundex');
 
-            $groups[$groupKey][$normalizedFirstName] ??= [
+            $birthDateGroups[$birthDateGroupKey][$normalizedFirstName] ??= [
                 'ids' => [],
                 'soundex' => [],
             ];
-            $groups[$groupKey][$normalizedFirstName]['ids'][] = (int) $participant->getKey();
-            $groups[$groupKey][$normalizedFirstName]['soundex'][$phoneticName] = true;
+            $birthDateGroups[$birthDateGroupKey][$normalizedFirstName]['ids'][] = (int) $participant->getKey();
+            $birthDateGroups[$birthDateGroupKey][$normalizedFirstName]['soundex'][$phoneticName] = true;
         }
 
-        $counts = [];
-        $duplicateGroups = 0;
+        /** @var array<int, array<int, true>> $relationships */
+        $relationships = [];
+        $connect = static function (int $leftId, int $rightId) use (&$relationships): void {
+            if ($leftId === $rightId) {
+                return;
+            }
 
-        foreach ($groups as $variantsByFirstName) {
+            $relationships[$leftId][$rightId] = true;
+            $relationships[$rightId][$leftId] = true;
+        };
+
+        foreach ($exactNameGroups as $participantIds) {
+            $participantCount = count($participantIds);
+
+            for ($left = 0; $left < $participantCount; $left++) {
+                for ($right = $left + 1; $right < $participantCount; $right++) {
+                    $connect($participantIds[$left], $participantIds[$right]);
+                }
+            }
+        }
+
+        foreach ($birthDateGroups as $variantsByFirstName) {
             $firstNames = array_keys($variantsByFirstName);
             $variantCount = count($firstNames);
-            $groupHasDuplicates = false;
 
             for ($left = 0; $left < $variantCount; $left++) {
                 for ($right = $left + 1; $right < $variantCount; $right++) {
@@ -409,33 +442,52 @@ class PotentialDuplicates extends Page implements HasTable
                         continue;
                     }
 
-                    $groupHasDuplicates = true;
-                    $leftRelatedCount = count($rightVariant['ids']);
-                    $rightRelatedCount = count($leftVariant['ids']);
-
-                    foreach ($leftVariant['ids'] as $participantId) {
-                        $counts[$participantId] = ($counts[$participantId] ?? 0)
-                            + $leftRelatedCount;
+                    foreach ($leftVariant['ids'] as $leftParticipantId) {
+                        foreach ($rightVariant['ids'] as $rightParticipantId) {
+                            $connect($leftParticipantId, $rightParticipantId);
+                        }
                     }
+                }
+            }
+        }
 
-                    foreach ($rightVariant['ids'] as $participantId) {
-                        $counts[$participantId] = ($counts[$participantId] ?? 0)
-                            + $rightRelatedCount;
+        $counts = array_map('count', $relationships);
+        ksort($counts);
+
+        $unvisited = array_fill_keys(array_keys($relationships), true);
+        $components = [];
+
+        while ($unvisited !== []) {
+            $startingId = (int) array_key_first($unvisited);
+            $stack = [$startingId];
+            $component = [];
+
+            while ($stack !== []) {
+                $participantId = (int) array_pop($stack);
+
+                if (! isset($unvisited[$participantId])) {
+                    continue;
+                }
+
+                unset($unvisited[$participantId]);
+                $component[] = $participantId;
+
+                foreach (array_keys($relationships[$participantId] ?? []) as $relatedId) {
+                    if (isset($unvisited[$relatedId])) {
+                        $stack[] = (int) $relatedId;
                     }
                 }
             }
 
-            if ($groupHasDuplicates) {
-                $duplicateGroups++;
-            }
+            sort($component);
+            $components[] = $component;
         }
-
-        ksort($counts);
 
         return [
             'ids' => array_map('intval', array_keys($counts)),
             'counts' => $counts,
-            'groups' => $duplicateGroups,
+            'groups' => count($components),
+            'components' => $components,
         ];
     }
 

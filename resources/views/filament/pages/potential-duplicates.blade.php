@@ -399,7 +399,7 @@
                 </h2>
 
                 <p class="duplicate-audit-subtitle">
-                    Review similar—but not identical—participant identities across every category.
+                    Review exact-name and similar participant identities across every category.
                     The report prioritizes records that share strong identity signals and leaves the final decision to an authorized reviewer.
                 </p>
             </div>
@@ -429,16 +429,16 @@
                     What qualifies as a high-probability match?
                 </h3>
                 <p class="duplicate-audit-card-copy">
-                    Exact normalized first-name matches are excluded. A record appears only when these stronger identity signals align.
-                    Similarity includes shortened names, added initials, and small phonetic spelling differences.
+                    Exact normalized first-and-last-name matches are included even when their birthdates differ.
+                    The review also includes shortened names, added initials, and small phonetic spelling differences when birthdate and last name match.
                 </p>
 
                 <div class="duplicate-audit-rules">
                     @foreach ([
                         'Same registration year',
-                        'Same birth date',
-                        'Same normalized last name',
-                        'Similar non-exact first name',
+                        'Same exact name, regardless of birthdate',
+                        'Or same birthdate and last name',
+                        'With a similar first name',
                     ] as $rule)
                         <span class="duplicate-audit-rule">
                             <x-filament::icon icon="heroicon-m-check" class="h-3.5 w-3.5 text-success-500" />

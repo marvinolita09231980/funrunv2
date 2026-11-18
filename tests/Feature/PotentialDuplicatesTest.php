@@ -48,7 +48,7 @@ class PotentialDuplicatesTest extends TestCase
         $this->assertFalse(PotentialDuplicates::canAccess());
     }
 
-    public function test_page_displays_same_year_duplicates_across_categories(): void
+    public function test_page_displays_same_year_duplicates_across_categories_and_birthdates(): void
     {
         $admin = $this->userWithRole('Duplicate Admin', 'duplicate-admin', 'admin');
         $year = now()->year;
@@ -105,15 +105,19 @@ class PotentialDuplicatesTest extends TestCase
 
         Livewire::test(PotentialDuplicates::class)
             ->call('loadPotentialDuplicates')
-            ->assertCanSeeTableRecords([$firstDuplicate, $secondDuplicate])
-            ->assertCanNotSeeTableRecords([
+            ->assertCanSeeTableRecords([
+                $firstDuplicate,
+                $secondDuplicate,
                 $differentBirthDate,
-                $differentYear,
                 $exactOnlyFirst,
                 $exactOnlySecond,
             ])
+            ->assertCanNotSeeTableRecords([$differentYear])
             ->assertTableColumnStateSet('potential_duplicate_count', 1, $firstDuplicate)
-            ->assertTableColumnStateSet('potential_duplicate_count', 1, $secondDuplicate)
+            ->assertTableColumnStateSet('potential_duplicate_count', 2, $secondDuplicate)
+            ->assertTableColumnStateSet('potential_duplicate_count', 1, $differentBirthDate)
+            ->assertTableColumnStateSet('potential_duplicate_count', 1, $exactOnlyFirst)
+            ->assertTableColumnStateSet('potential_duplicate_count', 1, $exactOnlySecond)
             ->assertSee('Phone 09171111111')
             ->assertSee('High-Probability Groups')
             ->assertSee('Records for Review')
