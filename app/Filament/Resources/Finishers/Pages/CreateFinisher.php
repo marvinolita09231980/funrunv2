@@ -50,18 +50,7 @@ class CreateFinisher extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(
-                Participant::query()
-                    ->where('year', date('Y'))
-                    ->whereNotExists(function ($query): void {
-                        $query
-                            ->selectRaw('1')
-                            ->from('finishers')
-                            ->whereColumn('finishers.participants_id', 'participants.id');
-                    })
-                    ->orderBy('lastName')
-                    ->orderBy('firstName')
-            )
+            ->query(self::eligibleParticipantsQuery()->with('finisher.awards'))
             ->columns([
                 TextColumn::make('mobile_runner_summary')
                     ->label('Runner')
@@ -76,6 +65,9 @@ class CreateFinisher extends Page implements HasTable
                             : null,
                         filled($record->birthDate)
                             ? 'Birth date: '.Carbon::parse($record->birthDate)->format('M d, Y')
+                            : null,
+                        filled(self::existingFinisher($record)?->award_names)
+                            ? 'Awards: '.self::existingFinisher($record)->award_names
                             : null,
                     ])->filter()->join(' • '))
                     ->weight('bold')
@@ -118,48 +110,69 @@ class CreateFinisher extends Page implements HasTable
                     ->placeholder('—')
                     ->wrap()
                     ->visibleFrom('md'),
+                TextColumn::make('desktop_current_awards')
+                    ->label('Current Awards')
+                    ->getStateUsing(fn (Participant $record): ?string => self::existingFinisher($record)?->award_names)
+                    ->placeholder('—')
+                    ->wrap()
+                    ->visibleFrom('md'),
             ])
             ->filters([
                 Filter::make('runner_name')
                     ->schema([
-                        TextInput::make('last_name')
-                            ->label('Last Name')
-                            ->placeholder('e.g. Cortez')
-                            ->autofocus(),
-                        TextInput::make('first_name')
-                            ->label('First Name')
-                            ->placeholder('e.g. Jimmy'),
+                        Select::make('participant_id')
+                            ->label('Name')
+                            ->placeholder('Type a first or last name to find a runner')
+                            ->searchable()
+                            ->searchDebounce(150)
+                            ->live()
+                            ->getSearchResultsUsing(function (string $search): array {
+                                $search = trim($search);
+
+                                if ($search === '') {
+                                    return [];
+                                }
+
+                                return self::eligibleParticipantsQuery()
+                                    ->where(function (Builder $query) use ($search): void {
+                                        $query
+                                            ->where('lastName', 'like', "{$search}%")
+                                            ->orWhere('firstName', 'like', "{$search}%");
+                                    })
+                                    ->select([
+                                        'id',
+                                        'firstName',
+                                        'lastName',
+                                        'middleInitial',
+                                        'birthDate',
+                                    ])
+                                    ->limit(15)
+                                    ->get()
+                                    ->mapWithKeys(fn (Participant $participant): array => [
+                                        $participant->getKey() => self::participantLookupLabel($participant),
+                                    ])
+                                    ->all();
+                            })
+                            ->getOptionLabelUsing(function (mixed $value): ?string {
+                                $participant = Participant::query()
+                                    ->where('year', date('Y'))
+                                    ->find($value);
+
+                                return $participant
+                                    ? self::participantLookupLabel($participant)
+                                    : null;
+                            }),
                     ])
-                    ->columns([
-                        'default' => 1,
-                        'md' => 2,
-                    ])
+                    ->columns(1)
                     ->columnSpanFull()
                     ->query(function (Builder $query, array $data): Builder {
-                        $lastName = trim((string) ($data['last_name'] ?? ''));
-                        $firstName = trim((string) ($data['first_name'] ?? ''));
+                        $participantId = $data['participant_id'] ?? null;
 
-                        if ($lastName === '' && $firstName === '') {
+                        if (blank($participantId)) {
                             return $query->whereRaw('1 = 0');
                         }
 
-                        return $query
-                            ->when(
-                                $lastName !== '',
-                                fn (Builder $query): Builder => $query->where(
-                                    'lastName',
-                                    'like',
-                                    "%{$lastName}%"
-                                )
-                            )
-                            ->when(
-                                $firstName !== '',
-                                fn (Builder $query): Builder => $query->where(
-                                    'firstName',
-                                    'like',
-                                    "%{$firstName}%"
-                                )
-                            );
+                        return $query->whereKey($participantId);
                     })
                     ->indicateUsing(fn (): array => []),
             ], layout: FiltersLayout::AboveContent)
@@ -167,21 +180,26 @@ class CreateFinisher extends Page implements HasTable
             ->deferFilters(false)
             ->recordActions([
                 Action::make('recordRunner')
-                    ->label('Record Runner')
+                    ->label(fn (Participant $record): string => self::existingFinisher($record)
+                        ? 'Assign Award'
+                        : 'Record Runner')
                     ->icon('heroicon-o-flag')
                     ->color('success')
                     ->button()
                     ->modalWidth('3xl')
                     ->closeModalByClickingAway(false)
-                    ->modalHeading(fn (Participant $record): string => "Record {$record->firstName} {$record->lastName}")
+                    ->modalHeading(fn (Participant $record): string => self::existingFinisher($record)
+                        ? "Assign another award to {$record->firstName} {$record->lastName}"
+                        : "Record {$record->firstName} {$record->lastName}")
                     ->modalDescription(fn (Participant $record): string => Participant::distanceLabel($record->distanceCategory) . ' runner')
-                    ->modalSubmitActionLabel('Record Runner')
+                    ->modalSubmitActionLabel(fn (Participant $record): string => self::existingFinisher($record)
+                        ? 'Assign Award'
+                        : 'Record Runner')
                     ->schema([
                         TextInput::make('racebib')
                             ->label('Race Bib Number')
-                            ->default(fn (Participant $record): ?string => Finisher::raceBibPrefixForDistance(
-                                $record->distanceCategory,
-                            ))
+                            ->default(fn (Participant $record): ?string => self::existingFinisher($record)?->racebib
+                                ?? Finisher::raceBibPrefixForDistance($record->distanceCategory))
                             ->helperText(fn (Participant $record): string => sprintf(
                                 '%s race bib: exactly 5 numbers starting with %s.',
                                 Participant::distanceLabel($record->distanceCategory),
@@ -207,7 +225,7 @@ class CreateFinisher extends Page implements HasTable
                             ->unique(
                                 table: Finisher::class,
                                 column: 'racebib',
-                                ignoreRecord: false,
+                                ignorable: fn (Participant $record): ?Finisher => self::existingFinisher($record),
                             )
                             ->validationMessages([
                                 'unique' => 'This race bib number is already assigned to another runner.',
@@ -226,7 +244,8 @@ class CreateFinisher extends Page implements HasTable
                                     }
                                 };
                             })
-                            ->required(),
+                            ->disabled(fn (Participant $record): bool => (bool) self::existingFinisher($record))
+                            ->required(fn (Participant $record): bool => ! self::existingFinisher($record)),
                         Grid::make([
                             'default' => 1,
                             'lg' => 2,
@@ -234,7 +253,9 @@ class CreateFinisher extends Page implements HasTable
                             ->schema([
                                 Select::make('award_id')
                                     ->label('Award')
-                                    ->placeholder('No award')
+                                    ->placeholder(fn (Participant $record): string => self::existingFinisher($record)
+                                        ? 'Select an award to add'
+                                        : 'No award')
                                     ->options(fn (Participant $record): array => Award::groupedOptions(
                                         distanceCategory: $record->distanceCategory,
                                     ))
@@ -250,7 +271,23 @@ class CreateFinisher extends Page implements HasTable
                                                 return;
                                             }
 
-                                            if (($holder = Finisher::awardHolder($value)) && ! $get('reassign_award')) {
+                                            $selectedAward = Award::query()->find($value);
+                                            $finisher = self::existingFinisher($record);
+                                            $categoryAward = $finisher?->awardInCategory($selectedAward?->category);
+
+                                            if ($categoryAward) {
+                                                $fail(
+                                                    "{$finisher->runner_name} already has {$categoryAward->name} in the "
+                                                    ."{$selectedAward->category} category. A finisher can receive only one award per category."
+                                                );
+
+                                                return;
+                                            }
+
+                                            if (
+                                                ($holder = Finisher::awardHolder($value, $finisher?->getKey()))
+                                                && ! $get('reassign_award')
+                                            ) {
                                                 $fail(
                                                     "This award is assigned to {$holder->runner_name}. "
                                                     .'Confirm the award transfer to continue.'
@@ -267,74 +304,96 @@ class CreateFinisher extends Page implements HasTable
                                         'reassign_award',
                                     ])
                                     ->searchable()
-                                    ->preload(),
+                                    ->preload()
+                                    ->required(fn (Participant $record): bool => (bool) self::existingFinisher($record)),
                                 SchemaView::make('filament.resources.finishers.partials.award-conflict-notice')
                                     ->key('award-conflict-notice'),
                             ])
                             ->columnSpanFull(),
                         Toggle::make('reassign_award')
                             ->label('Transfer this award to the new winner')
-                            ->helperText(function (Get $get): ?string {
-                                $holder = Finisher::awardHolder($get('award_id'));
+                            ->helperText(function (Get $get, Participant $record): ?string {
+                                $holder = Finisher::awardHolder(
+                                    $get('award_id'),
+                                    self::existingFinisher($record)?->getKey(),
+                                );
 
                                 return $holder
                                     ? "This will remove the award from {$holder->runner_name}."
                                     : null;
                             })
-                            ->visible(fn (Get $get): bool => (bool) Finisher::awardHolder($get('award_id')))
+                            ->visible(fn (Get $get, Participant $record): bool => (bool) Finisher::awardHolder(
+                                $get('award_id'),
+                                self::existingFinisher($record)?->getKey(),
+                            ))
                             ->default(false)
                             ->live()
                             ->columnSpanFull(),
                         TimePicker::make('finish_time')
                             ->label('Finish Time')
                             ->seconds(true)
-                            ->default(fn (): string => now('Asia/Manila')->format('H:i:s'))
-                            ->required(),
+                            ->default(fn (Participant $record): string => self::existingFinisher($record)?->finish_time
+                                ? Carbon::parse(self::existingFinisher($record)->finish_time)->format('H:i:s')
+                                : now('Asia/Manila')->format('H:i:s'))
+                            ->disabled(fn (Participant $record): bool => (bool) self::existingFinisher($record))
+                            ->required(fn (Participant $record): bool => ! self::existingFinisher($record)),
                     ])
                     ->action(function (Participant $record, array $data): void {
                         $previousWinner = null;
 
-                        $created = DB::transaction(function () use ($record, $data, &$previousWinner): bool {
-                            if (Finisher::where('participants_id', $record->id)->lockForUpdate()->exists()) {
+                        $result = DB::transaction(function () use ($record, $data, &$previousWinner): string|false {
+                            $finisher = Finisher::query()
+                                ->where('participants_id', $record->id)
+                                ->lockForUpdate()
+                                ->first();
+                            $isExistingFinisher = (bool) $finisher;
+                            $awardId = $data['award_id'] ?? null;
+
+                            if ($isExistingFinisher && ! $awardId) {
                                 return false;
                             }
 
-                            $awardId = $data['award_id'] ?? null;
-
                             if ($awardId) {
-                                Award::query()->whereKey($awardId)->lockForUpdate()->first();
-                                $previousWinner = Finisher::query()
-                                    ->where('award_id', $awardId)
-                                    ->lockForUpdate()
-                                    ->first();
+                                $award = Award::query()->whereKey($awardId)->lockForUpdate()->firstOrFail();
+
+                                if ($finisher?->awardInCategory($award->category)) {
+                                    return false;
+                                }
+
+                                $previousWinner = Finisher::awardHolder($awardId, $finisher?->getKey());
 
                                 if ($previousWinner && ! ($data['reassign_award'] ?? false)) {
                                     return false;
                                 }
 
-                                $previousWinner?->update(['award_id' => null]);
+                                $previousWinner?->removeAward($award);
                             }
 
-                            Finisher::create([
-                                'participants_id' => $record->id,
-                                'firstName' => $record->firstName,
-                                'lastName' => $record->lastName,
-                                'middleInitial' => $record->middleInitial,
-                                'categoryDescription' => $record->categoryDescription,
-                                'subDescription' => $record->subDescription,
-                                'gender' => $record->gender,
-                                'birthDate' => $record->birthDate,
-                                'distanceCategory' => $record->distanceCategory,
-                                'racebib' => $data['racebib'],
-                                'award_id' => $awardId,
-                                'finish_time' => Carbon::now('Asia/Manila')->format('Y-m-d') . ' ' . $data['finish_time'],
-                                'created_by' => Auth::user()->username,
-                            ]);
+                            if (! $finisher) {
+                                $finisher = Finisher::create([
+                                    'participants_id' => $record->id,
+                                    'firstName' => $record->firstName,
+                                    'lastName' => $record->lastName,
+                                    'middleInitial' => $record->middleInitial,
+                                    'categoryDescription' => $record->categoryDescription,
+                                    'subDescription' => $record->subDescription,
+                                    'gender' => $record->gender,
+                                    'birthDate' => $record->birthDate,
+                                    'distanceCategory' => $record->distanceCategory,
+                                    'racebib' => $data['racebib'],
+                                    'finish_time' => Carbon::now('Asia/Manila')->format('Y-m-d').' '.$data['finish_time'],
+                                    'created_by' => Auth::user()->username,
+                                ]);
+                            }
 
-                            return true;
+                            if ($awardId) {
+                                $finisher->assignAward($award);
+                            }
+
+                            return $isExistingFinisher ? 'award-assigned' : 'runner-recorded';
                         });
 
-                        if (! $created) {
+                        if (! $result) {
                             Notification::make()
                                 ->title('Finisher could not be recorded')
                                 ->body('The runner or award assignment changed. Review the details and try again.')
@@ -346,11 +405,15 @@ class CreateFinisher extends Page implements HasTable
                         }
 
                         Notification::make()
-                            ->title($previousWinner ? 'Award transferred' : 'Runner recorded')
+                            ->title($previousWinner
+                                ? 'Award transferred'
+                                : ($result === 'award-assigned' ? 'Award assigned' : 'Runner recorded'))
                             ->body(
                                 $previousWinner
                                     ? "The award was transferred from {$previousWinner->runner_name} to {$record->firstName} {$record->lastName}."
-                                    : "{$record->firstName} {$record->lastName} was added to the finishers list."
+                                    : ($result === 'award-assigned'
+                                        ? "The award was added to {$record->firstName} {$record->lastName}."
+                                        : "{$record->firstName} {$record->lastName} was added to the finishers list.")
                             )
                             ->success()
                             ->send();
@@ -358,7 +421,7 @@ class CreateFinisher extends Page implements HasTable
             ])
             ->recordUrl(null)
             ->heading('Participant Lookup Results')
-            ->description('Select an eligible runner to record their race result.')
+            ->description('Record a race result or assign another eligible award to an existing finisher.')
             ->striped()
             ->paginationPageOptions([10, 25, 50, 100])
             ->defaultPaginationPageOption(25)
@@ -373,5 +436,34 @@ class CreateFinisher extends Page implements HasTable
             : '';
 
         return "{$participant->lastName}, {$participant->firstName}{$middleInitial}";
+    }
+
+    private static function participantLookupLabel(Participant $participant): string
+    {
+        $birthDate = filled($participant->birthDate) && $participant->birthDate !== '0000-00-00'
+            ? Carbon::parse($participant->birthDate)->format('m/d/Y')
+            : 'Birthdate not recorded';
+
+        return self::participantName($participant).' - '.$birthDate;
+    }
+
+    private static function eligibleParticipantsQuery(): Builder
+    {
+        return Participant::query()
+            ->where('year', date('Y'))
+            ->orderBy('lastName')
+            ->orderBy('firstName');
+    }
+
+    private static function existingFinisher(Participant $participant): ?Finisher
+    {
+        if ($participant->relationLoaded('finisher')) {
+            return $participant->finisher;
+        }
+
+        return Finisher::query()
+            ->with('awards')
+            ->where('participants_id', $participant->getKey())
+            ->first();
     }
 }

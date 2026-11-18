@@ -10,6 +10,7 @@ use App\Models\Participant;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -127,7 +128,7 @@ class FinisherAwardTest extends TestCase
         $participant = $this->participant();
 
         $component = Livewire::test(CreateFinisher::class)
-            ->filterTable('runner_name', ['last_name' => 'Runner'])
+            ->filterTable('runner_name', ['participant_id' => $participant->getKey()])
             ->assertTableColumnExists(
                 'mobile_runner_summary',
                 fn ($column): bool => $column->getHiddenFrom() === 'md',
@@ -163,6 +164,21 @@ class FinisherAwardTest extends TestCase
         $this->assertNull($component->instance()->getTable()->getContentGrid());
         $this->assertFalse($component->instance()->getTable()->hasColumnsLayout());
         $this->assertTrue($component->instance()->getTable()->isStriped());
+
+        $runnerLookup = $component->instance()
+            ->getTable()
+            ->getFilter('runner_name')
+            ->getSchema()
+            ->getComponent('participant_id');
+        $this->assertInstanceOf(Select::class, $runnerLookup);
+        $this->assertSame(150, $runnerLookup->getSearchDebounce());
+        $this->assertSame([], $runnerLookup->getSearchResults(''));
+        $this->assertSame([
+            $participant->getKey() => 'Runner, Awarded - 01/01/1990',
+        ], $runnerLookup->getSearchResults('Runner'));
+        $this->assertSame([
+            $participant->getKey() => 'Runner, Awarded - 01/01/1990',
+        ], $runnerLookup->getSearchResults('Award'));
 
         $component->assertTableActionDataSet([
             'racebib' => '5',
@@ -219,7 +235,7 @@ class FinisherAwardTest extends TestCase
         ]);
 
         Livewire::test(CreateFinisher::class)
-            ->filterTable('runner_name', ['last_name' => 'Runner'])
+            ->filterTable('runner_name', ['participant_id' => $secondParticipant->getKey()])
             ->mountTableAction('recordRunner', $secondParticipant)
             ->setTableActionData([
                 'racebib' => '50001',
@@ -232,7 +248,7 @@ class FinisherAwardTest extends TestCase
         $this->assertDatabaseCount('finishers', 1);
 
         $transferComponent = Livewire::test(CreateFinisher::class)
-            ->filterTable('runner_name', ['last_name' => 'Runner'])
+            ->filterTable('runner_name', ['participant_id' => $secondParticipant->getKey()])
             ->mountTableAction('recordRunner', $secondParticipant)
             ->setTableActionData([
                 'racebib' => '50003',
@@ -313,6 +329,101 @@ class FinisherAwardTest extends TestCase
 
         $this->assertTrue($award->finishers->contains($finisher));
         $this->assertSame('Top Finisher', $finisher->award->name);
+    }
+
+    public function test_existing_finisher_can_win_one_main_and_one_special_award_only(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $role = Role::query()->firstOrCreate([
+            'name' => 'multiple-award-recorder',
+            'guard_name' => 'web',
+        ]);
+        $role->givePermissionTo([
+            Permission::findOrCreate('access_admin_panel'),
+            Permission::findOrCreate('ViewAny:Finisher'),
+            Permission::findOrCreate('Create:Finisher'),
+        ]);
+
+        $user = User::query()->create([
+            'name' => 'Multiple Award Recorder',
+            'username' => 'multiple-award-recorder',
+            'email' => 'multiple-award-recorder@example.test',
+            'password' => 'password',
+        ]);
+        $user->assignRole($role);
+        $this->actingAs($user);
+
+        $participant = $this->participant();
+        $mainAward = Award::query()->where('name', '5K Finisher Male')->firstOrFail();
+        $secondMainAward = Award::query()->create([
+            'name' => '5K Second Place Male',
+            'category' => Award::CATEGORY_TOP_FINISHERS,
+            'distance_category' => Award::DISTANCE_5KM,
+            'is_active' => true,
+        ]);
+        $oldestAward = Award::query()->where('name', 'Oldest Male 5K Winner')->firstOrFail();
+        $youngestAward = Award::query()->where('name', 'Youngest Male 5K Winner')->firstOrFail();
+        $tenKilometerAward = Award::query()->where('name', 'Oldest Male 10K Winner')->firstOrFail();
+
+        $finisher = Finisher::query()->create([
+            'participants_id' => $participant->getKey(),
+            'firstName' => $participant->firstName,
+            'lastName' => $participant->lastName,
+            'categoryDescription' => $participant->categoryDescription,
+            'subDescription' => $participant->subDescription,
+            'gender' => $participant->gender,
+            'birthDate' => $participant->birthDate,
+            'distanceCategory' => $participant->distanceCategory,
+            'racebib' => '50002',
+            'finish_time' => now(),
+            'award_id' => $mainAward->getKey(),
+            'created_by' => $user->username,
+        ]);
+
+        Livewire::test(CreateFinisher::class)
+            ->filterTable('runner_name', ['participant_id' => $participant->getKey()])
+            ->mountTableAction('recordRunner', $participant)
+            ->setTableActionData(['award_id' => $tenKilometerAward->getKey()])
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors(['award_id']);
+
+        Livewire::test(CreateFinisher::class)
+            ->filterTable('runner_name', ['participant_id' => $participant->getKey()])
+            ->assertCanSeeTableRecords([$participant])
+            ->mountTableAction('recordRunner', $participant)
+            ->setTableActionData(['award_id' => $oldestAward->getKey()])
+            ->callMountedTableAction()
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseCount('finishers', 1);
+        $this->assertEqualsCanonicalizing([
+            $mainAward->getKey(),
+            $oldestAward->getKey(),
+        ], $finisher->refresh()->awards()->pluck('awards.id')->all());
+
+        Livewire::test(CreateFinisher::class)
+            ->filterTable('runner_name', ['participant_id' => $participant->getKey()])
+            ->mountTableAction('recordRunner', $participant)
+            ->setTableActionData(['award_id' => $secondMainAward->getKey()])
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors(['award_id']);
+
+        Livewire::test(CreateFinisher::class)
+            ->filterTable('runner_name', ['participant_id' => $participant->getKey()])
+            ->mountTableAction('recordRunner', $participant)
+            ->setTableActionData(['award_id' => $youngestAward->getKey()])
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors(['award_id']);
+
+        $notice = view('filament.resources.finishers.partials.award-conflict-notice', [
+            'get' => fn (string $field): mixed => $field === 'award_id' ? $youngestAward->getKey() : null,
+            'record' => $participant,
+        ])->render();
+
+        $this->assertStringContainsString('Runner already has an award in this category', $notice);
+        $this->assertStringContainsString('can receive only one award per category', $notice);
+        $this->assertDatabaseCount('award_finisher', 2);
     }
 
     public function test_finisher_with_an_existing_award_can_open_the_edit_form(): void

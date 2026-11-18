@@ -9,6 +9,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 use App\Filament\Resources\Finishers\FinisherResource;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class EditFinisher extends EditRecord
@@ -36,25 +37,37 @@ class EditFinisher extends EditRecord
         unset($data['reassign_award']);
 
         $awardId = $data['award_id'] ?? null;
+        unset($data['award_id']);
 
-        if ($awardId) {
-            Award::query()->whereKey($awardId)->lockForUpdate()->first();
-            $holder = Finisher::query()
-                ->where('award_id', $awardId)
-                ->whereKeyNot($record->getKey())
-                ->lockForUpdate()
-                ->first();
+        return DB::transaction(function () use ($record, $data, $awardId, $shouldTransferAward): Model {
+            if ($awardId) {
+                $award = Award::query()->whereKey($awardId)->lockForUpdate()->firstOrFail();
+                $categoryAward = $record->awardInCategory($award->category);
 
-            if ($holder && ! $shouldTransferAward) {
-                throw ValidationException::withMessages([
-                    'data.award_id' => "This award is assigned to {$holder->runner_name}. Confirm the transfer to continue.",
-                ]);
+                if ($categoryAward && (int) $categoryAward->getKey() !== (int) $award->getKey()) {
+                    throw ValidationException::withMessages([
+                        'data.award_id' => "This finisher already has {$categoryAward->name} in the {$award->category} category.",
+                    ]);
+                }
+
+                if ($categoryAward) {
+                    return parent::handleRecordUpdate($record, $data);
+                }
+
+                $holder = Finisher::awardHolder($awardId, $record->getKey());
+
+                if ($holder && ! $shouldTransferAward) {
+                    throw ValidationException::withMessages([
+                        'data.award_id' => "This award is assigned to {$holder->runner_name}. Confirm the transfer to continue.",
+                    ]);
+                }
+
+                $holder?->removeAward($award);
+                $record->assignAward($award);
             }
 
-            $holder?->update(['award_id' => null]);
-        }
-
-        return parent::handleRecordUpdate($record, $data);
+            return parent::handleRecordUpdate($record, $data);
+        });
     }
 
 }

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -22,6 +23,11 @@ class Participant extends Model
     public function reportExclusions(): HasMany
     {
         return $this->hasMany(ParticipantReportExclusion::class);
+    }
+
+    public function finisher(): HasOne
+    {
+        return $this->hasOne(Finisher::class, 'participants_id');
     }
 
     public function registrationMembers(): HasMany

@@ -1,13 +1,35 @@
 @php
+    use App\Models\Award;
     use App\Models\Finisher;
+    use App\Models\Participant;
     use Filament\Notifications\Notification;
 
+    $selectedAward = Award::query()->find($get('award_id'));
+    $selectedFinisher = $record instanceof Finisher
+        ? $record
+        : ($record instanceof Participant
+            ? Finisher::query()->where('participants_id', $record->getKey())->first()
+            : null);
+    $categoryAward = $selectedFinisher?->awardInCategory($selectedAward?->category);
+    $hasCategoryConflict = $categoryAward
+        && (! ($record instanceof Finisher) || ! $categoryAward->is($selectedAward));
     $holder = Finisher::awardHolder(
         $get('award_id'),
-        $record instanceof Finisher ? $record->getKey() : null,
+        $selectedFinisher?->getKey(),
     );
 
-    $notification = $holder
+    $notification = $hasCategoryConflict
+        ? Notification::make()
+            ->title('Runner already has an award in this category')
+            ->body(
+                $selectedFinisher->runner_name.' already received '.$categoryAward->name
+                .' in '.$selectedAward->category.'. A finisher can receive only one award per category. '
+                .'Choose an award from a different category.'
+            )
+            ->danger()
+            ->persistent()
+            ->inline()
+        : ($holder
         ? Notification::make()
             ->title('Award has a current winner')
             ->body(
@@ -18,7 +40,7 @@
             ->warning()
             ->persistent()
             ->inline()
-        : null;
+        : null);
 @endphp
 
 @if ($notification)

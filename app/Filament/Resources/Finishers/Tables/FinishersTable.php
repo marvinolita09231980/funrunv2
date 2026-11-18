@@ -20,7 +20,7 @@ class FinishersTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['participant', 'award']))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['participant', 'awards']))
             ->columns([
                 TextColumn::make('mobile_finisher_summary')
                     ->label('Finisher')
@@ -34,7 +34,7 @@ class FinishersTable
                     ->description(fn (Finisher $record): string => collect([
                         "Bib {$record->racebib}",
                         Participant::distanceLabel($record->distanceCategory),
-                        filled($record->award?->name) ? "Award: {$record->award->name}" : null,
+                        filled($record->award_names) ? "Awards: {$record->award_names}" : null,
                         filled($record->finish_time)
                             ? 'Finish: '.Carbon::parse($record->finish_time)->format('h:i:s A')
                             : null,
@@ -80,7 +80,7 @@ class FinishersTable
                     ->visibleFrom('md'),
                 TextColumn::make('desktop_award')
                     ->label('Award')
-                    ->getStateUsing(fn (Finisher $record): ?string => $record->award?->name)
+                    ->getStateUsing(fn (Finisher $record): string => $record->award_names)
                     ->placeholder('—')
                     ->wrap()
                     ->visibleFrom('md'),

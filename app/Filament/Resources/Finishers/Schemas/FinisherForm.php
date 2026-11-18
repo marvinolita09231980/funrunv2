@@ -172,7 +172,7 @@ class FinisherForm
                                 : ['default' => 1])
                             ->placeholder(fn (Get $get, ?Finisher $record): string => filled(
                                 $get('distanceCategory') ?? $record?->distanceCategory
-                            ) ? 'No award' : 'Select and validate a runner first')
+                            ) ? ($record ? 'Select another award to add' : 'No award') : 'Select and validate a runner first')
                             ->options(function (Get $get, ?Finisher $record): array {
                                 $distance = $get('distanceCategory') ?? $record?->distanceCategory;
 
@@ -180,12 +180,19 @@ class FinisherForm
                                     ? Award::groupedOptions($record?->award_id, $distance)
                                     : [];
                             })
+                            ->helperText(fn (?Finisher $record): ?string => $record && filled($record->award_names)
+                                ? 'Current awards: '.$record->award_names
+                                : null)
                             ->disabled(fn (Get $get, ?Finisher $record): bool => blank(
                                 $get('distanceCategory') ?? $record?->distanceCategory
                             ))
                             ->rule(function (Get $get, ?Finisher $record): Closure {
                                 return function (string $attribute, mixed $value, Closure $fail) use ($get, $record): void {
-                                    if (blank($value) || (int) $value === (int) $record?->award_id) {
+                                    if (blank($value)) {
+                                        return;
+                                    }
+
+                                    if ($record?->awards()->whereKey($value)->exists()) {
                                         return;
                                     }
 
@@ -193,6 +200,22 @@ class FinisherForm
 
                                     if (! Award::isSelectableForDistance($value, $distance)) {
                                         $fail('The selected award does not match the runner’s registered distance category.');
+
+                                        return;
+                                    }
+
+                                    $selectedAward = Award::query()->find($value);
+                                    $categoryAward = $record?->awardInCategory($selectedAward?->category);
+
+                                    if ($categoryAward) {
+                                        if ((int) $categoryAward->getKey() === (int) $value) {
+                                            return;
+                                        }
+
+                                        $fail(
+                                            "{$record->runner_name} already has {$categoryAward->name} in the "
+                                            ."{$selectedAward->category} category. A finisher can receive only one award per category."
+                                        );
 
                                         return;
                                     }

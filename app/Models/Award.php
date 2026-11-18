@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Award extends Model
 {
@@ -112,8 +112,8 @@ class Award extends Model
         ];
     }
 
-    public function finishers(): HasMany
+    public function finishers(): BelongsToMany
     {
-        return $this->hasMany(Finisher::class);
+        return $this->belongsToMany(Finisher::class)->withTimestamps();
     }
 }
