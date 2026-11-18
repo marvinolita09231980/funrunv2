@@ -52,7 +52,10 @@ class Award extends Model
                 $query->where('is_active', true);
 
                 if ($includeAwardId) {
-                    $query->orWhereKey($includeAwardId);
+                    $query->orWhere(
+                        $query->getModel()->getQualifiedKeyName(),
+                        $includeAwardId,
+                    );
                 }
             })
             ->get()

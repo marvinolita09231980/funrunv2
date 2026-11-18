@@ -54,18 +54,4 @@ class ParticipantReportPdf
         ];
     }
 
-    /**
-     * @return array{content: string, filename: string}
-     */
-    public static function finishers(User $user, int $year, string $type, string $gender): array
-    {
-        $report = SpecialFinisherReport::build($user, $year, $type, $gender);
-
-        return [
-            'content' => Pdf::loadView('pdf.special-finisher-report', [
-                'report' => $report,
-            ])->setPaper('a4', 'landscape')->output(),
-            'filename' => "top-10-{$type}-{$gender}-finishers-{$year}.pdf",
-        ];
-    }
 }

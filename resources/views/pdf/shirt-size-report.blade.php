@@ -80,6 +80,8 @@
         .distance-row:nth-child(even) td,
         .distance-row:nth-child(even) th { background: #f8fafc; }
 
+        .group-start td { border-top: 2px solid #bfdbfe; }
+
         .group-total td {
             color: #1e3a8a;
             background: #eff6ff;
@@ -157,11 +159,9 @@
         <tbody>
             @forelse ($report['groups'] as $group)
                 @foreach ($group['distances'] as $distance)
-                    <tr class="distance-row">
-                        @if ($loop->first)
-                            <td class="category" rowspan="4">{{ $group['category'] }}</td>
-                            <td class="subcategory" rowspan="4">{{ $group['subcategory'] }}</td>
-                        @endif
+                    <tr @class(['distance-row', 'group-start' => $loop->first])>
+                        <td class="category">{{ $group['category'] }}</td>
+                        <td class="subcategory">{{ $group['subcategory'] }}</td>
                         <td class="distance">{{ $distance['label'] }}</td>
                         @foreach ($report['size_labels'] as $size => $label)
                             @php($count = $distance['sizes'][$size])
@@ -171,6 +171,8 @@
                     </tr>
                 @endforeach
                 <tr class="group-total">
+                    <td class="category">{{ $group['category'] }}</td>
+                    <td class="subcategory">{{ $group['subcategory'] }}</td>
                     <td class="distance">All Distances</td>
                     @foreach ($report['size_labels'] as $size => $label)
                         <td>{{ number_format($group['totals'][$size]) }}</td>

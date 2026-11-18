@@ -19,12 +19,6 @@ Route::get(
 )->whereIn('type', ['couple', 'family'])
     ->name('participant-reports.preview.group');
 
-Route::get(
-    '/admin/participant-reports/preview/finishers/{type}',
-    [ParticipantReportPdfController::class, 'finishers'],
-)->whereIn('type', ['padac', 'rpwuds'])
-    ->name('participant-reports.preview.finishers');
-
 Route::get('/feedback/feedback-qr-code.png', function () {
     return response(FeedbackShareLink::downloadableQrCodePng(), 200, [
         'Cache-Control' => 'no-store, private',

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Finishers\Pages\CreateFinisher;
+use App\Filament\Resources\Finishers\Pages\EditFinisher;
 use App\Models\Award;
 use App\Models\Finisher;
 use App\Models\Participant;
@@ -129,7 +130,8 @@ class FinisherAwardTest extends TestCase
             ->filterTable('runner_name', ['last_name' => 'Runner'])
             ->assertTableActionExists(
                 'recordRunner',
-                fn (Action $action): bool => ! $action->isModalClosedByClickingAway(),
+                fn (Action $action): bool => ! $action->isModalClosedByClickingAway()
+                    && $action->getModalWidth() === '3xl',
                 $participant,
             )
             ->mountTableAction('recordRunner', $participant);
@@ -188,6 +190,19 @@ class FinisherAwardTest extends TestCase
             'lastName' => 'Runner',
         ]);
 
+        Livewire::test(CreateFinisher::class)
+            ->filterTable('runner_name', ['last_name' => 'Runner'])
+            ->mountTableAction('recordRunner', $secondParticipant)
+            ->setTableActionData([
+                'racebib' => '50001',
+                'award_id' => null,
+                'finish_time' => '01:03:00',
+            ])
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors(['racebib' => 'unique']);
+
+        $this->assertDatabaseCount('finishers', 1);
+
         $transferComponent = Livewire::test(CreateFinisher::class)
             ->filterTable('runner_name', ['last_name' => 'Runner'])
             ->mountTableAction('recordRunner', $secondParticipant)
@@ -197,10 +212,38 @@ class FinisherAwardTest extends TestCase
                 'finish_time' => '01:03:00',
             ])
             ->assertSet('mountedActions.0.data.award_id', $award->getKey())
+            ->assertSet('mountedActions.0.data.reassign_award', false);
+
+        $transferComponent
+            ->set('mountedActions.0.data.award_id', null)
             ->assertSet('mountedActions.0.data.reassign_award', false)
-            ->assertNotified('Award has a current winner')
+            ->set('mountedActions.0.data.award_id', $wrongDistanceAward->getKey())
+            ->assertSet('mountedActions.0.data.reassign_award', false)
+            ->set('mountedActions.0.data.award_id', $award->getKey())
+            ->assertSet('mountedActions.0.data.reassign_award', false)
             ->callMountedTableAction()
             ->assertHasTableActionErrors(['award_id']);
+
+        $notice = view('filament.resources.finishers.partials.award-conflict-notice', [
+            'get' => fn (string $field): mixed => $field === 'award_id' ? $award->getKey() : null,
+            'record' => $secondParticipant,
+        ])->render();
+
+        $this->assertStringContainsString('Award has a current winner', $notice);
+        $this->assertStringContainsString('Awarded Runner already received this award', $notice);
+        $this->assertStringContainsString('(recorded by award-recorder).', $notice);
+        $this->assertStringContainsString('class="award-conflict-notice"', $notice);
+        $this->assertStringContainsString('color: var(--warning-950)', $notice);
+        $this->assertStringContainsString('persistent', $notice);
+
+        foreach ([null, $wrongDistanceAward->getKey()] as $availableAwardId) {
+            $noticeWithoutHolder = view('filament.resources.finishers.partials.award-conflict-notice', [
+                'get' => fn (string $field): mixed => $field === 'award_id' ? $availableAwardId : null,
+                'record' => $secondParticipant,
+            ])->render();
+
+            $this->assertStringNotContainsString('Award has a current winner', $noticeWithoutHolder);
+        }
 
         $this->assertDatabaseCount('finishers', 1);
         $this->assertSame($finisher->getKey(), Finisher::awardHolder($award->getKey())?->getKey());
@@ -242,6 +285,83 @@ class FinisherAwardTest extends TestCase
 
         $this->assertTrue($award->finishers->contains($finisher));
         $this->assertSame('Top Finisher', $finisher->award->name);
+    }
+
+    public function test_finisher_with_an_existing_award_can_open_the_edit_form(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $role = Role::query()->firstOrCreate([
+            'name' => 'superadmin',
+            'guard_name' => 'web',
+        ]);
+        $user = User::query()->create([
+            'name' => 'Finisher Editor',
+            'username' => 'finisher-editor',
+            'email' => 'finisher-editor@example.test',
+            'password' => 'password',
+        ]);
+        $user->assignRole($role);
+        $this->actingAs($user);
+
+        $award = Award::query()->create([
+            'name' => 'Existing Inactive Award',
+            'category' => Award::CATEGORY_SPECIAL_AWARDS,
+            'distance_category' => Award::DISTANCE_5KM,
+            'is_active' => false,
+        ]);
+        $participant = $this->participant();
+        $finisher = Finisher::query()->create([
+            'participants_id' => $participant->getKey(),
+            'firstName' => $participant->firstName,
+            'lastName' => $participant->lastName,
+            'categoryDescription' => $participant->categoryDescription,
+            'subDescription' => $participant->subDescription,
+            'gender' => $participant->gender,
+            'birthDate' => $participant->birthDate,
+            'distanceCategory' => $participant->distanceCategory,
+            'racebib' => '50002',
+            'finish_time' => now(),
+            'award_id' => $award->getKey(),
+            'created_by' => $user->username,
+        ]);
+
+        $otherParticipant = $this->participant([
+            'participantNumber' => '2',
+            'firstName' => 'Other',
+        ]);
+        Finisher::query()->create([
+            'participants_id' => $otherParticipant->getKey(),
+            'firstName' => $otherParticipant->firstName,
+            'lastName' => $otherParticipant->lastName,
+            'categoryDescription' => $otherParticipant->categoryDescription,
+            'subDescription' => $otherParticipant->subDescription,
+            'gender' => $otherParticipant->gender,
+            'birthDate' => $otherParticipant->birthDate,
+            'distanceCategory' => $otherParticipant->distanceCategory,
+            'racebib' => '50004',
+            'finish_time' => now(),
+            'created_by' => $user->username,
+        ]);
+
+        $component = Livewire::test(EditFinisher::class, [
+            'record' => $finisher->getRouteKey(),
+        ])
+            ->assertFormFieldExists('award_id', fn ($field): bool =>
+                $field->getColumnSpan('default') === 1
+                && $field->getColumnSpan('md') === 2)
+            ->assertSet('data.award_id', $award->getKey())
+            ->assertDontSee('race bib: exactly 5 numbers starting with')
+            ->assertSee('Existing Inactive Award');
+
+        $component
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->fillForm(['racebib' => '50004'])
+            ->call('save')
+            ->assertHasFormErrors(['racebib' => 'unique']);
+
+        $this->assertSame('50002', $finisher->refresh()->racebib);
     }
 
     private function participant(array $attributes = []): Participant

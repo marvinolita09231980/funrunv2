@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Services\ParticipantAgeReport;
 use App\Services\ParticipantReportPdf;
 use App\Services\RegistrationGroupReport;
-use App\Services\SpecialFinisherReport;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
@@ -175,34 +174,6 @@ class ParticipantReports extends Page
         $this->dispatch('open-modal', id: 'participant-report-pdf-preview');
     }
 
-    public function openFinisherReportPreview(string $type, string $gender): void
-    {
-        abort_unless(static::canAccess(), 403);
-
-        $parameters = validator([
-            'year' => $this->selectedYear,
-            'type' => $type,
-            'gender' => $gender,
-        ], [
-            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
-            'type' => ['required', Rule::in(['padac', 'rpwuds'])],
-            'gender' => ['required', Rule::in(['male', 'female'])],
-        ])->validate();
-
-        $this->previewReportType = 'finisher';
-        $this->previewReportParameters = $parameters;
-        $this->previewUrl = $this->previewFinisherReportUrl(
-            $parameters['type'],
-            $parameters['gender'],
-        );
-        $this->previewTitle = SpecialFinisherReport::title(
-            $parameters['type'],
-            $parameters['gender'],
-        ).' · '.$parameters['year'];
-
-        $this->dispatch('open-modal', id: 'participant-report-pdf-preview');
-    }
-
     /** @return array<string, mixed> */
     public function previewReport(): array
     {
@@ -225,62 +196,8 @@ class ParticipantReports extends Page
                 (int) ($this->previewReportParameters['year'] ?? 0),
                 (string) ($this->previewReportParameters['type'] ?? ''),
             ),
-            'finisher' => SpecialFinisherReport::build(
-                $user,
-                (int) ($this->previewReportParameters['year'] ?? 0),
-                (string) ($this->previewReportParameters['type'] ?? ''),
-                (string) ($this->previewReportParameters['gender'] ?? ''),
-            ),
             default => [],
         };
-    }
-
-    public function excludeFinisherPreviewParticipant(
-        int $participantId,
-        string $type,
-        string $gender,
-    ): void {
-        abort_unless(static::canAccess(), 403);
-        abort_unless($this->previewReportType === 'finisher', 404);
-
-        $parameters = validator([
-            'year' => $this->previewReportParameters['year'] ?? null,
-            'type' => $type,
-            'gender' => $gender,
-        ], [
-            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
-            'type' => ['required', Rule::in(['padac', 'rpwuds'])],
-            'gender' => ['required', Rule::in(['male', 'female'])],
-        ])->validate();
-
-        abort_unless(
-            ($this->previewReportParameters['type'] ?? null) === $parameters['type']
-                && ($this->previewReportParameters['gender'] ?? null) === $parameters['gender'],
-            404,
-        );
-
-        $finisher = SpecialFinisherReport::candidateQuery(
-            (int) $parameters['year'],
-            $parameters['type'],
-            $parameters['gender'],
-        )->where('participants_id', $participantId)->firstOrFail();
-
-        ParticipantReportExclusion::query()->updateOrCreate([
-            'participant_id' => $finisher->participants_id,
-            'year' => (int) $parameters['year'],
-            'report_key' => ParticipantReportExclusion::finisherKey(
-                $parameters['type'],
-                $parameters['gender'],
-            ),
-        ], [
-            'excluded_by' => Auth::id(),
-        ]);
-
-        Notification::make()
-            ->success()
-            ->title('Finisher marked as DQ')
-            ->body("{$finisher->runner_name} was marked as DQ for this report. The next eligible finisher has been promoted.")
-            ->send();
     }
 
     public function excludePreviewParticipant(
@@ -467,7 +384,6 @@ class ParticipantReports extends Page
         $document = match ($this->previewReportType) {
             'age' => $this->previewAgeDocument(),
             'group' => $this->previewGroupDocument(),
-            'finisher' => $this->previewFinisherDocument(),
             default => abort(404),
         };
 
@@ -494,15 +410,6 @@ class ParticipantReports extends Page
         return route('participant-reports.preview.group', [
             'type' => $type,
             'year' => $this->selectedYear,
-        ]);
-    }
-
-    public function previewFinisherReportUrl(string $type, string $gender): string
-    {
-        return route('participant-reports.preview.finishers', [
-            'type' => $type,
-            'year' => $this->selectedYear,
-            'gender' => $gender,
         ]);
     }
 
@@ -540,23 +447,6 @@ class ParticipantReports extends Page
         );
     }
 
-    /** @return array{content: string, filename: string} */
-    private function previewFinisherDocument(): array
-    {
-        $parameters = validator($this->previewReportParameters, [
-            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
-            'type' => ['required', Rule::in(['padac', 'rpwuds'])],
-            'gender' => ['required', Rule::in(['male', 'female'])],
-        ])->validate();
-
-        return ParticipantReportPdf::finishers(
-            Auth::user(),
-            (int) $parameters['year'],
-            $parameters['type'],
-            $parameters['gender'],
-        );
-    }
-
     private function agePreviewTitle(
         string $ranking,
         ?string $gender,
@@ -582,19 +472,6 @@ class ParticipantReports extends Page
     /** @return array<string, string> */
     private function previewReportDefinitions(): array
     {
-        if ($this->previewReportType === 'finisher') {
-            $type = (string) ($this->previewReportParameters['type'] ?? '');
-            $gender = (string) ($this->previewReportParameters['gender'] ?? '');
-
-            return in_array($type, ['padac', 'rpwuds'], true)
-                && in_array($gender, ['male', 'female'], true)
-                    ? [
-                        ParticipantReportExclusion::finisherKey($type, $gender)
-                            => SpecialFinisherReport::title($type, $gender),
-                    ]
-                    : [];
-        }
-
         if ($this->previewReportType === 'group') {
             $type = (string) ($this->previewReportParameters['type'] ?? '');
 

@@ -44,8 +44,19 @@ class ParticipantsTable
                 $year = (int) ($livewire->getTableFilterState('year')['value'] ?? date('Y'));
 
                 $query
-                    ->with('creator')
+                    ->with(['creator', 'registrationMembers'])
                     ->where('year', $year);
+
+                $runnerGroup = $livewire->getTableFilterState('runner_group')['value'] ?? null;
+
+                if (in_array($runnerGroup, ['couple', 'family'], true)) {
+                    $query
+                        ->orderByRaw(
+                            "CASE WHEN participantNumber IS NULL OR TRIM(participantNumber) IN ('', '0') THEN 1 ELSE 0 END"
+                        )
+                        ->orderBy('participantNumber')
+                        ->orderBy('id');
+                }
 
                 if (! Auth::check()) {
                     return;
@@ -63,10 +74,21 @@ class ParticipantsTable
 
                         return "{$record->lastName}, {$record->firstName}{$middleInitial}";
                     })
-                    ->description(function (Participant $record): string {
+                    ->description(function (Participant $record, $livewire): string {
+                        $runnerGroup = $livewire->getTableFilterState('runner_group')['value'] ?? null;
+
                         return collect([
                             $record->categoryDescription,
                             $record->subDescription,
+                            in_array($runnerGroup, ['couple', 'family'], true)
+                                ? collect([
+                                    $record->relationship_group_marker,
+                                    $record->relationship_group_size.' runner(s)',
+                                ])->filter()->join(' · ')
+                                : null,
+                            in_array($runnerGroup, ['couple', 'family'], true)
+                                ? 'Related: '.($record->related_runners_label ?? 'No related runner found')
+                                : null,
                             filled($record->gender) ? ucfirst($record->gender) : null,
                             filled($record->created_by) ? "Added by {$record->creator_name}" : null,
                         ])->filter()->join(' • ');
@@ -74,6 +96,24 @@ class ParticipantsTable
                     ->weight('bold')
                     ->wrap()
                     ->hiddenFrom('md'),
+                TextColumn::make('relationship_group')
+                    ->label('Group')
+                    ->getStateUsing(fn (Participant $record): ?string => $record->relationship_group_marker)
+                    ->formatStateUsing(
+                        fn (?string $state, Participant $record): HtmlString => self::relationshipGroupBracket(
+                            $state,
+                            $record,
+                        ),
+                    )
+                    ->fontFamily('mono')
+                    ->weight('bold')
+                    ->color('primary')
+                    ->visible(function ($livewire): bool {
+                        $runnerGroup = $livewire->getTableFilterState('runner_group')['value'] ?? null;
+
+                        return in_array($runnerGroup, ['couple', 'family'], true);
+                    })
+                    ->visibleFrom('md'),
                 TextColumn::make('firstName')
                     ->label('First Name')
                     ->searchable()
@@ -94,6 +134,21 @@ class ParticipantsTable
                 TextColumn::make('gender')
                     ->label('Gender')
                     ->searchable()
+                    ->visibleFrom('md'),
+                TextColumn::make('related_runners')
+                    ->label('Related Runners')
+                    ->getStateUsing(fn (Participant $record): ?string => $record->related_runners_label)
+                    ->description(fn (Participant $record): string => filled($record->participantNumber)
+                        && $record->participantNumber !== '0'
+                            ? "Registration #{$record->participantNumber}"
+                            : 'No shared registration reference')
+                    ->placeholder('No related runner found')
+                    ->wrap()
+                    ->visible(function ($livewire): bool {
+                        $runnerGroup = $livewire->getTableFilterState('runner_group')['value'] ?? null;
+
+                        return in_array($runnerGroup, ['couple', 'family'], true);
+                    })
                     ->visibleFrom('md'),
                 TextColumn::make('creator_name')
                     ->label('Created By')
@@ -122,7 +177,29 @@ class ParticipantsTable
                     ->default(date('Y'))
                     ->selectablePlaceholder(false)
                     ->query(fn ($query) => $query),
-            ], layout: FiltersLayout::Hidden)
+                SelectFilter::make('runner_group')
+                    ->label('Runner Group')
+                    ->placeholder('All runner groups')
+                    ->options([
+                        'padac' => 'PADAC Members',
+                        'rpwuds' => 'RPWUDS',
+                        'couple' => 'Couple',
+                        'family' => 'Family',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $group = $data['value'] ?? null;
+
+                        if (! in_array($group, ['padac', 'rpwuds', 'couple', 'family'], true)) {
+                            return $query;
+                        }
+
+                        return $query->inRunnerGroup($group);
+                    }),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns([
+                'default' => 1,
+                'md' => 2,
+            ])
             ->deferFilters(false)
             ->recordActions([
                  EditAction::make(),
@@ -447,6 +524,46 @@ class ParticipantsTable
             
             ]);
             
+    }
+
+    private static function relationshipGroupBracket(?string $state, Participant $record): HtmlString
+    {
+        $reference = e(trim((string) $record->participantNumber));
+        $runnerCount = $record->relationship_group_size;
+        $runnerLabel = $runnerCount === 1 ? '1 runner' : "{$runnerCount} runners";
+
+        if (blank($state) || $reference === '' || $reference === '0') {
+            return new HtmlString('<span aria-label="No shared registration group">—</span>');
+        }
+
+        $position = match (true) {
+            str_starts_with($state, '┌') => 'top',
+            str_starts_with($state, '├') => 'middle',
+            str_starts_with($state, '└') => 'bottom',
+            default => 'single',
+        };
+
+        $verticalLine = match ($position) {
+            'top' => 'top:50%; bottom:-1.25rem;',
+            'middle' => 'top:-1.25rem; bottom:-1.25rem;',
+            'bottom' => 'top:-1.25rem; bottom:50%;',
+            default => null,
+        };
+
+        $indicator = $position === 'single'
+            ? '<span aria-hidden="true" style="position:absolute; left:0.18rem; top:50%; width:0.55rem; height:0.55rem; border-radius:9999px; background:currentColor; transform:translateY(-50%);"></span>'
+            : '<span aria-hidden="true" style="position:absolute; left:0.4rem; width:2px; background:currentColor; border-radius:9999px; '.$verticalLine.'"></span>'
+                .'<span aria-hidden="true" style="position:absolute; left:0.4rem; top:50%; width:0.9rem; height:2px; background:currentColor; border-radius:9999px; transform:translateY(-1px);"></span>';
+
+        return new HtmlString(
+            '<div data-group-bracket="'.$position.'" aria-label="Registration group '.$reference.', '.$runnerLabel.'" style="position:relative; display:flex; min-height:2.75rem; align-items:center;">'
+                .$indicator
+                .'<span style="display:flex; flex-direction:column; margin-left:1.7rem; line-height:1.25;">'
+                    .'<span>#'.$reference.'</span>'
+                    .'<span style="font-family:inherit; font-size:0.72rem; font-weight:500; opacity:0.72;">'.$runnerLabel.'</span>'
+                .'</span>'
+            .'</div>',
+        );
     }
 
     public static function applyVisibilityForUser(Builder $query, ?User $user): Builder

@@ -24,10 +24,11 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\View as SchemaView;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 
 class CreateFinisher extends Page implements HasTable
 {
@@ -150,7 +151,7 @@ class CreateFinisher extends Page implements HasTable
                     ->icon('heroicon-o-flag')
                     ->color('success')
                     ->button()
-                    ->modalWidth('md')
+                    ->modalWidth('3xl')
                     ->closeModalByClickingAway(false)
                     ->modalHeading(fn (Participant $record): string => "Record {$record->firstName} {$record->lastName}")
                     ->modalDescription(fn (Participant $record): string => Participant::distanceLabel($record->distanceCategory) . ' runner')
@@ -182,7 +183,14 @@ class CreateFinisher extends Page implements HasTable
                             ->rules([
                                 'required',
                                 'digits:5',
-                                Rule::unique('finishers', 'racebib'),
+                            ])
+                            ->unique(
+                                table: Finisher::class,
+                                column: 'racebib',
+                                ignoreRecord: false,
+                            )
+                            ->validationMessages([
+                                'unique' => 'This race bib number is already assigned to another runner.',
                             ])
                             ->rule(function (Participant $record): callable {
                                 return function (string $attribute, mixed $value, callable $fail) use ($record): void {
@@ -199,53 +207,51 @@ class CreateFinisher extends Page implements HasTable
                                 };
                             })
                             ->required(),
-                        Select::make('award_id')
-                            ->label('Award')
-                            ->placeholder('No award')
-                            ->options(fn (Participant $record): array => Award::groupedOptions(
-                                distanceCategory: $record->distanceCategory,
-                            ))
-                            ->rule(function (Get $get, Participant $record): Closure {
-                                return function (string $attribute, mixed $value, Closure $fail) use ($get, $record): void {
-                                    if (blank($value)) {
-                                        return;
-                                    }
+                        Grid::make([
+                            'default' => 1,
+                            'lg' => 2,
+                        ])
+                            ->schema([
+                                Select::make('award_id')
+                                    ->label('Award')
+                                    ->placeholder('No award')
+                                    ->options(fn (Participant $record): array => Award::groupedOptions(
+                                        distanceCategory: $record->distanceCategory,
+                                    ))
+                                    ->rule(function (Get $get, Participant $record): Closure {
+                                        return function (string $attribute, mixed $value, Closure $fail) use ($get, $record): void {
+                                            if (blank($value)) {
+                                                return;
+                                            }
 
-                                    if (! Award::isSelectableForDistance($value, $record->distanceCategory)) {
-                                        $fail('The selected award does not match the runner’s registered distance category.');
+                                            if (! Award::isSelectableForDistance($value, $record->distanceCategory)) {
+                                                $fail('The selected award does not match the runner’s registered distance category.');
 
-                                        return;
-                                    }
+                                                return;
+                                            }
 
-                                    if (($holder = Finisher::awardHolder($value)) && ! $get('reassign_award')) {
-                                        $fail(
-                                            "This award is assigned to {$holder->runner_name}. "
-                                            .'Confirm the award transfer to continue.'
-                                        );
-                                    }
-                                };
-                            })
-                            ->live()
-                            ->afterStateUpdated(function (mixed $state, Set $set): void {
-                                $set('reassign_award', false);
-
-                                if (! $holder = Finisher::awardHolder($state)) {
-                                    return;
-                                }
-
-                                Notification::make()
-                                    ->title('Award has a current winner')
-                                    ->body(
-                                        "{$holder->runner_name} already received this award"
-                                        .(filled($holder->created_by) ? " (recorded by {$holder->created_by}). " : '. ')
-                                        .'Enable “Transfer this award” only after the contest has been resolved.'
-                                    )
-                                    ->warning()
-                                    ->persistent()
-                                    ->send();
-                            })
-                            ->searchable()
-                            ->preload(),
+                                            if (($holder = Finisher::awardHolder($value)) && ! $get('reassign_award')) {
+                                                $fail(
+                                                    "This award is assigned to {$holder->runner_name}. "
+                                                    .'Confirm the award transfer to continue.'
+                                                );
+                                            }
+                                        };
+                                    })
+                                    ->live()
+                                    ->afterStateUpdated(function (Set $set): void {
+                                        $set('reassign_award', false);
+                                    })
+                                    ->partiallyRenderComponentsAfterStateUpdated([
+                                        'award-conflict-notice',
+                                        'reassign_award',
+                                    ])
+                                    ->searchable()
+                                    ->preload(),
+                                SchemaView::make('filament.resources.finishers.partials.award-conflict-notice')
+                                    ->key('award-conflict-notice'),
+                            ])
+                            ->columnSpanFull(),
                         Toggle::make('reassign_award')
                             ->label('Transfer this award to the new winner')
                             ->helperText(function (Get $get): ?string {

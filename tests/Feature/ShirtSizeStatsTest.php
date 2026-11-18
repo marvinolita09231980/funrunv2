@@ -147,6 +147,8 @@ class ShirtSizeStatsTest extends TestCase
         $this->assertStringContainsString('Office A', $html);
         $this->assertStringContainsString('Rave Run (3K)', $html);
         $this->assertStringContainsString('Grand Total', $html);
+        $this->assertStringNotContainsString('rowspan=', $html);
+        $this->assertSame(4, substr_count($html, '>Office A</td>'));
 
         $pdf = Pdf::loadView('pdf.shirt-size-report', [
             'report' => $report,

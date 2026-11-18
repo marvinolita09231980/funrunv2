@@ -49,27 +49,6 @@ class ParticipantReportPdfController extends Controller
         ));
     }
 
-    public function finishers(Request $request, string $type): Response
-    {
-        $user = $this->authorizedUser();
-        $validated = validator([
-            'year' => $request->query('year'),
-            'type' => $type,
-            'gender' => $request->query('gender'),
-        ], [
-            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
-            'type' => ['required', Rule::in(['padac', 'rpwuds'])],
-            'gender' => ['required', Rule::in(['male', 'female'])],
-        ])->validate();
-
-        return $this->inlineResponse(ParticipantReportPdf::finishers(
-            $user,
-            (int) $validated['year'],
-            $validated['type'],
-            $validated['gender'],
-        ));
-    }
-
     private function authorizedUser(): User
     {
         $user = Auth::user();

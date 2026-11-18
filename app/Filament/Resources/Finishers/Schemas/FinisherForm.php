@@ -15,6 +15,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Fieldset;
+use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 
@@ -122,15 +123,14 @@ class FinisherForm
                         ->reactive()
                         ->inputMode('numeric')
                         ->maxLength(5)
-                        ->helperText(function (Get $get): string {
-                            $distance = $get('distanceCategory');
-                            $prefix = Finisher::raceBibPrefixForDistance($distance);
-
-                            return $prefix
-                                ? Participant::distanceLabel($distance)
-                                    ." race bib: exactly 5 numbers starting with {$prefix}."
-                                : 'Select a runner to determine the required race bib prefix.';
-                        })
+                        ->unique(
+                            table: Finisher::class,
+                            column: 'racebib',
+                            ignoreRecord: true,
+                        )
+                        ->validationMessages([
+                            'unique' => 'This race bib number is already assigned to another runner.',
+                        ])
                         ->extraInputAttributes(function (Get $get): array {
                             $prefix = Finisher::raceBibPrefixForDistance($get('distanceCategory'));
 
@@ -167,6 +167,9 @@ class FinisherForm
                         ),
                         Select::make('award_id')
                             ->label('Award')
+                            ->columnSpan(fn ($context): array => $context === 'edit'
+                                ? ['default' => 1, 'md' => 2]
+                                : ['default' => 1])
                             ->placeholder(fn (Get $get, ?Finisher $record): string => filled(
                                 $get('distanceCategory') ?? $record?->distanceCategory
                             ) ? 'No award' : 'Select and validate a runner first')
@@ -206,27 +209,20 @@ class FinisherForm
                                 };
                             })
                             ->live()
-                            ->afterStateUpdated(function (mixed $state, Set $set, ?Finisher $record): void {
+                            ->afterStateUpdated(function (Set $set): void {
                                 $set('reassign_award', false);
-                                $holder = Finisher::awardHolder($state, $record?->getKey());
-
-                                if (! $holder) {
-                                    return;
-                                }
-
-                                Notification::make()
-                                    ->title('Award has a current winner')
-                                    ->body(
-                                        "{$holder->runner_name} already received this award"
-                                        .(filled($holder->created_by) ? " (recorded by {$holder->created_by}). " : '. ')
-                                        .'Enable “Transfer this award” only after the contest has been resolved.'
-                                    )
-                                    ->warning()
-                                    ->persistent()
-                                    ->send();
                             })
+                            ->partiallyRenderComponentsAfterStateUpdated([
+                                'award-conflict-notice',
+                                'reassign_award',
+                            ])
                             ->searchable()
                             ->preload(),
+                        SchemaView::make('filament.resources.finishers.partials.award-conflict-notice')
+                            ->key('award-conflict-notice')
+                            ->columnSpan(fn ($context): array => $context === 'edit'
+                                ? ['default' => 1]
+                                : ['default' => 1, 'md' => 2]),
                         Toggle::make('reassign_award')
                             ->label('Transfer this award to this winner')
                             ->helperText(function (Get $get, ?Finisher $record): ?string {
