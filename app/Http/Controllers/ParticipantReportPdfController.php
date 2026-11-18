@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Filament\Pages\ParticipantReports;
 use App\Models\User;
+use App\Services\ParticipantAgeReport;
 use App\Services\ParticipantReportPdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -15,11 +16,15 @@ class ParticipantReportPdfController extends Controller
     public function age(Request $request): Response
     {
         $user = $this->authorizedUser();
-        $validated = validator($request->query(), [
+        $validated = validator([
+            ...$request->query(),
+            'limit' => $request->query('limit', ParticipantAgeReport::DEFAULT_LIMIT),
+        ], [
             'year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'ranking' => ['required', Rule::in(['all', 'oldest', 'youngest'])],
             'gender' => ['nullable', Rule::in(['male', 'female', 'integrated'])],
             'distance' => ['nullable', Rule::in(['5km', '10km'])],
+            'limit' => ['required', 'integer', 'min:1'],
         ])->validate();
 
         return $this->inlineResponse(ParticipantReportPdf::age(
@@ -28,6 +33,7 @@ class ParticipantReportPdfController extends Controller
             $validated['ranking'],
             $validated['gender'] ?? null,
             $validated['distance'] ?? null,
+            (int) $validated['limit'],
         ));
     }
 

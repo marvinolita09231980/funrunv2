@@ -10,8 +10,18 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ParticipantAgeReport
 {
-    public static function build(User $user, int $year, string $ranking = 'all', ?string $gender = null, ?string $distance = null): array
+    public const DEFAULT_LIMIT = 10;
+
+    public static function build(
+        User $user,
+        int $year,
+        string $ranking = 'all',
+        ?string $gender = null,
+        ?string $distance = null,
+        int $limit = self::DEFAULT_LIMIT,
+    ): array
     {
+        $limit = max(1, $limit);
         $asOf = $year === (int) now()->year
             ? CarbonImmutable::today()
             : CarbonImmutable::create($year, 12, 31)->startOfDay();
@@ -42,7 +52,7 @@ class ParticipantAgeReport
                         );
 
                     $participants = $query->orderBy('birthDate', $order === 'oldest' ? 'asc' : 'desc')
-                        ->orderBy('lastName')->orderBy('firstName')->orderBy('id')->limit(10)->get()
+                        ->orderBy('lastName')->orderBy('firstName')->orderBy('id')->limit($limit)->get()
                         ->map(fn (Participant $participant, int $index): array => [
                             'participant_id' => $participant->getKey(),
                             'rank' => $index + 1,
@@ -62,7 +72,7 @@ class ParticipantAgeReport
                         ])->all();
 
                     $sections[] = [
-                        'title' => "Top 10 {$orderLabel} {$genderLabel} — {$distanceLabel}",
+                        'title' => "Top {$limit} {$orderLabel} {$genderLabel} — {$distanceLabel}",
                         'ranking' => $order,
                         'gender' => $sex,
                         'distance' => $race,
@@ -76,6 +86,7 @@ class ParticipantAgeReport
             'year' => $year, 'as_of' => $asOf->format('m/d/Y'),
             'generated_at' => now('Asia/Shanghai')->format('m/d/Y h:i A'),
             'scope' => 'All categories',
+            'limit' => $limit,
             'sections' => $sections,
         ];
     }

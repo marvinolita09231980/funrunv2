@@ -16,7 +16,6 @@ use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Enums\FiltersLayout;
@@ -64,40 +63,61 @@ class CreateFinisher extends Page implements HasTable
                     ->orderBy('firstName')
             )
             ->columns([
-                Stack::make([
-                    TextColumn::make('runner_name')
-                        ->label('Runner')
-                        ->getStateUsing(function (Participant $record): string {
-                            $middleInitial = filled($record->middleInitial)
-                                ? ' ' . rtrim($record->middleInitial, '.') . '.'
-                                : '';
-
-                            return "{$record->lastName}, {$record->firstName}{$middleInitial}";
-                        })
-                        ->weight('bold')
-                        ->wrap(),
-                    TextColumn::make('distanceCategory')
-                        ->label('Distance')
-                        ->formatStateUsing(fn (?string $state): string => Participant::distanceLabel($state))
-                        ->badge()
-                        ->color('info'),
-                    TextColumn::make('categoryDescription')
-                        ->prefix('Category: ')
-                        ->placeholder('Category: —')
-                        ->wrap(),
-                    TextColumn::make('subDescription')
-                        ->prefix('Organization: ')
-                        ->placeholder('Organization: —')
-                        ->wrap(),
-                    TextColumn::make('birthDate')
-                        ->prefix('Birth date: ')
-                        ->date('M d, Y')
-                        ->placeholder('Birth date: —'),
-                ])->space(2),
-            ])
-            ->contentGrid([
-                'md' => 2,
-                'xl' => 3,
+                TextColumn::make('mobile_runner_summary')
+                    ->label('Runner')
+                    ->getStateUsing(fn (Participant $record): string => self::participantName($record))
+                    ->description(fn (Participant $record): string => collect([
+                        Participant::distanceLabel($record->distanceCategory),
+                        filled($record->categoryDescription)
+                            ? "Category: {$record->categoryDescription}"
+                            : null,
+                        filled($record->subDescription)
+                            ? "Organization: {$record->subDescription}"
+                            : null,
+                        filled($record->birthDate)
+                            ? 'Birth date: '.Carbon::parse($record->birthDate)->format('M d, Y')
+                            : null,
+                    ])->filter()->join(' • '))
+                    ->weight('bold')
+                    ->searchable(['firstName', 'lastName'])
+                    ->wrap()
+                    ->hiddenFrom('md'),
+                TextColumn::make('desktop_runner_name')
+                    ->label('Runner')
+                    ->getStateUsing(fn (Participant $record): string => self::participantName($record))
+                    ->weight('bold')
+                    ->searchable(['firstName', 'lastName'])
+                    ->wrap()
+                    ->visibleFrom('md'),
+                TextColumn::make('desktop_birth_date')
+                    ->label('Birth Date')
+                    ->getStateUsing(fn (Participant $record): mixed => $record->birthDate)
+                    ->date('M d, Y')
+                    ->placeholder('—')
+                    ->visibleFrom('md'),
+                TextColumn::make('desktop_distance')
+                    ->label('Distance')
+                    ->getStateUsing(fn (Participant $record): ?string => $record->distanceCategory)
+                    ->formatStateUsing(fn (?string $state): string => Participant::distanceLabel($state))
+                    ->badge()
+                    ->color('info')
+                    ->visibleFrom('md'),
+                TextColumn::make('desktop_category')
+                    ->label('Category')
+                    ->getStateUsing(fn (Participant $record): ?string => $record->categoryDescription)
+                    ->searchable(['categoryDescription'])
+                    ->placeholder('—')
+                    ->badge()
+                    ->color('gray')
+                    ->wrap()
+                    ->visibleFrom('md'),
+                TextColumn::make('desktop_organization')
+                    ->label('Organization')
+                    ->getStateUsing(fn (Participant $record): ?string => $record->subDescription)
+                    ->searchable(['subDescription'])
+                    ->placeholder('—')
+                    ->wrap()
+                    ->visibleFrom('md'),
             ])
             ->filters([
                 Filter::make('runner_name')
@@ -337,7 +357,21 @@ class CreateFinisher extends Page implements HasTable
                     }),
             ])
             ->recordUrl(null)
+            ->heading('Participant Lookup Results')
+            ->description('Select an eligible runner to record their race result.')
+            ->striped()
+            ->paginationPageOptions([10, 25, 50, 100])
+            ->defaultPaginationPageOption(25)
             ->emptyStateHeading('Search for a runner')
             ->emptyStateDescription('Enter a last name or first name to display matching runners.');
+    }
+
+    private static function participantName(Participant $participant): string
+    {
+        $middleInitial = filled($participant->middleInitial)
+            ? ' ' . rtrim($participant->middleInitial, '.') . '.'
+            : '';
+
+        return "{$participant->lastName}, {$participant->firstName}{$middleInitial}";
     }
 }

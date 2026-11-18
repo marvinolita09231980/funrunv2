@@ -128,6 +128,30 @@ class FinisherAwardTest extends TestCase
 
         $component = Livewire::test(CreateFinisher::class)
             ->filterTable('runner_name', ['last_name' => 'Runner'])
+            ->assertTableColumnExists(
+                'mobile_runner_summary',
+                fn ($column): bool => $column->getHiddenFrom() === 'md',
+            )
+            ->assertTableColumnExists(
+                'desktop_runner_name',
+                fn ($column): bool => $column->getVisibleFrom() === 'md',
+            )
+            ->assertTableColumnExists(
+                'desktop_birth_date',
+                fn ($column): bool => $column->getVisibleFrom() === 'md',
+            )
+            ->assertTableColumnExists(
+                'desktop_distance',
+                fn ($column): bool => $column->getVisibleFrom() === 'md',
+            )
+            ->assertTableColumnExists(
+                'desktop_category',
+                fn ($column): bool => $column->getVisibleFrom() === 'md',
+            )
+            ->assertTableColumnExists(
+                'desktop_organization',
+                fn ($column): bool => $column->getVisibleFrom() === 'md',
+            )
             ->assertTableActionExists(
                 'recordRunner',
                 fn (Action $action): bool => ! $action->isModalClosedByClickingAway()
@@ -135,6 +159,10 @@ class FinisherAwardTest extends TestCase
                 $participant,
             )
             ->mountTableAction('recordRunner', $participant);
+
+        $this->assertNull($component->instance()->getTable()->getContentGrid());
+        $this->assertFalse($component->instance()->getTable()->hasColumnsLayout());
+        $this->assertTrue($component->instance()->getTable()->isStriped());
 
         $component->assertTableActionDataSet([
             'racebib' => '5',

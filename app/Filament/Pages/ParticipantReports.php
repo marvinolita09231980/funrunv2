@@ -38,6 +38,8 @@ class ParticipantReports extends Page
 
     public string $genderGrouping = 'separate';
 
+    public int|string|null $participantLimit = ParticipantAgeReport::DEFAULT_LIMIT;
+
     public ?string $previewUrl = null;
 
     public string $previewTitle = 'Participant Report Preview';
@@ -65,9 +67,37 @@ class ParticipantReports extends Page
             ->push((int) now()->year)->unique()->sortDesc()->values()->all();
     }
 
+    public function updatedSelectedYear(): void
+    {
+        $this->validateOnly('selectedYear', [
+            'selectedYear' => ['required', 'integer', Rule::in($this->years())],
+        ], [
+            'selectedYear.in' => 'Select an available registration year.',
+        ]);
+    }
+
+    public function updatedGenderGrouping(): void
+    {
+        $this->validateOnly('genderGrouping', [
+            'genderGrouping' => ['required', Rule::in(['separate', 'integrated'])],
+        ], [
+            'genderGrouping.in' => 'Select a valid gender grouping.',
+        ]);
+    }
+
+    public function updatedParticipantLimit(): void
+    {
+        $this->validateOnly(
+            'participantLimit',
+            $this->participantLimitValidationRules(),
+            $this->participantLimitValidationMessages(),
+        );
+    }
+
     public function downloadReport(string $ranking = 'all', ?string $gender = null, ?string $distance = null): StreamedResponse
     {
         abort_unless(static::canAccess(), 403);
+        $limit = $this->validatedParticipantLimit();
         validator(['year' => $this->selectedYear, 'ranking' => $ranking, 'gender' => $gender, 'distance' => $distance], [
             'year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'ranking' => ['required', Rule::in(['all', 'oldest', 'youngest'])],
@@ -81,6 +111,7 @@ class ParticipantReports extends Page
             $ranking,
             $gender,
             $distance,
+            $limit,
         );
 
         return response()->streamDownload(static function () use ($document): void {
@@ -113,17 +144,20 @@ class ParticipantReports extends Page
         ?string $distance = null,
     ): void {
         abort_unless(static::canAccess(), 403);
+        $limit = $this->validatedParticipantLimit();
 
         $parameters = validator([
             'year' => $this->selectedYear,
             'ranking' => $ranking,
             'gender' => $gender,
             'distance' => $distance,
+            'limit' => $limit,
         ], [
             'year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'ranking' => ['required', Rule::in(['all', 'oldest', 'youngest'])],
             'gender' => ['nullable', Rule::in(['male', 'female', 'integrated'])],
             'distance' => ['nullable', Rule::in(['5km', '10km'])],
+            'limit' => ['required', 'integer', 'min:1'],
         ])->validate();
 
         $this->previewReportType = 'age';
@@ -132,12 +166,14 @@ class ParticipantReports extends Page
             $parameters['ranking'],
             $parameters['gender'] ?? null,
             $parameters['distance'] ?? null,
+            (int) $parameters['limit'],
         );
         $this->previewTitle = $this->agePreviewTitle(
             $parameters['ranking'],
             $parameters['gender'] ?? null,
             $parameters['distance'] ?? null,
             (int) $parameters['year'],
+            (int) $parameters['limit'],
         );
 
         $this->dispatch('open-modal', id: 'participant-report-pdf-preview');
@@ -145,9 +181,17 @@ class ParticipantReports extends Page
 
     public function openSelectedAgeReportPreview(): void
     {
-        validator(['genderGrouping' => $this->genderGrouping], [
+        $this->validate([
+            'selectedYear' => ['required', 'integer', Rule::in($this->years())],
             'genderGrouping' => ['required', Rule::in(['separate', 'integrated'])],
-        ])->validate();
+            'participantLimit' => ['required', 'integer', 'min:1'],
+        ], [
+            'selectedYear.in' => 'Select an available registration year.',
+            'genderGrouping.in' => 'Select a valid gender grouping.',
+            'participantLimit.required' => 'Enter how many participants to include.',
+            'participantLimit.integer' => 'The participant limit must be a whole number.',
+            'participantLimit.min' => 'The participant limit must be at least 1.',
+        ]);
 
         $this->openAgeReportPreview(
             gender: $this->genderGrouping === 'integrated' ? 'integrated' : null,
@@ -190,6 +234,7 @@ class ParticipantReports extends Page
                 (string) ($this->previewReportParameters['ranking'] ?? 'all'),
                 $this->previewReportParameters['gender'] ?? null,
                 $this->previewReportParameters['distance'] ?? null,
+                (int) ($this->previewReportParameters['limit'] ?? ParticipantAgeReport::DEFAULT_LIMIT),
             ),
             'group' => RegistrationGroupReport::build(
                 $user,
@@ -396,12 +441,14 @@ class ParticipantReports extends Page
         string $ranking = 'all',
         ?string $gender = null,
         ?string $distance = null,
+        int $limit = ParticipantAgeReport::DEFAULT_LIMIT,
     ): string {
         return route('participant-reports.preview.age', array_filter([
             'year' => $this->selectedYear,
             'ranking' => $ranking,
             'gender' => $gender,
             'distance' => $distance,
+            'limit' => $limit,
         ], fn (mixed $value): bool => $value !== null));
     }
 
@@ -421,6 +468,7 @@ class ParticipantReports extends Page
             'ranking' => ['required', Rule::in(['all', 'oldest', 'youngest'])],
             'gender' => ['nullable', Rule::in(['male', 'female', 'integrated'])],
             'distance' => ['nullable', Rule::in(['5km', '10km'])],
+            'limit' => ['required', 'integer', 'min:1'],
         ])->validate();
 
         return ParticipantReportPdf::age(
@@ -429,6 +477,7 @@ class ParticipantReports extends Page
             $parameters['ranking'],
             $parameters['gender'] ?? null,
             $parameters['distance'] ?? null,
+            (int) $parameters['limit'],
         );
     }
 
@@ -452,6 +501,7 @@ class ParticipantReports extends Page
         ?string $gender,
         ?string $distance,
         int $year,
+        int $limit,
     ): string {
         if ($ranking === 'all') {
             return $gender === 'integrated'
@@ -460,13 +510,41 @@ class ParticipantReports extends Page
         }
 
         return collect([
-            'Top 10 '.ucfirst($ranking),
+            'Top '.$limit.' '.ucfirst($ranking),
             $gender === 'integrated'
                 ? 'Male & Female'
                 : ($gender ? ucfirst($gender) : null),
             $distance ? strtoupper(str_replace('km', 'K', $distance)) : null,
             (string) $year,
         ])->filter()->join(' · ');
+    }
+
+    /** @return array<string, array<int, string>> */
+    private function participantLimitValidationRules(): array
+    {
+        return [
+            'participantLimit' => ['required', 'integer', 'min:1'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function participantLimitValidationMessages(): array
+    {
+        return [
+            'participantLimit.required' => 'Enter how many participants to include.',
+            'participantLimit.integer' => 'The participant limit must be a whole number.',
+            'participantLimit.min' => 'The participant limit must be at least 1.',
+        ];
+    }
+
+    private function validatedParticipantLimit(): int
+    {
+        $validated = $this->validate(
+            $this->participantLimitValidationRules(),
+            $this->participantLimitValidationMessages(),
+        );
+
+        return (int) $validated['participantLimit'];
     }
 
     /** @return array<string, string> */
@@ -487,6 +565,7 @@ class ParticipantReports extends Page
         $selectedRanking = (string) ($this->previewReportParameters['ranking'] ?? 'all');
         $selectedGender = $this->previewReportParameters['gender'] ?? null;
         $selectedDistance = $this->previewReportParameters['distance'] ?? null;
+        $limit = (int) ($this->previewReportParameters['limit'] ?? ParticipantAgeReport::DEFAULT_LIMIT);
         $rankings = $selectedRanking === 'all' ? ['oldest', 'youngest'] : [$selectedRanking];
         $genders = $selectedGender === null ? ['male', 'female'] : [$selectedGender];
         $distances = $selectedDistance === null ? ['5km', '10km'] : [$selectedDistance];
@@ -502,7 +581,7 @@ class ParticipantReports extends Page
                     }
 
                     $definitions[ParticipantReportExclusion::ageKey($ranking, $gender, $distance)] = collect([
-                        'Top 10 '.ucfirst($ranking),
+                        'Top '.$limit.' '.ucfirst($ranking),
                         $gender === 'integrated' ? 'Male & Female' : ucfirst($gender),
                         strtoupper(str_replace('km', 'K', $distance)),
                     ])->join(' · ');

@@ -74,6 +74,19 @@ class ParticipantAgeReportTest extends TestCase
             $this->assertSame(range(1, 10), array_column($rows, 'rank'));
         }
 
+        $expandedReport = ParticipantAgeReport::build(
+            $admin,
+            now()->year,
+            'oldest',
+            'male',
+            '5km',
+            12,
+        );
+        $this->assertSame(12, $expandedReport['limit']);
+        $this->assertSame('Top 12 Oldest Male — 5K', $expandedReport['sections'][0]['title']);
+        $this->assertCount(12, $expandedReport['sections'][0]['participants']);
+        $this->assertSame(range(1, 12), array_column($expandedReport['sections'][0]['participants'], 'rank'));
+
         $pdf = Pdf::loadView('pdf.participant-age-report', ['report' => $report])->setPaper('a4', 'landscape')->output();
         $this->assertStringStartsWith('%PDF', $pdf);
         $html = view('pdf.participant-age-report', ['report' => $report])->render();
@@ -199,13 +212,42 @@ class ParticipantAgeReportTest extends TestCase
         Livewire::test(ParticipantReports::class)->assertForbidden();
     }
 
+    public function test_report_select_validation_updates_when_each_option_changes(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($this->user('superadmin'));
+
+        Livewire::test(ParticipantReports::class)
+            ->set('genderGrouping', 'unsupported')
+            ->assertHasErrors(['genderGrouping' => 'in'])
+            ->assertSee('Select a valid gender grouping.')
+            ->assertSeeHtml('data-validation-error')
+            ->set('genderGrouping', 'integrated')
+            ->assertHasNoErrors('genderGrouping')
+            ->assertDontSee('Select a valid gender grouping.')
+            ->set('selectedYear', 1999)
+            ->assertHasErrors(['selectedYear' => 'in'])
+            ->assertSee('Select an available registration year.')
+            ->assertSeeHtml('data-validation-error')
+            ->set('selectedYear', (int) now()->year)
+            ->assertHasNoErrors('selectedYear')
+            ->assertDontSee('Select an available registration year.')
+            ->set('participantLimit', 0)
+            ->assertHasErrors(['participantLimit' => 'min'])
+            ->assertSee('The participant limit must be at least 1.')
+            ->set('participantLimit', 25)
+            ->assertHasNoErrors('participantLimit')
+            ->assertDontSee('The participant limit must be at least 1.')
+            ->assertSee('Top 25 Oldest Participants');
+    }
+
     public function test_authorized_user_can_view_report_pdfs_inline(): void
     {
         $this->actingAs($this->user('superadmin'));
 
         $ageReports = [
             ['ranking' => 'all'],
-            ['ranking' => 'oldest', 'gender' => 'female', 'distance' => '10km'],
+            ['ranking' => 'oldest', 'gender' => 'female', 'distance' => '10km', 'limit' => 12],
             ['ranking' => 'youngest', 'gender' => 'integrated', 'distance' => '5km'],
         ];
 
@@ -223,6 +265,13 @@ class ParticipantAgeReportTest extends TestCase
                 (string) $response->headers->get('Content-Disposition'),
             );
             $this->assertStringStartsWith('%PDF', (string) $response->getContent());
+
+            if (isset($parameters['limit'])) {
+                $this->assertStringContainsString(
+                    'top-'.$parameters['limit'].'-',
+                    (string) $response->headers->get('Content-Disposition'),
+                );
+            }
         }
 
         foreach (['couple', 'family'] as $type) {
@@ -249,15 +298,25 @@ class ParticipantAgeReportTest extends TestCase
 
         $year = now()->year;
         $page = Livewire::test(ParticipantReports::class)
+            ->assertSet('participantLimit', 10)
+            ->set('participantLimit', 12)
             ->call('openAgeReportPreview', 'oldest', 'female', '10km')
             ->assertSet('previewReportType', 'age')
-            ->assertSet('previewTitle', "Top 10 Oldest · Female · 10K · {$year}")
+            ->assertSet('previewTitle', "Top 12 Oldest · Female · 10K · {$year}")
             ->assertSet('previewReportParameters.year', $year)
             ->assertSet('previewReportParameters.ranking', 'oldest')
+            ->assertSet('previewReportParameters.limit', 12)
+            ->assertSet('previewUrl', route('participant-reports.preview.age', [
+                'year' => $year,
+                'ranking' => 'oldest',
+                'gender' => 'female',
+                'distance' => '10km',
+                'limit' => 12,
+            ]))
             ->assertDispatched('open-modal', id: 'participant-report-pdf-preview')
             ->assertSee('Download PDF')
             ->call('downloadPreview')
-            ->assertFileDownloaded("top-10-oldest-female-10km-{$year}.pdf");
+            ->assertFileDownloaded("top-12-oldest-female-10km-{$year}.pdf");
 
         $page
             ->call('openRunnerListPreview', 'family')

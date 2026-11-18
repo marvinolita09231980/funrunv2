@@ -236,8 +236,10 @@
         }
     </style>
 
+    @php($reportLimit = max(1, (int) ($participantLimit ?: \App\Services\ParticipantAgeReport::DEFAULT_LIMIT)))
+
     <div style="display: grid; gap: 1.5rem;">
-        <x-filament::section heading="Participant Age Reports" description="Preview the top 10 oldest and youngest participants using separate or integrated gender rankings.">
+        <x-filament::section heading="Participant Age Reports" :description="'Preview the top '.$reportLimit.' oldest and youngest participants using separate or integrated gender rankings.'">
             <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; justify-content: space-between;">
                 <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: end;">
                     <label style="display: grid; gap: 0.5rem; min-width: 10rem;">
@@ -249,6 +251,9 @@
                                 @endforeach
                             </x-filament::input.select>
                         </x-filament::input.wrapper>
+                        @error('selectedYear')
+                            <p data-validation-error class="fi-fo-field-wrp-error-message">{{ $message }}</p>
+                        @enderror
                     </label>
 
                     <label style="display: grid; gap: 0.5rem; min-width: 16rem;">
@@ -259,6 +264,25 @@
                                 <option value="integrated">Integrated Male and Female</option>
                             </x-filament::input.select>
                         </x-filament::input.wrapper>
+                        @error('genderGrouping')
+                            <p data-validation-error class="fi-fo-field-wrp-error-message">{{ $message }}</p>
+                        @enderror
+                    </label>
+
+                    <label style="display: grid; gap: 0.5rem; min-width: 12rem;">
+                        <span>Participants per report</span>
+                        <x-filament::input.wrapper :valid="! $errors->has('participantLimit')">
+                            <x-filament::input
+                                type="number"
+                                min="1"
+                                step="1"
+                                wire:model.live.debounce.400ms="participantLimit"
+                                aria-label="Participants per report"
+                            />
+                        </x-filament::input.wrapper>
+                        @error('participantLimit')
+                            <p data-validation-error class="fi-fo-field-wrp-error-message">{{ $message }}</p>
+                        @enderror
                     </label>
                 </div>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
@@ -302,14 +326,14 @@
         </x-filament::section>
 
         @foreach (['oldest' => 'Oldest', 'youngest' => 'Youngest'] as $ranking => $label)
-            <x-filament::section :heading="'Top 10 '.$label.' Participants'" :description="'Individual PDF reports for '.$selectedYear.'.'">
+            <x-filament::section :heading="'Top '.$reportLimit.' '.$label.' Participants'" :description="'Individual PDF reports for '.$selectedYear.'.'">
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem;">
                     @foreach ($genderGrouping === 'integrated'
                         ? ['integrated' => 'Male & Female']
                         : ['male' => 'Male', 'female' => 'Female'] as $gender => $genderLabel)
                         @foreach (['5km' => '5K', '10km' => '10K'] as $distance => $distanceLabel)
                             <div style="padding: 1.25rem; border: 1px solid #9ca3af55; border-radius: 0.75rem; display: grid; gap: 1rem;">
-                                <div><h3 style="font-weight: 600;">{{ $genderLabel }} · {{ $distanceLabel }}</h3><p style="font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem;">10 {{ $ranking }} registered participants</p></div>
+                                <div><h3 style="font-weight: 600;">{{ $genderLabel }} · {{ $distanceLabel }}</h3><p style="font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem;">{{ $reportLimit }} {{ $ranking }} registered participants</p></div>
                                 <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                                     <x-filament::button
                                         type="button"

@@ -16,6 +16,7 @@ class ParticipantReportPdf
         string $ranking = 'all',
         ?string $gender = null,
         ?string $distance = null,
+        int $limit = ParticipantAgeReport::DEFAULT_LIMIT,
     ): array {
         $report = ParticipantAgeReport::build(
             $user,
@@ -23,6 +24,7 @@ class ParticipantReportPdf
             $ranking,
             $gender,
             $distance,
+            $limit,
         );
 
         return [
@@ -30,7 +32,7 @@ class ParticipantReportPdf
                 'report' => $report,
             ])->setPaper('a4', 'landscape')->output(),
             'filename' => implode('-', array_filter([
-                'top-10',
+                'top-'.$limit,
                 $ranking,
                 $gender,
                 $distance,
