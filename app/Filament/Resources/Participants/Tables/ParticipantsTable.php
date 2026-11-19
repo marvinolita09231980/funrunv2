@@ -214,6 +214,7 @@ class ParticipantsTable
                 Action::make('attendance_export')
                     ->label('Attendance Export')
                     ->icon('heroicon-o-document-arrow-down')
+                    ->closeModalByClickingAway(false)
                     ->visible(fn (): bool => self::canUseAttendanceExports(Auth::user()))
                     ->action(fn (array $data) => self::downloadAttendanceExport($data))
                    ->schema([
@@ -235,6 +236,14 @@ class ParticipantsTable
                                     })
                                     ->searchable()
                                     ->required()
+                                    ->columnSpanFull(),
+
+                                Select::make('distanceCategory')
+                                    ->label('Distance')
+                                    ->options(self::distanceCategoryFilterOptions())
+                                    ->default('all')
+                                    ->live()
+                                    ->afterStateUpdated(fn (callable $set, callable $get) => self::updateParticipantCount($set, $get))
                                     ->columnSpanFull(),
 
                                 Toggle::make('excludeDuplicates')
@@ -291,6 +300,7 @@ class ParticipantsTable
                 Action::make('food_attendance_export')
                     ->label('Food Attendance Export')
                     ->icon('heroicon-o-document-arrow-down')
+                    ->closeModalByClickingAway(false)
                     ->visible(fn (): bool => self::canUseAttendanceExports(Auth::user()))
                     ->action(fn (array $data) => self::downloadAttendanceExport($data, food: true))
                    ->schema([
@@ -312,6 +322,14 @@ class ParticipantsTable
                                     })
                                     ->searchable()
                                     ->required()
+                                    ->columnSpanFull(),
+
+                                Select::make('distanceCategory')
+                                    ->label('Distance')
+                                    ->options(self::distanceCategoryFilterOptions())
+                                    ->default('all')
+                                    ->live()
+                                    ->afterStateUpdated(fn (callable $set, callable $get) => self::updateParticipantCount($set, $get))
                                     ->columnSpanFull(),
 
                                 Toggle::make('excludeDuplicates')
@@ -368,12 +386,23 @@ class ParticipantsTable
                 Action::make('filtered_export')
                     ->label('Filtered Export')
                     ->icon('heroicon-o-document-arrow-down')
+                    ->closeModalByClickingAway(false)
                     ->action(function (array $data) {
                         
                           
                     //    dd($data);
                         $year                 = $data['year'] ?? date('Y');
-                        $distanceCategory     = $data['distanceCategory'] ?? null;
+                        $distanceCategory     = self::normalizedDistanceFilter($data['distanceCategory'] ?? null);
+                        $data['distanceCategory'] = $distanceCategory;
+                        $letterStart = self::normalizedLetterFilter($data['letterStart'] ?? 'A') ?? 'A';
+                        $letterEnd = self::normalizedLetterFilter($data['letterEnd'] ?? 'Z') ?? 'Z';
+
+                        if ($letterStart > $letterEnd) {
+                            [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
+                        }
+
+                        $data['letterStart'] = $letterStart;
+                        $data['letterEnd'] = $letterEnd;
                         $categoryDescription  = $data['categoryDescription'] ?? null;
                         $subDescription       = $data['subDescription'] ?? null;
                         $gender               = $data['gender'] ?? null;
@@ -396,7 +425,10 @@ class ParticipantsTable
                         ->when($subDescription, fn($query, $subDescription) => $query->where('subDescription', $subDescription))
                         ->when($gender, fn($query, $gender) => $query->where('gender', $gender))
                         ->when($pwd !== null, fn($query, $pwd) => $query->where('pwd', $pwd)) // if you have pwd field
-                        // ->whereRaw("LEFT(UPPER(TRIM(lastName)), 1) BETWEEN ? AND ?", [$this->letterStart, $this->letterEnd])
+                        ->whereRaw(
+                            'SUBSTR(UPPER(TRIM(lastName)), 1, 1) BETWEEN ? AND ?',
+                            [$letterStart, $letterEnd],
+                        )
                         ->get();
                     
 
@@ -435,15 +467,24 @@ class ParticipantsTable
                                     ->columnSpan(1),
 
                                 Select::make('distanceCategory')
-                                    ->label('Category')
-                                    ->options(
-                                        [
-                                            '3km'=>'Rave Run (3K)',
-                                            '5km'=>'5km',
-                                            '10km'=>'10km'
-                                        ]
-                                    )
+                                    ->label('Distance')
+                                    ->options(self::distanceCategoryFilterOptions())
+                                    ->default('all')
                                     ->searchable()
+                                    ->columnSpan(1),
+                                Select::make('letterStart')
+                                    ->label('List from')
+                                    ->options(self::letterFilterOptions())
+                                    ->default('A')
+                                    ->searchable()
+                                    ->required()
+                                    ->columnSpan(1),
+                                Select::make('letterEnd')
+                                    ->label('List to')
+                                    ->options(self::letterFilterOptions())
+                                    ->default('Z')
+                                    ->searchable()
+                                    ->required()
                                     ->columnSpan(1),
                                 Select::make('categoryDescription')
                                     ->label('Description')
@@ -733,6 +774,8 @@ class ParticipantsTable
             [$letterStart, $letterEnd] = [$letterEnd, $letterStart];
         }
 
+        $distanceCategory = self::normalizedDistanceFilter($data['distanceCategory'] ?? null);
+
         $participants = self::participantsForExport($subcategories)
             ->where('year', date('Y'))
             ->when(
@@ -740,6 +783,13 @@ class ParticipantsTable
                 fn (Builder $query): Builder => $query->whereRaw(
                     'SUBSTR(UPPER(TRIM(lastName)), 1, 1) BETWEEN ? AND ?',
                     [$letterStart, $letterEnd],
+                ),
+            )
+            ->when(
+                $distanceCategory,
+                fn (Builder $query): Builder => $query->whereRaw(
+                    "REPLACE(LOWER(TRIM(distanceCategory)), ' ', '') = ?",
+                    [$distanceCategory],
                 ),
             )
             ->exists();
@@ -764,8 +814,8 @@ class ParticipantsTable
         $excludeDuplicates = (bool) ($data['excludeDuplicates'] ?? true);
 
         $export = $food
-            ? new FoodAttendanceSheetExport($selections, $letterStart, $letterEnd, $excludeDuplicates)
-            : new AttendanceSheetExport($selections, $letterStart, $letterEnd, $excludeDuplicates);
+            ? new FoodAttendanceSheetExport($selections, $letterStart, $letterEnd, $excludeDuplicates, $distanceCategory)
+            : new AttendanceSheetExport($selections, $letterStart, $letterEnd, $excludeDuplicates, $distanceCategory);
 
         return Excel::download(
             $export,
@@ -786,6 +836,7 @@ class ParticipantsTable
         $year = date('Y');
         $letterStart = strtoupper((string) $get('letterStart'));
         $letterEnd   = strtoupper((string) $get('letterEnd'));
+        $distanceCategory = self::normalizedDistanceFilter($get('distanceCategory'));
         $selectedIds = collect((array) $get('subcategory'))
             ->filter(fn (mixed $id): bool => filled($id))
             ->unique()
@@ -819,6 +870,13 @@ class ParticipantsTable
                     [$letterStart, $letterEnd],
                 ),
             )
+            ->when(
+                $distanceCategory,
+                fn (Builder $query): Builder => $query->whereRaw(
+                    "REPLACE(LOWER(TRIM(distanceCategory)), ' ', '') = ?",
+                    [$distanceCategory],
+                ),
+            )
             ->pluck('id')
             ->map(fn (int|string $participantId): int => (int) $participantId)
             ->all();
@@ -833,5 +891,40 @@ class ParticipantsTable
         $set('participantCount', $count);
 
         return $count;
+    }
+
+    /** @return array<string, string> */
+    private static function distanceCategoryFilterOptions(): array
+    {
+        return [
+            'all' => 'All distances',
+            '3km' => '3KM (Rave Run)',
+            '5km' => '5KM',
+            '10km' => '10KM',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private static function letterFilterOptions(): array
+    {
+        return collect(range('A', 'Z'))
+            ->mapWithKeys(fn (string $letter): array => [$letter => $letter])
+            ->all();
+    }
+
+    private static function normalizedDistanceFilter(mixed $distanceCategory): ?string
+    {
+        $distanceCategory = strtolower(str_replace(' ', '', trim((string) $distanceCategory)));
+
+        return in_array($distanceCategory, ['3km', '5km', '10km'], true)
+            ? $distanceCategory
+            : null;
+    }
+
+    private static function normalizedLetterFilter(mixed $letter): ?string
+    {
+        $letter = strtoupper(trim((string) $letter));
+
+        return preg_match('/^[A-Z]$/', $letter) === 1 ? $letter : null;
     }
 }

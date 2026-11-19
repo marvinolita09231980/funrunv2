@@ -533,6 +533,81 @@ class PotentialDuplicatesTest extends TestCase
         ], $completeFilteredIds);
     }
 
+    public function test_attendance_distance_and_filtered_letter_range_filters_are_applied(): void
+    {
+        $threeKilometerRunner = $this->participant([
+            'firstName' => 'Aaron',
+            'lastName' => 'Alpha',
+            'distanceCategory' => '3km',
+        ]);
+        $fiveKilometerRunner = $this->participant([
+            'firstName' => 'Bella',
+            'lastName' => 'Miller',
+            'distanceCategory' => '5km',
+        ]);
+        $tenKilometerRunner = $this->participant([
+            'firstName' => 'Carlo',
+            'lastName' => 'Zulu',
+            'distanceCategory' => '10km',
+        ]);
+        $outsideCategoryRunner = $this->participant([
+            'firstName' => 'Nora',
+            'lastName' => 'Newton',
+            'distanceCategory' => '10km',
+            'categoryDescription' => 'CATEGORY B',
+            'subDescription' => 'Office B',
+        ]);
+        $selection = [[
+            'category' => 'CATEGORY A',
+            'subcategory' => 'Office A',
+        ]];
+
+        foreach ([
+            new AttendanceSheetExport($selection, 'A', 'Z', distanceCategory: '5km'),
+            new FoodAttendanceSheetExport($selection, 'A', 'Z', distanceCategory: '5km'),
+        ] as $export) {
+            $this->assertSame(
+                [$fiveKilometerRunner->getKey()],
+                $export->participantsForSheet()->pluck('id')->all(),
+            );
+        }
+
+        foreach ([
+            new AttendanceSheetExport($selection, 'B', 'Y', distanceCategory: 'all'),
+            new FoodAttendanceSheetExport($selection, 'B', 'Y', distanceCategory: 'all'),
+        ] as $export) {
+            $this->assertSame(
+                [$fiveKilometerRunner->getKey()],
+                $export->participantsForSheet()->pluck('id')->all(),
+            );
+        }
+
+        $letterRangeIds = (new FilteredSheetExport([
+            'year' => now()->year,
+            'distanceCategory' => 'all',
+            'categoryDescription' => 'CATEGORY A',
+            'letterStart' => 'B',
+            'letterEnd' => 'Y',
+            'excludeDuplicates' => false,
+        ]))->participantsForSheet()->pluck('id')->all();
+
+        $this->assertSame([$fiveKilometerRunner->getKey()], $letterRangeIds);
+
+        $reversedLetterRangeIds = (new FilteredSheetExport([
+            'year' => now()->year,
+            'distanceCategory' => 'all',
+            'categoryDescription' => 'CATEGORY A',
+            'letterStart' => 'Y',
+            'letterEnd' => 'B',
+            'excludeDuplicates' => false,
+        ]))->participantsForSheet()->pluck('id')->all();
+
+        $this->assertSame([$fiveKilometerRunner->getKey()], $reversedLetterRangeIds);
+        $this->assertNotContains($threeKilometerRunner->getKey(), $letterRangeIds);
+        $this->assertNotContains($tenKilometerRunner->getKey(), $letterRangeIds);
+        $this->assertNotContains($outsideCategoryRunner->getKey(), $letterRangeIds);
+    }
+
 
     private function userWithRole(string $name, string $username, string $roleName): User
     {

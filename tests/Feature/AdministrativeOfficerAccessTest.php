@@ -292,6 +292,18 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->actingAs($officer);
 
         Livewire::test(ListParticipants::class)
+            ->assertTableActionExists(
+                'attendance_export',
+                fn (\Filament\Actions\Action $action): bool => ! $action->isModalClosedByClickingAway(),
+            )
+            ->assertTableActionExists(
+                'food_attendance_export',
+                fn (\Filament\Actions\Action $action): bool => ! $action->isModalClosedByClickingAway(),
+            )
+            ->assertTableActionExists(
+                'filtered_export',
+                fn (\Filament\Actions\Action $action): bool => ! $action->isModalClosedByClickingAway(),
+            )
             ->callTableAction('attendance_export', null, [
                 'subcategory' => [$officeA->getKey(), $officeB->getKey()],
             ])

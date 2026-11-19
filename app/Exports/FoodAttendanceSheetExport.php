@@ -27,6 +27,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
     protected ?string $letterEnd;
     protected string $year; 
     protected bool $excludeDuplicates;
+    protected ?string $distanceCategory;
     protected array $agencyCodes = [
     "PROVINCIAL GOVERNOR'S OFFICE" => 'PGO',
     "PROVINCIAL ADMINISTRATOR'S OFFICE" => 'PAO',
@@ -58,6 +59,7 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
         ?string $letterStart = null,
         ?string $letterEnd = null,
         bool $excludeDuplicates = true,
+        ?string $distanceCategory = null,
     )
     {
         $this->subcategories = $subcategories;
@@ -67,6 +69,11 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
         $this->letterEnd = $letterEnd;
 
         $this->excludeDuplicates = $excludeDuplicates;
+
+        $distanceCategory = strtolower(str_replace(' ', '', trim((string) $distanceCategory)));
+        $this->distanceCategory = in_array($distanceCategory, ['3km', '5km', '10km'], true)
+            ? $distanceCategory
+            : null;
 
         $this->year = date('Y');
     }
@@ -121,6 +128,13 @@ class FoodAttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                 fn ($query) => $query->whereRaw(
                     'SUBSTR(UPPER(TRIM(lastName)), 1, 1) BETWEEN ? AND ?',
                     [$this->letterStart, $this->letterEnd],
+                ),
+            )
+            ->when(
+                $this->distanceCategory,
+                fn ($query) => $query->whereRaw(
+                    "REPLACE(LOWER(TRIM(distanceCategory)), ' ', '') = ?",
+                    [strtolower($this->distanceCategory)],
                 ),
             )
             ->orderBy('lastName')

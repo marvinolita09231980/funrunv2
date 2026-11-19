@@ -24,8 +24,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
 {
         protected string $subcategory;
-        protected string $letterStart;
-        protected string $letterEnd;
+        protected ?string $letterStart = null;
+        protected ?string $letterEnd = null;
         protected string $year;
 
         protected ?string $distanceCategory = null;
@@ -41,7 +41,16 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
     {
         $this->subcategory          = $data['subcategory'] ?? '';
         $this->year                 = $data['year'] ?? date('Y');
-        $this->distanceCategory     = $data['distanceCategory'] ?? null;
+        $distanceCategory = strtolower(trim((string) ($data['distanceCategory'] ?? '')));
+        $this->distanceCategory     = in_array($distanceCategory, ['3km', '5km', '10km'], true)
+            ? $distanceCategory
+            : null;
+        $this->letterStart          = $this->normalizeLetter($data['letterStart'] ?? null);
+        $this->letterEnd            = $this->normalizeLetter($data['letterEnd'] ?? null);
+
+        if ($this->letterStart && $this->letterEnd && $this->letterStart > $this->letterEnd) {
+            [$this->letterStart, $this->letterEnd] = [$this->letterEnd, $this->letterStart];
+        }
         $this->categoryDescription  = $data['categoryDescription'] ?? null;
         $this->subDescription       = $data['subDescription'] ?? null;
         $this->gender               = $data['gender'] ?? null;
@@ -89,6 +98,13 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
             ->when($this->subDescription, fn ($query, $subDescription) => $query->where('subDescription', $subDescription))
             ->when($this->gender, fn ($query, $gender) => $query->where('gender', $gender))
             ->when($this->pwd !== null, fn ($query, $pwd) => $query->where('pwd', $pwd))
+            ->when(
+                $this->letterStart && $this->letterEnd,
+                fn ($query) => $query->whereRaw(
+                    'SUBSTR(UPPER(TRIM(lastName)), 1, 1) BETWEEN ? AND ?',
+                    [$this->letterStart, $this->letterEnd],
+                ),
+            )
             ->when($this->order_by_column, function ($query): void {
                 $allowed = [
                     'firstName',
@@ -117,6 +133,13 @@ class FilteredSheetExport implements WithHeadings, WithEvents, WithStyles
             : [];
 
         return $participants->whereNotIn('id', $excludedParticipantIds)->values();
+    }
+
+    private function normalizeLetter(mixed $letter): ?string
+    {
+        $letter = strtoupper(trim((string) $letter));
+
+        return preg_match('/^[A-Z]$/', $letter) === 1 ? $letter : null;
     }
 
     public function registerEvents(): array
