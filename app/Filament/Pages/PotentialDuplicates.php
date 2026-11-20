@@ -10,10 +10,13 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
+use Filament\Forms\Components\TextInput;
 use Filament\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -286,7 +289,7 @@ class PotentialDuplicates extends Page implements HasTable
                     ->description(fn (Participant $record): string => filled($record->subDescription)
                         ? $record->subDescription
                         : 'No subcategory recorded')
-                    ->searchable()
+                    ->searchable(['categoryDescription', 'subDescription'])
                     ->wrap()
                     ->visibleFrom('md'),
                 TextColumn::make('shirtSize')
@@ -294,11 +297,35 @@ class PotentialDuplicates extends Page implements HasTable
                     ->formatStateUsing(fn (?string $state): string => filled($state)
                         ? strtoupper(trim($state))
                         : 'Not provided')
-                    ->visibleFrom('md'),
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query
+                        ->whereRaw(
+                            'LOWER(TRIM(shirtSize)) LIKE ?',
+                            ['%'.mb_strtolower(trim($search)).'%'],
+                        )),
                 TextColumn::make('distanceCategory')
                     ->label('Race Distance')
                     ->formatStateUsing(fn (?string $state): string => Participant::distanceLabel($state))
-                    ->visibleFrom('md'),
+                    ->searchable(
+                        query: function (Builder $query, string $search): Builder {
+                            $search = mb_strtolower(trim($search));
+
+                            return $query->where(function (Builder $query) use ($search): void {
+                                $query
+                                    ->whereRaw(
+                                        "LOWER(CASE
+                                            WHEN LOWER(REPLACE(TRIM(distanceCategory), ' ', '')) IN ('3k', '3km')
+                                                THEN 'Rave Run (3K)'
+                                            ELSE TRIM(distanceCategory)
+                                        END) LIKE ?",
+                                        ["%{$search}%"],
+                                    )
+                                    ->orWhereRaw(
+                                        'LOWER(TRIM(distanceCategory)) LIKE ?',
+                                        ["%{$search}%"],
+                                    );
+                            });
+                        },
+                    ),
                 TextColumn::make('creator_name')
                     ->label('Recorded By')
                     ->description(fn (Participant $record): string => $record->created_at
@@ -313,8 +340,59 @@ class PotentialDuplicates extends Page implements HasTable
                     ->options(fn (): array => self::registrationYearOptions())
                     ->default((string) now()->year)
                     ->selectablePlaceholder(false),
+                Filter::make('shirt_size')
+                    ->schema([
+                        TextInput::make('value')
+                            ->label('Shirt Size')
+                            ->placeholder('e.g. XS, M, or 2XL')
+                            ->live(debounce: 300),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $search = mb_strtolower(trim((string) ($data['value'] ?? '')));
+
+                        return $search === ''
+                            ? $query
+                            : $query->whereRaw('LOWER(TRIM(shirtSize)) LIKE ?', ["%{$search}%"]);
+                    }),
+                Filter::make('race_distance')
+                    ->schema([
+                        TextInput::make('value')
+                            ->label('Race Distance')
+                            ->placeholder('e.g. Rave Run (3K), 5KM, or 10KM')
+                            ->live(debounce: 300),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $search = mb_strtolower(trim((string) ($data['value'] ?? '')));
+
+                        if ($search === '') {
+                            return $query;
+                        }
+
+                        return $query->where(function (Builder $query) use ($search): void {
+                            $query
+                                ->whereRaw(
+                                    "LOWER(CASE
+                                        WHEN LOWER(REPLACE(TRIM(distanceCategory), ' ', '')) IN ('3k', '3km')
+                                            THEN 'Rave Run (3K)'
+                                        ELSE TRIM(distanceCategory)
+                                    END) LIKE ?",
+                                    ["%{$search}%"],
+                                )
+                                ->orWhereRaw(
+                                    'LOWER(TRIM(distanceCategory)) LIKE ?',
+                                    ["%{$search}%"],
+                                );
+                        });
+                    }),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns([
+                'default' => 1,
+                'md' => 3,
             ])
             ->deferFilters(false)
+            ->persistFiltersInSession()
+            ->splitSearchTerms()
+            ->searchPlaceholder('Combine name, category, shirt size, or race distance')
             ->paginated(false)
             ->heading('Participant Records for Review')
             ->description('Relationship brackets connect records that belong to the same potential duplicate group.')

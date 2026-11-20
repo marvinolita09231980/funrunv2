@@ -12,6 +12,7 @@ use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Tables\Enums\FiltersLayout;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -135,6 +136,16 @@ class PotentialDuplicatesTest extends TestCase
             ->assertTableColumnStateSet('shirtSize', '2xl', $secondDuplicate)
             ->assertTableColumnStateSet('distanceCategory', '3km', $firstDuplicate)
             ->assertTableColumnStateSet('distanceCategory', '10km', $secondDuplicate)
+            ->assertTableColumnExists(
+                'shirtSize',
+                fn ($column): bool => $column->getVisibleFrom() === null
+                    && ! $column->isIndividuallySearchable(),
+            )
+            ->assertTableColumnExists(
+                'distanceCategory',
+                fn ($column): bool => $column->getVisibleFrom() === null
+                    && ! $column->isIndividuallySearchable(),
+            )
             ->assertSee('Phone 09171111111')
             ->assertSee('Shirt Size')
             ->assertSee('XS')
@@ -142,6 +153,11 @@ class PotentialDuplicatesTest extends TestCase
             ->assertSee('Race Distance')
             ->assertSee('Rave Run (3K)')
             ->assertSee('10KM')
+            ->assertTableFilterExists('shirt_size')
+            ->assertTableFilterExists('race_distance')
+            ->assertSee('e.g. XS, M, or 2XL')
+            ->assertSee('e.g. Rave Run (3K), 5KM, or 10KM')
+            ->assertSee('Reset')
             ->assertSee('High-Probability Groups')
             ->assertSee('Records for Review')
             ->assertSee('High Probability')
@@ -160,6 +176,13 @@ class PotentialDuplicatesTest extends TestCase
         $table = $component->instance()->getTable();
         $this->assertNull($table->getContentGrid());
         $this->assertNull($table->getGrouping());
+        $this->assertSame(FiltersLayout::AboveContent, $table->getFiltersLayout());
+        $this->assertTrue($table->persistsFiltersInSession());
+        $this->assertSame([], collect($table->getColumns())
+            ->filter(fn ($column): bool => $column->isIndividuallySearchable())
+            ->keys()
+            ->values()
+            ->all());
 
         $reviewAction = $table->getAction('review')->getClone()->record($firstDuplicate);
         $comparisonHtml = $reviewAction->getModalContent()->render();
@@ -172,8 +195,66 @@ class PotentialDuplicatesTest extends TestCase
         $this->assertStringContainsString('data-comparison-participant="'.$differentBirthDate->getKey().'"', $comparisonHtml);
         $this->assertStringContainsString('June 15, 1994', $comparisonHtml);
         $this->assertStringContainsString('June 15, 1995', $comparisonHtml);
+        $this->assertStringContainsString('Shirt Size', $comparisonHtml);
+        $this->assertStringContainsString('XS', $comparisonHtml);
+        $this->assertStringContainsString('2XL', $comparisonHtml);
         $this->assertStringContainsString('data-duplicate-comparison', $comparisonHtml);
         $this->assertStringContainsString('grid-template-columns: repeat(2, minmax(0, 1fr))', $comparisonHtml);
+
+        Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->searchTable('Rave Run (3K)')
+            ->assertCanSeeTableRecords([$firstDuplicate])
+            ->assertCanNotSeeTableRecords([
+                $secondDuplicate,
+                $differentBirthDate,
+                $exactOnlyFirst,
+                $exactOnlySecond,
+            ]);
+
+        Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->searchTable('10KM')
+            ->assertCanSeeTableRecords([$secondDuplicate])
+            ->assertCanNotSeeTableRecords([$firstDuplicate]);
+
+        Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->searchTable('XS')
+            ->assertCanSeeTableRecords([$firstDuplicate])
+            ->assertCanNotSeeTableRecords([$secondDuplicate]);
+
+        Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->searchTable('2XL')
+            ->assertCanSeeTableRecords([$secondDuplicate])
+            ->assertCanNotSeeTableRecords([$firstDuplicate]);
+
+        Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->searchTable('Maria XS 3K')
+            ->assertCanSeeTableRecords([$firstDuplicate])
+            ->assertCanNotSeeTableRecords([$secondDuplicate]);
+
+        Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->searchTable('Santos 2XL 10KM')
+            ->assertCanSeeTableRecords([$secondDuplicate])
+            ->assertCanNotSeeTableRecords([$firstDuplicate]);
+
+        Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->filterTable('shirt_size', ['value' => 'XS'])
+            ->filterTable('race_distance', ['value' => 'Rave Run (3K)'])
+            ->assertCanSeeTableRecords([$firstDuplicate])
+            ->assertCanNotSeeTableRecords([$secondDuplicate]);
+
+        Livewire::test(PotentialDuplicates::class)
+            ->assertSet('tableFilters.shirt_size.value', 'XS')
+            ->assertSet('tableFilters.race_distance.value', 'Rave Run (3K)')
+            ->resetTableFilters()
+            ->assertSet('tableFilters.shirt_size.value', null)
+            ->assertSet('tableFilters.race_distance.value', null);
     }
 
     public function test_page_detects_shortened_initialed_and_phonetically_misspelled_first_names(): void

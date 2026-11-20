@@ -129,6 +129,9 @@
                     'Category' => $participant->categoryDescription ?: 'Not provided',
                     'Subcategory' => $participant->subDescription ?: 'Not provided',
                     'Distance' => $participant->distance_label,
+                    'Shirt Size' => filled($participant->shirtSize)
+                        ? strtoupper(trim((string) $participant->shirtSize))
+                        : 'Not provided',
                     'Recorded By' => $participant->creator_name,
                     'Registered At' => $participant->created_at?->format('F j, Y g:i A') ?? 'Not recorded',
                 ];
