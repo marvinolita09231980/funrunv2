@@ -38,6 +38,8 @@ use App\Filament\Exports\ParticipantExporter;
 
 class ParticipantsTable
 {
+    public const REPLACEMENT_CATEGORY_OPTION = '__in_place_of_duplicates__';
+
     public static function configure(Table $table): Table
     {
         
@@ -488,7 +490,7 @@ class ParticipantsTable
                                     ->columnSpan(1),
                                 Select::make('categoryDescription')
                                     ->label('Description')
-                                    ->options(Subcategory::pluck('categoryDescription', 'categoryDescription'))
+                                    ->options(fn (): array => self::filteredExportDescriptionOptions())
                                     ->searchable()
                                     ->columnSpan(1),
                                 Select::make('subDescription')
@@ -694,6 +696,19 @@ class ParticipantsTable
             ->mapWithKeys(fn (Subcategory $subcategory): array => [
                 $subcategory->getKey() => $subcategory->categoryDescription . ' — ' . ($subcategory->subDescription ?: 'No subcategory'),
             ])
+            ->put(self::REPLACEMENT_CATEGORY_OPTION, PotentialDuplicates::REPLACEMENT_CATEGORY)
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->all();
+    }
+
+    public static function filteredExportDescriptionOptions(): array
+    {
+        return Subcategory::query()
+            ->distinct()
+            ->orderBy('categoryDescription')
+            ->pluck('categoryDescription', 'categoryDescription')
+            ->put(PotentialDuplicates::REPLACEMENT_CATEGORY, PotentialDuplicates::REPLACEMENT_CATEGORY)
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
             ->all();
     }
 
@@ -717,13 +732,32 @@ class ParticipantsTable
             return new EloquentCollection();
         }
 
-        $query = Subcategory::reportQuery()->whereIn('id', $ids->all());
+        $includesReplacementCategory = $ids->contains(
+            fn (mixed $id): bool => (string) $id === self::REPLACEMENT_CATEGORY_OPTION,
+        );
+        $subcategoryIds = $ids
+            ->reject(fn (mixed $id): bool => (string) $id === self::REPLACEMENT_CATEGORY_OPTION)
+            ->values();
+
+        $query = Subcategory::reportQuery()->whereIn('id', $subcategoryIds->all());
 
         if ($user?->isAdministrativeOfficer()) {
             $query->whereIn('categoryDescription', $user->administeredCategoryNames());
         }
 
-        return $query->get();
+        $subcategories = $query->get();
+
+        if ($includesReplacementCategory) {
+            $replacementCategory = new Subcategory([
+                'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+                'subDescription' => '',
+            ]);
+            $replacementCategory->setAttribute('id', self::REPLACEMENT_CATEGORY_OPTION);
+            $replacementCategory->exists = true;
+            $subcategories->push($replacementCategory);
+        }
+
+        return $subcategories;
     }
 
     private static function participantsForExport(EloquentCollection $subcategories): Builder
@@ -733,7 +767,10 @@ class ParticipantsTable
                 $query->orWhere(function (Builder $query) use ($subcategory): void {
                     $query->where('categoryDescription', $subcategory->categoryDescription);
 
-                    if ($subcategory->categoryDescription !== 'OPEN CATEGORY') {
+                    if (! in_array($subcategory->categoryDescription, [
+                        'OPEN CATEGORY',
+                        PotentialDuplicates::REPLACEMENT_CATEGORY,
+                    ], true)) {
                         $query->where('subDescription', $subcategory->subDescription);
                     }
                 });

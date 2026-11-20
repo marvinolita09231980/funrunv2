@@ -94,7 +94,10 @@ class AttendanceSheetExport implements WithHeadings, WithEvents, WithStyles
                     $query->orWhere(function ($query) use ($subcategory): void {
                         $query->where('categoryDescription', $subcategory['category']);
 
-                        if ($subcategory['category'] !== 'OPEN CATEGORY') {
+                        if (! in_array($subcategory['category'], [
+                            'OPEN CATEGORY',
+                            PotentialDuplicates::REPLACEMENT_CATEGORY,
+                        ], true)) {
                             $query->where('subDescription', $subcategory['subcategory']);
                         }
                     });

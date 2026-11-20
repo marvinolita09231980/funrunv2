@@ -5,12 +5,17 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\Participants\ParticipantResource;
 use App\Models\Participant;
 use App\Models\User;
+use App\Services\AuditLogger;
 use BackedEnum;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -21,12 +26,16 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PotentialDuplicates extends Page implements HasTable
 {
     use InteractsWithTable;
+
+    public const REPLACEMENT_CATEGORY = 'IN PLACE OF DUPLICATES';
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-duplicate';
 
@@ -407,16 +416,131 @@ class PotentialDuplicates extends Page implements HasTable
                     ->tooltip('Compare duplicate records')
                     ->modalHeading(fn (Participant $record): string => 'Compare Duplicate Group '
                         .$this->potentialDuplicateGroupNumber($record))
-                    ->modalDescription('Review the participant details side by side before editing or deleting a registration.')
+                    ->modalDescription('Review the participant details side by side. Only the latest registered record can be assigned to a different participant.')
                     ->modalWidth('7xl')
                     ->closeModalByClickingAway(false)
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close')
-                    ->modalContent(fn (Participant $record) => view(
-                        'filament.pages.partials.potential-duplicate-comparison',
-                        ['participants' => $this->potentialDuplicateGroupParticipants($record)],
-                    ))
+                    ->modalContent(function (Participant $record) {
+                        $participants = $this->potentialDuplicateGroupParticipants($record);
+
+                        return view('filament.pages.partials.potential-duplicate-comparison', [
+                            'participants' => $participants,
+                            'replaceableParticipantId' => self::latestRegisteredParticipantId(
+                                $participants->modelKeys(),
+                            ),
+                        ]);
+                    })
+                    ->registerModalActions([
+                        fn (): Action => $this->getTable()
+                            ->getAction('replaceDuplicate')
+                            ->getClone()
+                            ->hidden(false),
+                    ])
                     ->action(fn (): null => null),
+                Action::make('replaceDuplicate')
+                    ->label('Replace Participant')
+                    ->icon('heroicon-o-user-plus')
+                    ->color('success')
+                    ->tooltip('Assign this duplicate registration to a different participant')
+                    ->modalHeading(fn (Participant $record): string => 'Replace '
+                        .trim("{$record->firstName} {$record->lastName}"))
+                    ->modalDescription('Enter the different participant’s personal details. The category will become IN PLACE OF DUPLICATES, while shirt size and race distance stay unchanged. The original values remain available in Audit Logs.')
+                    ->modalSubmitActionLabel('Save New Participant Details')
+                    ->modalWidth('5xl')
+                    ->closeModalByClickingAway(false)
+                    ->fillForm(fn (Participant $record): array => [
+                        'firstName' => $record->firstName,
+                        'lastName' => $record->lastName,
+                        'middleInitial' => $record->middleInitial,
+                        'birthDate' => $record->birthDate,
+                        'gender' => $record->gender,
+                        'address' => $record->address,
+                        'contactNumber' => $record->contactNumber,
+                        'categoryDescription' => self::REPLACEMENT_CATEGORY,
+                        'subDescription' => '',
+                        'shirtSize' => $record->shirtSize,
+                        'distanceCategory' => $record->distanceCategory,
+                        'pwd' => (bool) $record->pwd,
+                        'rpwuds' => (bool) $record->rpwuds,
+                    ])
+                    ->schema([
+                        TextInput::make('firstName')
+                            ->label('First Name')
+                            ->required()
+                            ->maxLength(100),
+                        TextInput::make('lastName')
+                            ->label('Last Name')
+                            ->required()
+                            ->maxLength(100),
+                        TextInput::make('middleInitial')
+                            ->label('Middle Initial')
+                            ->maxLength(1),
+                        DatePicker::make('birthDate')
+                            ->label('Birth Date')
+                            ->required()
+                            ->maxDate(now()),
+                        Select::make('gender')
+                            ->label('Gender')
+                            ->options([
+                                'male' => 'Male',
+                                'female' => 'Female',
+                                'non-binary' => 'Non-binary',
+                                'transgender' => 'Transgender',
+                                'genderqueer' => 'Genderqueer',
+                                'agender' => 'Agender',
+                                'prefer not to say' => 'Prefer not to say',
+                            ])
+                            ->required(),
+                        TextInput::make('contactNumber')
+                            ->label('Phone Number')
+                            ->required()
+                            ->maxLength(30),
+                        TextInput::make('address')
+                            ->label('Address')
+                            ->required()
+                            ->columnSpanFull(),
+                        TextInput::make('categoryDescription')
+                            ->label('Category')
+                            ->disabled(),
+                        TextInput::make('subDescription')
+                            ->label('Subcategory / Description')
+                            ->disabled(),
+                        Select::make('shirtSize')
+                            ->label('Shirt Size')
+                            ->options([
+                                'xs' => 'XS',
+                                'small' => 'Small',
+                                'medium' => 'Medium',
+                                'large' => 'Large',
+                                'xl' => 'XL',
+                                '2xl' => '2XL',
+                                '3xl' => '3XL',
+                                '4xl' => '4XL',
+                                '5xl' => '5XL',
+                            ])
+                            ->disabled(),
+                        Select::make('distanceCategory')
+                            ->label('Race Distance')
+                            ->options([
+                                '3km' => 'Rave Run (3K)',
+                                '5km' => '5KM',
+                                '10km' => '10KM',
+                            ])
+                            ->disabled(),
+                        Toggle::make('pwd')
+                            ->label('Person with Disability'),
+                        Toggle::make('rpwuds')
+                            ->label('Recovering Person Who Used Drugs'),
+                    ])
+                    ->authorize(fn (Participant $record): bool => self::canReplacePotentialDuplicate(
+                        Auth::user(),
+                        $record,
+                    ))
+                    ->hidden()
+                    ->action(function (Participant $record, array $data): void {
+                        $this->replacePotentialDuplicateParticipant($record, $data);
+                    }),
                 DeleteAction::make()
                     ->label('Delete')
                     ->iconButton()
@@ -482,6 +606,175 @@ class PotentialDuplicates extends Page implements HasTable
 
         return $user->isAdministrativeOfficer()
             && $user->administersCategory($participant->categoryDescription);
+    }
+
+    public static function canReplacePotentialDuplicate(
+        ?User $user,
+        Participant $participant,
+    ): bool {
+        if (! $user) {
+            return false;
+        }
+
+        $canManageRecord = $user->hasAnyRole(['admin', 'superadmin', 'super_admin'])
+            || (
+                $user->isAdministrativeOfficer()
+                && $user->administersCategory($participant->categoryDescription)
+            );
+
+        return $canManageRecord && self::isLatestPotentialDuplicate($participant);
+    }
+
+    private static function isLatestPotentialDuplicate(Participant $participant): bool
+    {
+        if (! $participant->exists || blank($participant->year)) {
+            return false;
+        }
+
+        $participantId = (int) $participant->getKey();
+        $group = collect(self::findPotentialDuplicates((int) $participant->year)['components'])
+            ->first(fn (array $participantIds): bool => in_array($participantId, $participantIds, true));
+
+        return is_array($group)
+            && count($group) > 1
+            && self::latestRegisteredParticipantId($group) === $participantId;
+    }
+
+    /** @param array<int|string> $participantIds */
+    private static function latestRegisteredParticipantId(array $participantIds): ?int
+    {
+        $participantId = Participant::query()
+            ->whereKey($participantIds)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->value('id');
+
+        return filled($participantId) ? (int) $participantId : null;
+    }
+
+    /**
+     * Reassign one duplicate registration to a different participant while
+     * moving it to the replacement category while retaining its shirt size
+     * and race distance.
+     *
+     * Participant model events write the complete changed fields to the audit
+     * log, preserving the original and replacement values.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function replacePotentialDuplicateParticipant(
+        Participant $participant,
+        array $data,
+    ): void {
+        abort_unless(
+            self::canReplacePotentialDuplicate(Auth::user(), $participant),
+            403,
+        );
+
+        $groupKey = $this->potentialDuplicateGroupKeys[$participant->getKey()] ?? null;
+        $participantIds = collect($this->potentialDuplicateGroupKeys)
+            ->filter(fn (string $candidateGroupKey): bool => $candidateGroupKey === $groupKey)
+            ->keys()
+            ->map(fn (int|string $participantId): int => (int) $participantId)
+            ->values()
+            ->all();
+
+        if (! $groupKey || count($participantIds) < 2) {
+            throw ValidationException::withMessages([
+                'record' => 'This potential duplicate group no longer contains multiple participants.',
+            ]);
+        }
+
+        DB::transaction(function () use ($participant, $participantIds, $data): void {
+            /** @var Participant|null $participantToReplace */
+            $participantToReplace = Participant::query()
+                ->whereKey($participant->getKey())
+                ->lockForUpdate()
+                ->first();
+            $remainingGroupSize = Participant::query()
+                ->whereKey($participantIds)
+                ->lockForUpdate()
+                ->count();
+
+            if (! $participantToReplace || $remainingGroupSize < 2) {
+                throw ValidationException::withMessages([
+                    'record' => 'The duplicate records changed while you were reviewing them. Reload and try again.',
+                ]);
+            }
+
+            $firstName = trim((string) $data['firstName']);
+            $lastName = trim((string) $data['lastName']);
+            $birthDate = CarbonImmutable::parse((string) $data['birthDate'])->toDateString();
+            $identityChanged = Participant::normalizedIdentityName($firstName)
+                    !== Participant::normalizedIdentityName($participantToReplace->firstName)
+                || Participant::normalizedIdentityName($lastName)
+                    !== Participant::normalizedIdentityName($participantToReplace->lastName)
+                || CarbonImmutable::parse((string) $participantToReplace->birthDate)->toDateString()
+                    !== $birthDate;
+
+            if (! $identityChanged) {
+                throw ValidationException::withMessages([
+                    'firstName' => 'Enter a different participant name or birth date to replace this duplicate registration.',
+                ]);
+            }
+
+            if (Participant::query()
+                ->where('year', $participantToReplace->year)
+                ->whereKeyNot($participantToReplace->getKey())
+                ->matchingIdentity($firstName, $lastName, $birthDate)
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'firstName' => 'The replacement participant is already registered for this year.',
+                ]);
+            }
+
+            $originalValues = $participantToReplace->getAttributes();
+            unset($originalValues['created_at'], $originalValues['updated_at']);
+
+            $participantToReplace->updateQuietly([
+                'firstName' => $firstName,
+                'lastName' => $lastName,
+                'middleInitial' => filled($data['middleInitial'] ?? null)
+                    ? strtoupper(trim((string) $data['middleInitial']))
+                    : null,
+                'birthDate' => $birthDate,
+                'gender' => $data['gender'],
+                'address' => trim((string) $data['address']),
+                'contactNumber' => trim((string) $data['contactNumber']),
+                'categoryDescription' => self::REPLACEMENT_CATEGORY,
+                'subDescription' => '',
+                'pwd' => (bool) ($data['pwd'] ?? false),
+                'rpwuds' => (bool) ($data['rpwuds'] ?? false),
+            ]);
+
+            $replacementValues = $participantToReplace->fresh()->getAttributes();
+            unset($replacementValues['created_at'], $replacementValues['updated_at']);
+            AuditLogger::recordReplacement(
+                $participantToReplace,
+                $originalValues,
+                $replacementValues,
+            );
+
+            if ($finisher = $participantToReplace->finisher) {
+                $finisher->update([
+                    'firstName' => $participantToReplace->firstName,
+                    'lastName' => $participantToReplace->lastName,
+                    'middleInitial' => $participantToReplace->middleInitial,
+                    'gender' => $participantToReplace->gender,
+                    'birthDate' => $participantToReplace->birthDate,
+                    'categoryDescription' => self::REPLACEMENT_CATEGORY,
+                    'subDescription' => '',
+                ]);
+            }
+        });
+
+        $this->preparePotentialDuplicates($this->selectedYear());
+
+        Notification::make()
+            ->success()
+            ->title('Participant replacement saved')
+            ->body('The registration now belongs to the new participant under IN PLACE OF DUPLICATES. Shirt size and race distance were kept, and the original values are available in Audit Logs.')
+            ->send();
     }
 
     public function getPotentialDuplicateStats(): array

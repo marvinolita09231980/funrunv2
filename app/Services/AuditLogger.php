@@ -66,6 +66,23 @@ class AuditLogger
         );
     }
 
+    public static function recordReplacement(
+        mixed $model,
+        array $oldValues,
+        array $newValues,
+    ): void {
+        if (! self::shouldAudit($model)) {
+            return;
+        }
+
+        self::store(
+            event: 'replaced',
+            model: $model,
+            oldValues: $oldValues,
+            newValues: $newValues,
+        );
+    }
+
     private static function shouldAudit(mixed $model): bool
     {
         return $model instanceof Model

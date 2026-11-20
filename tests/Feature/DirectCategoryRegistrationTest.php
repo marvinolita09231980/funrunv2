@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\Dashboard;
+use App\Filament\Pages\PotentialDuplicates;
 use App\Filament\Pages\ShirtSizes;
 use App\Filament\Resources\Participants\Pages\CreateParticipant;
 use App\Filament\Resources\Participants\Schemas\ParticipantForm;
@@ -70,7 +71,10 @@ class DirectCategoryRegistrationTest extends TestCase
         $this->assertSame(2, $category->registrationSlotsRemaining());
         $this->assertFalse($category->accommodatesSubcategoryCapacity(3));
         $options = ParticipantsTable::attendanceSubcategoryOptions($officer);
-        $this->assertSame(['DIRECT CATEGORY — No subcategory'], array_values($options));
+        $this->assertSame([
+            'DIRECT CATEGORY — No subcategory',
+            PotentialDuplicates::REPLACEMENT_CATEGORY,
+        ], array_values($options));
         $this->assertNotNull(ParticipantsTable::exportSubcategoryForUser($officer, array_key_first($options)));
 
         $this->actingAs($superadmin = User::factory()->create());

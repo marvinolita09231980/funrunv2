@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\PotentialDuplicates;
 use App\Filament\Resources\Subcategories\SubcategoriesResource;
 use App\Filament\Resources\Subcategories\Pages\EditSubcategories;
 use App\Filament\Resources\Subcategories\Pages\ListSubcategories;
@@ -162,6 +163,7 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->assertSame([
             $officeA->getKey() => 'CATEGORY A — Office A',
             $officeATwo->getKey() => 'CATEGORY A — Office A Two',
+            ParticipantsTable::REPLACEMENT_CATEGORY_OPTION => PotentialDuplicates::REPLACEMENT_CATEGORY,
         ], ParticipantsTable::attendanceSubcategoryOptions($officer));
         $this->assertSame(
             $officeA->getKey(),

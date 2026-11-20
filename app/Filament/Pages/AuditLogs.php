@@ -77,6 +77,7 @@ class AuditLogs extends Page implements HasTable
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'deleted' => 'danger',
+                        'replaced' => 'success',
                         default => 'warning',
                     }),
                 TextColumn::make('actor_display_name')
@@ -108,6 +109,7 @@ class AuditLogs extends Page implements HasTable
                     ->label('Action')
                     ->options([
                         'updated' => 'Edited',
+                        'replaced' => 'Replaced',
                         'deleted' => 'Deleted',
                     ]),
                 SelectFilter::make('auditable_type')

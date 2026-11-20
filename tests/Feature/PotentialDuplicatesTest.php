@@ -6,6 +6,8 @@ use App\Exports\AttendanceSheetExport;
 use App\Exports\FilteredSheetExport;
 use App\Exports\FoodAttendanceSheetExport;
 use App\Filament\Pages\PotentialDuplicates;
+use App\Filament\Resources\Participants\Tables\ParticipantsTable;
+use App\Models\AuditLog;
 use App\Models\CategoryAllocation;
 use App\Models\Participant;
 use App\Models\User;
@@ -198,8 +200,33 @@ class PotentialDuplicatesTest extends TestCase
         $this->assertStringContainsString('Shirt Size', $comparisonHtml);
         $this->assertStringContainsString('XS', $comparisonHtml);
         $this->assertStringContainsString('2XL', $comparisonHtml);
+        $this->assertStringContainsString('Choose This Record to Update', $comparisonHtml);
+        $this->assertStringContainsString('Latest registration — eligible for replacement', $comparisonHtml);
+        $this->assertStringContainsString('data-replace-duplicate="'.$differentBirthDate->getKey().'"', $comparisonHtml);
+        $this->assertStringNotContainsString('data-replace-duplicate="'.$firstDuplicate->getKey().'"', $comparisonHtml);
+        $this->assertStringNotContainsString('data-replace-duplicate="'.$secondDuplicate->getKey().'"', $comparisonHtml);
         $this->assertStringContainsString('data-duplicate-comparison', $comparisonHtml);
         $this->assertStringContainsString('grid-template-columns: repeat(2, minmax(0, 1fr))', $comparisonHtml);
+
+        $replacementSelection = Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->mountTableAction('review', $firstDuplicate)
+            ->call('mountTableAction', 'replaceDuplicate', (string) $differentBirthDate->getKey());
+
+        $this->assertSame(
+            'replaceDuplicate',
+            $replacementSelection->instance()->getMountedTableAction()?->getName(),
+        );
+        $this->assertTrue(
+            $replacementSelection->instance()->getMountedTableAction()?->getRecord()?->is($differentBirthDate),
+        );
+        $replacementSelection->assertTableActionDataSet([
+                'firstName' => 'Maria',
+                'lastName' => 'Santos',
+                'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+                'shirtSize' => 'medium',
+                'distanceCategory' => '5km',
+            ]);
 
         Livewire::test(PotentialDuplicates::class)
             ->call('loadPotentialDuplicates')
@@ -418,6 +445,122 @@ class PotentialDuplicatesTest extends TestCase
         $this->assertFalse(PotentialDuplicates::canAccess());
     }
 
+    public function test_admin_or_assigned_ao_can_replace_one_duplicate_with_a_different_participant(): void
+    {
+        $admin = $this->userWithRole('Duplicate Admin', 'duplicate-admin', 'admin');
+        $officer = $this->userWithRole(
+            'Duplicate Officer',
+            'duplicate-officer',
+            'administrative officer',
+        );
+        $allocation = CategoryAllocation::query()->create([
+            'categoryDescription' => 'CATEGORY A',
+            'allocated_participants' => 0,
+        ]);
+        $allocation->administrativeOfficers()->attach($officer);
+
+        $original = $this->participant([
+            'firstName' => 'ALFRED JOHN',
+            'lastName' => 'MILAR',
+            'birthDate' => '1999-01-09',
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+            'shirtSize' => 'medium',
+            'distanceCategory' => '5km',
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+        ]);
+        $recordToReplace = $this->participant([
+            'firstName' => 'Alfred John',
+            'lastName' => 'Milar',
+            'birthDate' => '1999-01-09',
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+            'shirtSize' => 'large',
+            'distanceCategory' => '10km',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $unassignedCategoryRecord = new Participant([
+            'categoryDescription' => 'CATEGORY B',
+        ]);
+
+        $this->assertTrue(PotentialDuplicates::canReplacePotentialDuplicate($admin, $recordToReplace));
+        $this->assertTrue(PotentialDuplicates::canReplacePotentialDuplicate($officer, $recordToReplace));
+        $this->assertFalse(PotentialDuplicates::canReplacePotentialDuplicate($admin, $original));
+        $this->assertFalse(PotentialDuplicates::canReplacePotentialDuplicate($officer, $original));
+        $this->assertFalse(PotentialDuplicates::canReplacePotentialDuplicate($officer, $unassignedCategoryRecord));
+
+        $this->actingAs($admin);
+        Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->assertTableActionHidden('replaceDuplicate', $recordToReplace);
+
+        $this->actingAs($officer);
+        $replacementComponent = Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->assertTableActionHidden('replaceDuplicate', $recordToReplace);
+        $replacementComponent->instance()->replacePotentialDuplicateParticipant(
+            $recordToReplace,
+            [
+                'firstName' => 'Brenda Mae',
+                'lastName' => 'Cruz',
+                'middleInitial' => 'Q',
+                'birthDate' => '2001-04-12',
+                'gender' => 'female',
+                'address' => 'Replacement participant address',
+                'contactNumber' => '09998887777',
+                'pwd' => true,
+                'rpwuds' => false,
+            ],
+        );
+        $replacementComponent->assertCountTableRecords(0);
+
+        $this->assertDatabaseCount('participants', 2);
+        $this->assertDatabaseHas('participants', [
+            'id' => $original->getKey(),
+            'firstName' => 'ALFRED JOHN',
+            'lastName' => 'MILAR',
+        ]);
+        $this->assertDatabaseHas('participants', [
+            'id' => $recordToReplace->getKey(),
+            'firstName' => 'Brenda Mae',
+            'lastName' => 'Cruz',
+            'middleInitial' => 'Q',
+            'birthDate' => '2001-04-12',
+            'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+            'subDescription' => '',
+            'shirtSize' => 'large',
+            'distanceCategory' => '10km',
+            'address' => 'Replacement participant address',
+        ]);
+
+        $replacementLog = AuditLog::query()
+            ->where('event', 'replaced')
+            ->where('auditable_type', Participant::class)
+            ->where('auditable_id', (string) $recordToReplace->getKey())
+            ->sole();
+
+        $this->assertSame('Alfred John', $replacementLog->old_values['firstName']);
+        $this->assertSame('Brenda Mae', $replacementLog->new_values['firstName']);
+        $this->assertSame('Milar', $replacementLog->old_values['lastName']);
+        $this->assertSame('Cruz', $replacementLog->new_values['lastName']);
+        $this->assertSame('large', $replacementLog->old_values['shirtSize']);
+        $this->assertSame('large', $replacementLog->new_values['shirtSize']);
+        $this->assertSame('10km', $replacementLog->old_values['distanceCategory']);
+        $this->assertSame('10km', $replacementLog->new_values['distanceCategory']);
+        $this->assertSame('CATEGORY A', $replacementLog->old_values['categoryDescription']);
+        $this->assertSame(
+            PotentialDuplicates::REPLACEMENT_CATEGORY,
+            $replacementLog->new_values['categoryDescription'],
+        );
+        $this->assertSame('Duplicate Officer', $replacementLog->actor_name);
+        $this->assertDatabaseCount('audit_logs', 1);
+        $this->assertDatabaseMissing('category_allocations', [
+            'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+        ]);
+    }
+
     public function test_page_shows_generation_status_before_loading_duplicate_results(): void
     {
         $admin = $this->userWithRole('Duplicate Admin', 'duplicate-admin', 'admin');
@@ -626,6 +769,79 @@ class PotentialDuplicatesTest extends TestCase
             $excludedDuplicate->getKey(),
             $uniqueParticipant->getKey(),
         ], $completeFilteredIds);
+    }
+
+    public function test_replacement_category_is_available_in_attendance_singlet_and_filtered_exports(): void
+    {
+        $admin = $this->userWithRole('Duplicate Admin', 'duplicate-admin', 'admin');
+        $officer = $this->userWithRole(
+            'Duplicate Officer',
+            'duplicate-officer',
+            'administrative officer',
+        );
+        $replacement = $this->participant([
+            'firstName' => 'Replacement',
+            'lastName' => 'Runner',
+            'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+            'subDescription' => '',
+        ]);
+        $otherParticipant = $this->participant([
+            'firstName' => 'Other',
+            'lastName' => 'Runner',
+        ]);
+
+        foreach ([$admin, $officer] as $user) {
+            $this->assertSame(
+                PotentialDuplicates::REPLACEMENT_CATEGORY,
+                ParticipantsTable::attendanceSubcategoryOptions($user)[ParticipantsTable::REPLACEMENT_CATEGORY_OPTION],
+            );
+
+            $selected = ParticipantsTable::exportSubcategoriesForUser(
+                $user,
+                [ParticipantsTable::REPLACEMENT_CATEGORY_OPTION],
+            );
+
+            $this->assertCount(1, $selected);
+            $this->assertSame(
+                PotentialDuplicates::REPLACEMENT_CATEGORY,
+                $selected->first()->categoryDescription,
+            );
+        }
+
+        $this->assertArrayHasKey(
+            PotentialDuplicates::REPLACEMENT_CATEGORY,
+            ParticipantsTable::filteredExportDescriptionOptions(),
+        );
+
+        $selection = [[
+            'category' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+            'subcategory' => '',
+        ]];
+
+        foreach ([
+            new AttendanceSheetExport($selection, 'A', 'Z', excludeDuplicates: false),
+            new FoodAttendanceSheetExport($selection, 'A', 'Z', excludeDuplicates: false),
+        ] as $export) {
+            $this->assertSame(
+                [$replacement->getKey()],
+                $export->participantsForSheet()->pluck('id')->all(),
+            );
+            $this->assertNotContains(
+                $otherParticipant->getKey(),
+                $export->participantsForSheet()->pluck('id')->all(),
+            );
+        }
+
+        $this->assertSame(
+            [$replacement->getKey()],
+            (new FilteredSheetExport([
+                'year' => now()->year,
+                'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+                'letterStart' => 'A',
+                'letterEnd' => 'Z',
+                'excludeDuplicates' => false,
+            ]))->participantsForSheet()->pluck('id')->all(),
+        );
     }
 
     public function test_attendance_distance_and_filtered_letter_range_filters_are_applied(): void

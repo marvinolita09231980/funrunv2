@@ -1,4 +1,5 @@
 @php
+    use App\Filament\Pages\PotentialDuplicates;
     use App\Filament\Resources\Participants\ParticipantResource;
     use Carbon\CarbonImmutable;
     use Illuminate\Support\Facades\Auth;
@@ -73,7 +74,9 @@
 
         .potential-duplicate-comparison-actions {
             display: flex;
+            flex-wrap: wrap;
             justify-content: flex-end;
+            gap: 0.5rem;
             padding: 0.85rem 1.1rem 1rem;
             border-top: 1px solid var(--gray-100);
         }
@@ -135,12 +138,22 @@
                     'Recorded By' => $participant->creator_name,
                     'Registered At' => $participant->created_at?->format('F j, Y g:i A') ?? 'Not recorded',
                 ];
+                $isLatestRegistration = (int) $participant->getKey() === (int) $replaceableParticipantId;
+                $canReplaceParticipant = $isLatestRegistration
+                    && PotentialDuplicates::canReplacePotentialDuplicate(
+                        Auth::user(),
+                        $participant,
+                    );
+                $canOpenParticipant = Auth::user()?->can('update', $participant) ?? false;
             @endphp
 
             <article class="potential-duplicate-comparison-card" data-comparison-participant="{{ $participant->getKey() }}">
                 <header class="potential-duplicate-comparison-header">
                     <h3 class="potential-duplicate-comparison-name">{{ $name }}</h3>
                     <p>Participant record #{{ $participant->getKey() }}</p>
+                    @if ($isLatestRegistration)
+                        <p><strong>Latest registration — eligible for replacement</strong></p>
+                    @endif
                 </header>
 
                 <dl class="potential-duplicate-comparison-details">
@@ -152,16 +165,34 @@
                     @endforeach
                 </dl>
 
-                @if (Auth::user()?->can('update', $participant))
+                @if ($canReplaceParticipant || $canOpenParticipant)
                     <footer class="potential-duplicate-comparison-actions">
-                        <x-filament::button
-                            tag="a"
-                            :href="ParticipantResource::getUrl('edit', ['record' => $participant])"
-                            size="sm"
-                            icon="heroicon-o-pencil-square"
-                        >
-                            Open Participant Record
-                        </x-filament::button>
+                        @if ($canOpenParticipant)
+                            <x-filament::button
+                                tag="a"
+                                :href="ParticipantResource::getUrl('edit', ['record' => $participant])"
+                                size="sm"
+                                color="gray"
+                                icon="heroicon-o-pencil-square"
+                            >
+                                Open Participant Record
+                            </x-filament::button>
+                        @endif
+
+                        @if ($canReplaceParticipant)
+                            <x-filament::button
+                                type="button"
+                                size="sm"
+                                color="success"
+                                icon="heroicon-o-user-plus"
+                                wire:click="mountTableAction('replaceDuplicate', '{{ $participant->getKey() }}')"
+                                wire:loading.attr="disabled"
+                                wire:target="mountTableAction"
+                                data-replace-duplicate="{{ $participant->getKey() }}"
+                            >
+                                Choose This Record to Update
+                            </x-filament::button>
+                        @endif
                     </footer>
                 @endif
             </article>
