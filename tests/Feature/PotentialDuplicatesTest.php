@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Exports\AttendanceSheetExport;
 use App\Exports\FilteredSheetExport;
 use App\Exports\FoodAttendanceSheetExport;
+use App\Exports\InPlaceOfDuplicatesExport;
 use App\Filament\Pages\PotentialDuplicates;
 use App\Filament\Resources\Participants\Tables\ParticipantsTable;
 use App\Models\AuditLog;
@@ -18,10 +19,13 @@ use Filament\Tables\Enums\FiltersLayout;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
+use Maatwebsite\Excel\Facades\Excel;
 use Mockery;
 use Spatie\Permission\Models\Role;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Tests\TestCase;
 
 class PotentialDuplicatesTest extends TestCase
@@ -566,6 +570,32 @@ class PotentialDuplicatesTest extends TestCase
         $this->assertDatabaseMissing('category_allocations', [
             'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
         ]);
+
+        $comparison = (new InPlaceOfDuplicatesExport(now()->year))
+            ->comparisonRows()
+            ->sole();
+        $this->assertSame('Alfred John', $comparison['original']['First Name']);
+        $this->assertSame('Brenda Mae', $comparison['replacement']['First Name']);
+        $this->assertSame('CATEGORY A', $comparison['original']['Category']);
+        $this->assertSame(
+            PotentialDuplicates::REPLACEMENT_CATEGORY,
+            $comparison['replacement']['Category'],
+        );
+        $this->assertSame('duplicate-admin', $comparison['original']['Registered By']);
+        $this->assertSame($officer->username, $comparison['replacement']['Registered By']);
+        $this->assertSame('Duplicate Officer', $comparison['details']['Replaced By']);
+        $this->assertNotEmpty(Excel::raw(
+            new InPlaceOfDuplicatesExport(now()->year),
+            \Maatwebsite\Excel\Excel::XLSX,
+        ));
+
+        Excel::fake();
+        $response = $replacementComponent->instance()->downloadReplacementHistory();
+        $this->assertInstanceOf(BinaryFileResponse::class, $response);
+        Excel::assertDownloaded(
+            'in-place-of-duplicates-'.now()->year.'.xlsx',
+            fn (InPlaceOfDuplicatesExport $export): bool => $export->comparisonRows()->count() === 1,
+        );
     }
 
     public function test_page_shows_generation_status_before_loading_duplicate_results(): void
@@ -582,6 +612,109 @@ class PotentialDuplicatesTest extends TestCase
             ->assertSet('duplicatesReady', true)
             ->assertDontSee('Generating potential duplicates')
             ->assertSee('High-Probability Duplicate Review');
+    }
+
+    public function test_replacement_rejects_a_runner_who_is_already_registered(): void
+    {
+        $admin = $this->userWithRole('Duplicate Admin', 'duplicate-admin', 'admin');
+        $original = $this->participant([
+            'firstName' => 'Duplicate Person',
+            'lastName' => 'Runner',
+            'birthDate' => '1990-01-01',
+        ]);
+        $recordToReplace = $this->participant([
+            'firstName' => 'DUPLICATE PERSON',
+            'lastName' => 'RUNNER',
+            'birthDate' => '1990-01-01',
+        ]);
+        $alreadyRegistered = $this->participant([
+            'firstName' => 'Already     Registered',
+            'lastName' => 'Participant',
+            'birthDate' => '1995-05-15',
+        ]);
+
+        $this->actingAs($admin);
+        $reactiveComponent = Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates')
+            ->mountTableAction('review', $original)
+            ->call('mountAction', 'replaceDuplicate', [
+                'participant' => (string) $recordToReplace->getKey(),
+            ])
+            ->set('mountedActions.1.data.firstName', ' already registered ')
+            ->set('mountedActions.1.data.lastName', 'PARTICIPANT')
+            ->set('mountedActions.1.data.birthDate', '1995-05-15')
+            ->assertHasErrors([
+                'mountedActions.1.data.firstName',
+                'mountedActions.1.data.lastName',
+                'mountedActions.1.data.birthDate',
+            ])
+            ->assertNotified('Runner already registered');
+
+        $this->assertTrue($reactiveComponent->instance()->replacementRunnerAlreadyRegistered);
+        $this->assertTrue(
+            $reactiveComponent->instance()->getMountedAction()?->getModalSubmitAction()?->isDisabled(),
+        );
+        $this->assertSame(
+            'replaceDuplicate',
+            $reactiveComponent->instance()->getMountedAction()?->getName(),
+        );
+
+        $reactiveComponent
+            ->set('mountedActions.1.data.firstName', 'Unique Replacement')
+            ->assertSet('replacementRunnerAlreadyRegistered', false)
+            ->assertHasNoErrors([
+                'mountedActions.1.data.firstName',
+                'mountedActions.1.data.lastName',
+                'mountedActions.1.data.birthDate',
+            ]);
+        $this->assertFalse(
+            $reactiveComponent->instance()->getMountedAction()?->getModalSubmitAction()?->isDisabled(),
+        );
+
+        $component = Livewire::test(PotentialDuplicates::class)
+            ->call('loadPotentialDuplicates');
+
+        try {
+            $component->instance()->replacePotentialDuplicateParticipant(
+                $recordToReplace,
+                [
+                    'firstName' => ' already registered ',
+                    'lastName' => 'PARTICIPANT',
+                    'birthDate' => '1995-05-15',
+                    'gender' => 'female',
+                    'address' => 'Replacement address',
+                    'contactNumber' => '09998887777',
+                    'pwd' => false,
+                    'rpwuds' => false,
+                ],
+            );
+
+            $this->fail('The already registered runner should have been rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(
+                "This runner is already registered for {$recordToReplace->year} and cannot be used as a replacement.",
+                $exception->errors()['firstName'][0],
+            );
+            $this->assertArrayHasKey('lastName', $exception->errors());
+            $this->assertArrayHasKey('birthDate', $exception->errors());
+        }
+
+        $component->assertNotified('Runner already registered');
+
+        $this->assertDatabaseHas('participants', [
+            'id' => $recordToReplace->getKey(),
+            'firstName' => 'DUPLICATE PERSON',
+            'lastName' => 'RUNNER',
+        ]);
+        $this->assertDatabaseHas('participants', [
+            'id' => $alreadyRegistered->getKey(),
+            'firstName' => 'Already     Registered',
+        ]);
+        $this->assertDatabaseHas('participants', [
+            'id' => $original->getKey(),
+            'firstName' => 'Duplicate Person',
+        ]);
+        $this->assertDatabaseCount('audit_logs', 0);
     }
 
     public function test_generation_does_not_run_correlated_duplicate_self_joins(): void
@@ -669,7 +802,8 @@ class PotentialDuplicatesTest extends TestCase
         $this->actingAs($admin);
 
         $component = Livewire::test(PotentialDuplicates::class)
-            ->assertActionExists('downloadPdfReport');
+            ->assertActionExists('downloadPdfReport')
+            ->assertActionExists('downloadReplacementHistory');
         $response = $component->instance()->downloadPdfReport();
 
         $this->assertInstanceOf(StreamedResponse::class, $response);

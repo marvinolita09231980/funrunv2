@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Exports\InPlaceOfDuplicatesExport;
 use App\Filament\Resources\Participants\ParticipantResource;
 use App\Models\Participant;
 use App\Models\User;
@@ -17,6 +18,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Fieldset;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -29,7 +31,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
+use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class PotentialDuplicates extends Page implements HasTable
 {
@@ -71,6 +75,8 @@ class PotentialDuplicates extends Page implements HasTable
     public array $potentialDuplicateStats = [];
 
     public ?int $potentialDuplicatesYear = null;
+
+    public bool $replacementRunnerAlreadyRegistered = false;
 
     public function loadPotentialDuplicates(): void
     {
@@ -116,7 +122,35 @@ class PotentialDuplicates extends Page implements HasTable
                 ->icon('heroicon-o-printer')
                 ->color('primary')
                 ->action(fn (): StreamedResponse => $this->downloadPdfReport()),
+            Action::make('downloadReplacementHistory')
+                ->label('Export IN PLACE OF DUPLICATES')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('success')
+                ->action(fn () => $this->downloadReplacementHistory()),
         ];
+    }
+
+    public function downloadReplacementHistory(): mixed
+    {
+        abort_unless(static::canAccess(), 403);
+
+        $year = $this->selectedYear();
+        $export = new InPlaceOfDuplicatesExport($year);
+
+        if ($export->replacementLogs()->isEmpty()) {
+            Notification::make()
+                ->warning()
+                ->title('No replacement history found')
+                ->body("No IN PLACE OF DUPLICATES replacements were recorded for {$year}.")
+                ->send();
+
+            return null;
+        }
+
+        return Excel::download(
+            $export,
+            "in-place-of-duplicates-{$year}.xlsx",
+        );
     }
 
     public function downloadPdfReport(): StreamedResponse
@@ -447,34 +481,43 @@ class PotentialDuplicates extends Page implements HasTable
                         .trim("{$record->firstName} {$record->lastName}"))
                     ->modalDescription('The original registration is shown on the left. Enter the different participant’s details in the empty fields on the right. The category will become IN PLACE OF DUPLICATES, while shirt size and race distance stay unchanged.')
                     ->modalSubmitActionLabel('Save New Participant Details')
+                    ->modalSubmitAction(fn (Action $action): Action => $action
+                        ->disabled(fn (): bool => $this->replacementRunnerAlreadyRegistered)
+                        ->tooltip(fn (): ?string => $this->replacementRunnerAlreadyRegistered
+                            ? 'This runner is already registered. Enter different runner details before saving.'
+                            : null))
                     ->modalWidth('5xl')
                     ->closeModalByClickingAway(false)
-                    ->fillForm(fn (Participant $record): array => [
-                        'originalFirstName' => $record->firstName,
-                        'firstName' => null,
-                        'originalLastName' => $record->lastName,
-                        'lastName' => null,
-                        'originalMiddleInitial' => $record->middleInitial,
-                        'middleInitial' => null,
-                        'originalBirthDate' => $record->birthDate,
-                        'birthDate' => null,
-                        'originalGender' => filled($record->gender)
-                            ? ucfirst((string) $record->gender)
-                            : 'Not provided',
-                        'gender' => null,
-                        'originalContactNumber' => $record->contactNumber,
-                        'contactNumber' => null,
-                        'originalAddress' => $record->address,
-                        'address' => null,
-                        'originalPwd' => $record->pwd ? 'Yes' : 'No',
-                        'pwd' => null,
-                        'originalRpwuds' => $record->rpwuds ? 'Yes' : 'No',
-                        'rpwuds' => null,
-                        'originalCategoryDescription' => $record->categoryDescription,
-                        'categoryDescription' => self::REPLACEMENT_CATEGORY,
-                        'shirtSize' => $record->shirtSize,
-                        'distanceCategory' => $record->distanceCategory,
-                    ])
+                    ->fillForm(function (Participant $record): array {
+                        $this->replacementRunnerAlreadyRegistered = false;
+
+                        return [
+                            'originalFirstName' => $record->firstName,
+                            'firstName' => null,
+                            'originalLastName' => $record->lastName,
+                            'lastName' => null,
+                            'originalMiddleInitial' => $record->middleInitial,
+                            'middleInitial' => null,
+                            'originalBirthDate' => $record->birthDate,
+                            'birthDate' => null,
+                            'originalGender' => filled($record->gender)
+                                ? ucfirst((string) $record->gender)
+                                : 'Not provided',
+                            'gender' => null,
+                            'originalContactNumber' => $record->contactNumber,
+                            'contactNumber' => null,
+                            'originalAddress' => $record->address,
+                            'address' => null,
+                            'originalPwd' => $record->pwd ? 'Yes' : 'No',
+                            'pwd' => null,
+                            'originalRpwuds' => $record->rpwuds ? 'Yes' : 'No',
+                            'rpwuds' => null,
+                            'originalCategoryDescription' => $record->categoryDescription,
+                            'categoryDescription' => self::REPLACEMENT_CATEGORY,
+                            'shirtSize' => $record->shirtSize,
+                            'distanceCategory' => $record->distanceCategory,
+                        ];
+                    })
                     ->schema([
                         Fieldset::make('Participant details')
                             ->columns(2)
@@ -487,6 +530,16 @@ class PotentialDuplicates extends Page implements HasTable
                                     ->label('To update with: First Name')
                                     ->placeholder('Enter the new first name')
                                     ->required()
+                                    ->live(debounce: 500)
+                                    ->afterStateUpdated(function (Get $get, $component, ?Participant $record): void {
+                                        $this->validateReplacementIdentityAvailability(
+                                            $record,
+                                            $get('firstName'),
+                                            $get('lastName'),
+                                            $get('birthDate'),
+                                            $component->getStatePath(),
+                                        );
+                                    })
                                     ->maxLength(100),
                                 TextInput::make('originalLastName')
                                     ->label('Original: Last Name')
@@ -496,6 +549,16 @@ class PotentialDuplicates extends Page implements HasTable
                                     ->label('To update with: Last Name')
                                     ->placeholder('Enter the new last name')
                                     ->required()
+                                    ->live(debounce: 500)
+                                    ->afterStateUpdated(function (Get $get, $component, ?Participant $record): void {
+                                        $this->validateReplacementIdentityAvailability(
+                                            $record,
+                                            $get('firstName'),
+                                            $get('lastName'),
+                                            $get('birthDate'),
+                                            $component->getStatePath(),
+                                        );
+                                    })
                                     ->maxLength(100),
                                 TextInput::make('originalMiddleInitial')
                                     ->label('Original: Middle Initial')
@@ -517,6 +580,16 @@ class PotentialDuplicates extends Page implements HasTable
                                     ->defaultFocusedDate(now()->subYears(18))
                                     ->minDate('1900-01-01')
                                     ->required()
+                                    ->live(debounce: 500)
+                                    ->afterStateUpdated(function (Get $get, $component, ?Participant $record): void {
+                                        $this->validateReplacementIdentityAvailability(
+                                            $record,
+                                            $get('firstName'),
+                                            $get('lastName'),
+                                            $get('birthDate'),
+                                            $component->getStatePath(),
+                                        );
+                                    })
                                     ->maxDate(now())
                                     ->closeOnDateSelection(),
                                 TextInput::make('originalGender')
@@ -786,13 +859,27 @@ class PotentialDuplicates extends Page implements HasTable
                 ]);
             }
 
-            if (Participant::query()
-                ->where('year', $participantToReplace->year)
-                ->whereKeyNot($participantToReplace->getKey())
-                ->matchingIdentity($firstName, $lastName, $birthDate)
-                ->exists()) {
+            $alreadyRegistered = self::replacementIdentityExists(
+                $participantToReplace,
+                $firstName,
+                $lastName,
+                $birthDate,
+            );
+
+            if ($alreadyRegistered) {
+                $message = "This runner is already registered for {$participantToReplace->year} and cannot be used as a replacement.";
+
+                Notification::make()
+                    ->danger()
+                    ->title('Runner already registered')
+                    ->body($message)
+                    ->persistent()
+                    ->send();
+
                 throw ValidationException::withMessages([
-                    'firstName' => 'The replacement participant is already registered for this year.',
+                    'firstName' => $message,
+                    'lastName' => $message,
+                    'birthDate' => $message,
                 ]);
             }
 
@@ -844,6 +931,74 @@ class PotentialDuplicates extends Page implements HasTable
             ->title('Participant replacement saved')
             ->body('The registration now belongs to the new participant under IN PLACE OF DUPLICATES and is registered under your account. Shirt size and race distance were kept, and the original values are available in Audit Logs.')
             ->send();
+    }
+
+    private function validateReplacementIdentityAvailability(
+        ?Participant $participant,
+        mixed $firstName,
+        mixed $lastName,
+        mixed $birthDate,
+        string $statePath,
+    ): void {
+        $baseStatePath = preg_replace('/\.[^.]+$/', '', $statePath) ?? $statePath;
+        $errorPaths = [
+            "{$baseStatePath}.firstName",
+            "{$baseStatePath}.lastName",
+            "{$baseStatePath}.birthDate",
+        ];
+
+        $this->resetErrorBag($errorPaths);
+        $this->replacementRunnerAlreadyRegistered = false;
+
+        $firstName = trim((string) $firstName);
+        $lastName = trim((string) $lastName);
+
+        if (! $participant || $firstName === '' || $lastName === '' || blank($birthDate)) {
+            return;
+        }
+
+        try {
+            $birthDate = CarbonImmutable::parse((string) $birthDate)->toDateString();
+        } catch (Throwable) {
+            return;
+        }
+
+        if (! self::replacementIdentityExists($participant, $firstName, $lastName, $birthDate)) {
+            return;
+        }
+
+        $this->replacementRunnerAlreadyRegistered = true;
+
+        $message = "This runner is already registered for {$participant->year} and cannot be used as a replacement.";
+
+        foreach ($errorPaths as $errorPath) {
+            $this->addError($errorPath, $message);
+        }
+
+        Notification::make()
+            ->danger()
+            ->title('Runner already registered')
+            ->body($message)
+            ->persistent()
+            ->send();
+    }
+
+    private static function replacementIdentityExists(
+        Participant $participant,
+        string $firstName,
+        string $lastName,
+        string $birthDate,
+    ): bool {
+        return Participant::query()
+            ->where('year', $participant->year)
+            ->whereKeyNot($participant->getKey())
+            ->whereDate('birthDate', $birthDate)
+            ->get(['id', 'firstName', 'lastName'])
+            ->contains(fn (Participant $registeredParticipant): bool =>
+                Participant::normalizedIdentityName($registeredParticipant->firstName)
+                    === Participant::normalizedIdentityName($firstName)
+                && Participant::normalizedIdentityName($registeredParticipant->lastName)
+                    === Participant::normalizedIdentityName($lastName));
     }
 
     public function getPotentialDuplicateStats(): array
