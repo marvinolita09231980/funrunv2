@@ -14,9 +14,9 @@ use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Fieldset;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -416,7 +416,7 @@ class PotentialDuplicates extends Page implements HasTable
                     ->tooltip('Compare duplicate records')
                     ->modalHeading(fn (Participant $record): string => 'Compare Duplicate Group '
                         .$this->potentialDuplicateGroupNumber($record))
-                    ->modalDescription('Review the participant details side by side. Only the latest registered record can be assigned to a different participant.')
+                    ->modalDescription('Review the participant details side by side, then choose which record should be assigned to a different participant.')
                     ->modalWidth('7xl')
                     ->closeModalByClickingAway(false)
                     ->modalSubmitAction(false)
@@ -426,15 +426,15 @@ class PotentialDuplicates extends Page implements HasTable
 
                         return view('filament.pages.partials.potential-duplicate-comparison', [
                             'participants' => $participants,
-                            'replaceableParticipantId' => self::latestRegisteredParticipantId(
-                                $participants->modelKeys(),
-                            ),
                         ]);
                     })
                     ->registerModalActions([
                         fn (): Action => $this->getTable()
                             ->getAction('replaceDuplicate')
                             ->getClone()
+                            ->record(fn (array $arguments): ?Participant => Participant::query()->find(
+                                $arguments['participant'] ?? null,
+                            ))
                             ->hidden(false),
                     ])
                     ->action(fn (): null => null),
@@ -445,98 +445,178 @@ class PotentialDuplicates extends Page implements HasTable
                     ->tooltip('Assign this duplicate registration to a different participant')
                     ->modalHeading(fn (Participant $record): string => 'Replace '
                         .trim("{$record->firstName} {$record->lastName}"))
-                    ->modalDescription('Enter the different participant’s personal details. The category will become IN PLACE OF DUPLICATES, while shirt size and race distance stay unchanged. The original values remain available in Audit Logs.')
+                    ->modalDescription('The original registration is shown on the left. Enter the different participant’s details in the empty fields on the right. The category will become IN PLACE OF DUPLICATES, while shirt size and race distance stay unchanged.')
                     ->modalSubmitActionLabel('Save New Participant Details')
                     ->modalWidth('5xl')
                     ->closeModalByClickingAway(false)
                     ->fillForm(fn (Participant $record): array => [
-                        'firstName' => $record->firstName,
-                        'lastName' => $record->lastName,
-                        'middleInitial' => $record->middleInitial,
-                        'birthDate' => $record->birthDate,
-                        'gender' => $record->gender,
-                        'address' => $record->address,
-                        'contactNumber' => $record->contactNumber,
+                        'originalFirstName' => $record->firstName,
+                        'firstName' => null,
+                        'originalLastName' => $record->lastName,
+                        'lastName' => null,
+                        'originalMiddleInitial' => $record->middleInitial,
+                        'middleInitial' => null,
+                        'originalBirthDate' => $record->birthDate,
+                        'birthDate' => null,
+                        'originalGender' => filled($record->gender)
+                            ? ucfirst((string) $record->gender)
+                            : 'Not provided',
+                        'gender' => null,
+                        'originalContactNumber' => $record->contactNumber,
+                        'contactNumber' => null,
+                        'originalAddress' => $record->address,
+                        'address' => null,
+                        'originalPwd' => $record->pwd ? 'Yes' : 'No',
+                        'pwd' => null,
+                        'originalRpwuds' => $record->rpwuds ? 'Yes' : 'No',
+                        'rpwuds' => null,
+                        'originalCategoryDescription' => $record->categoryDescription,
                         'categoryDescription' => self::REPLACEMENT_CATEGORY,
-                        'subDescription' => '',
                         'shirtSize' => $record->shirtSize,
                         'distanceCategory' => $record->distanceCategory,
-                        'pwd' => (bool) $record->pwd,
-                        'rpwuds' => (bool) $record->rpwuds,
                     ])
                     ->schema([
-                        TextInput::make('firstName')
-                            ->label('First Name')
-                            ->required()
-                            ->maxLength(100),
-                        TextInput::make('lastName')
-                            ->label('Last Name')
-                            ->required()
-                            ->maxLength(100),
-                        TextInput::make('middleInitial')
-                            ->label('Middle Initial')
-                            ->maxLength(1),
-                        DatePicker::make('birthDate')
-                            ->label('Birth Date')
-                            ->required()
-                            ->maxDate(now()),
-                        Select::make('gender')
-                            ->label('Gender')
-                            ->options([
-                                'male' => 'Male',
-                                'female' => 'Female',
-                                'non-binary' => 'Non-binary',
-                                'transgender' => 'Transgender',
-                                'genderqueer' => 'Genderqueer',
-                                'agender' => 'Agender',
-                                'prefer not to say' => 'Prefer not to say',
-                            ])
-                            ->required(),
-                        TextInput::make('contactNumber')
-                            ->label('Phone Number')
-                            ->required()
-                            ->maxLength(30),
-                        TextInput::make('address')
-                            ->label('Address')
-                            ->required()
-                            ->columnSpanFull(),
-                        TextInput::make('categoryDescription')
-                            ->label('Category')
-                            ->disabled(),
-                        TextInput::make('subDescription')
-                            ->label('Subcategory / Description')
-                            ->disabled(),
-                        Select::make('shirtSize')
-                            ->label('Shirt Size')
-                            ->options([
-                                'xs' => 'XS',
-                                'small' => 'Small',
-                                'medium' => 'Medium',
-                                'large' => 'Large',
-                                'xl' => 'XL',
-                                '2xl' => '2XL',
-                                '3xl' => '3XL',
-                                '4xl' => '4XL',
-                                '5xl' => '5XL',
-                            ])
-                            ->disabled(),
-                        Select::make('distanceCategory')
-                            ->label('Race Distance')
-                            ->options([
-                                '3km' => 'Rave Run (3K)',
-                                '5km' => '5KM',
-                                '10km' => '10KM',
-                            ])
-                            ->disabled(),
-                        Toggle::make('pwd')
-                            ->label('Person with Disability'),
-                        Toggle::make('rpwuds')
-                            ->label('Recovering Person Who Used Drugs'),
+                        Fieldset::make('Participant details')
+                            ->columns(2)
+                            ->schema([
+                                TextInput::make('originalFirstName')
+                                    ->label('Original: First Name')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                TextInput::make('firstName')
+                                    ->label('To update with: First Name')
+                                    ->placeholder('Enter the new first name')
+                                    ->required()
+                                    ->maxLength(100),
+                                TextInput::make('originalLastName')
+                                    ->label('Original: Last Name')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                TextInput::make('lastName')
+                                    ->label('To update with: Last Name')
+                                    ->placeholder('Enter the new last name')
+                                    ->required()
+                                    ->maxLength(100),
+                                TextInput::make('originalMiddleInitial')
+                                    ->label('Original: Middle Initial')
+                                    ->placeholder('Not provided')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                TextInput::make('middleInitial')
+                                    ->label('To update with: Middle Initial')
+                                    ->placeholder('Optional')
+                                    ->maxLength(1),
+                                TextInput::make('originalBirthDate')
+                                    ->label('Original: Birth Date')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                DatePicker::make('birthDate')
+                                    ->label('To update with: Birth Date')
+                                    ->displayFormat('m/d/Y')
+                                    ->placeholder('mm/dd/yyyy')
+                                    ->defaultFocusedDate(now()->subYears(18))
+                                    ->minDate('1900-01-01')
+                                    ->required()
+                                    ->maxDate(now())
+                                    ->closeOnDateSelection(),
+                                TextInput::make('originalGender')
+                                    ->label('Original: Gender')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                Select::make('gender')
+                                    ->label('To update with: Gender')
+                                    ->placeholder('Select the new gender')
+                                    ->options([
+                                        'male' => 'Male',
+                                        'female' => 'Female',
+                                        'non-binary' => 'Non-binary',
+                                        'transgender' => 'Transgender',
+                                        'genderqueer' => 'Genderqueer',
+                                        'agender' => 'Agender',
+                                        'prefer not to say' => 'Prefer not to say',
+                                    ])
+                                    ->required(),
+                                TextInput::make('originalContactNumber')
+                                    ->label('Original: Phone Number')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                TextInput::make('contactNumber')
+                                    ->label('To update with: Phone Number')
+                                    ->placeholder('Enter the new phone number')
+                                    ->required()
+                                    ->maxLength(30),
+                                TextInput::make('originalAddress')
+                                    ->label('Original: Address')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                TextInput::make('address')
+                                    ->label('To update with: Address')
+                                    ->placeholder('Enter the new address')
+                                    ->required(),
+                                TextInput::make('originalPwd')
+                                    ->label('Original: Person with Disability')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                Select::make('pwd')
+                                    ->label('To update with: Person with Disability')
+                                    ->placeholder('Select Yes or No')
+                                    ->options([
+                                        1 => 'Yes',
+                                        0 => 'No',
+                                    ])
+                                    ->required(),
+                                TextInput::make('originalRpwuds')
+                                    ->label('Original: Recovering Person Who Used Drugs')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                Select::make('rpwuds')
+                                    ->label('To update with: Recovering Person Who Used Drugs')
+                                    ->placeholder('Select Yes or No')
+                                    ->options([
+                                        1 => 'Yes',
+                                        0 => 'No',
+                                    ])
+                                    ->required(),
+                            ]),
+                        Fieldset::make('Registration values')
+                            ->columns(2)
+                            ->schema([
+                                TextInput::make('originalCategoryDescription')
+                                    ->label('Original Category')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                TextInput::make('categoryDescription')
+                                    ->label('New Category')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                Select::make('shirtSize')
+                                    ->label('Retained Shirt Size')
+                                    ->options([
+                                        'xs' => 'XS',
+                                        'small' => 'Small',
+                                        'medium' => 'Medium',
+                                        'large' => 'Large',
+                                        'xl' => 'XL',
+                                        '2xl' => '2XL',
+                                        '3xl' => '3XL',
+                                        '4xl' => '4XL',
+                                        '5xl' => '5XL',
+                                    ])
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                Select::make('distanceCategory')
+                                    ->label('Retained Race Distance')
+                                    ->options([
+                                        '3km' => 'Rave Run (3K)',
+                                        '5km' => '5KM',
+                                        '10km' => '10KM',
+                                    ])
+                                    ->disabled()
+                                    ->dehydrated(false),
+                            ]),
                     ])
-                    ->authorize(fn (Participant $record): bool => self::canReplacePotentialDuplicate(
-                        Auth::user(),
-                        $record,
-                    ))
+                    ->authorize(fn (?Participant $record): bool => $record !== null
+                        && self::canReplacePotentialDuplicate(Auth::user(), $record))
                     ->hidden()
                     ->action(function (Participant $record, array $data): void {
                         $this->replacePotentialDuplicateParticipant($record, $data);
@@ -622,10 +702,10 @@ class PotentialDuplicates extends Page implements HasTable
                 && $user->administersCategory($participant->categoryDescription)
             );
 
-        return $canManageRecord && self::isLatestPotentialDuplicate($participant);
+        return $canManageRecord && self::isPotentialDuplicate($participant);
     }
 
-    private static function isLatestPotentialDuplicate(Participant $participant): bool
+    private static function isPotentialDuplicate(Participant $participant): bool
     {
         if (! $participant->exists || blank($participant->year)) {
             return false;
@@ -635,21 +715,7 @@ class PotentialDuplicates extends Page implements HasTable
         $group = collect(self::findPotentialDuplicates((int) $participant->year)['components'])
             ->first(fn (array $participantIds): bool => in_array($participantId, $participantIds, true));
 
-        return is_array($group)
-            && count($group) > 1
-            && self::latestRegisteredParticipantId($group) === $participantId;
-    }
-
-    /** @param array<int|string> $participantIds */
-    private static function latestRegisteredParticipantId(array $participantIds): ?int
-    {
-        $participantId = Participant::query()
-            ->whereKey($participantIds)
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->value('id');
-
-        return filled($participantId) ? (int) $participantId : null;
+        return is_array($group) && count($group) > 1;
     }
 
     /**
@@ -666,8 +732,10 @@ class PotentialDuplicates extends Page implements HasTable
         Participant $participant,
         array $data,
     ): void {
+        $actor = Auth::user();
+
         abort_unless(
-            self::canReplacePotentialDuplicate(Auth::user(), $participant),
+            self::canReplacePotentialDuplicate($actor, $participant),
             403,
         );
 
@@ -685,7 +753,7 @@ class PotentialDuplicates extends Page implements HasTable
             ]);
         }
 
-        DB::transaction(function () use ($participant, $participantIds, $data): void {
+        DB::transaction(function () use ($participant, $participantIds, $data, $actor): void {
             /** @var Participant|null $participantToReplace */
             $participantToReplace = Participant::query()
                 ->whereKey($participant->getKey())
@@ -743,6 +811,7 @@ class PotentialDuplicates extends Page implements HasTable
                 'contactNumber' => trim((string) $data['contactNumber']),
                 'categoryDescription' => self::REPLACEMENT_CATEGORY,
                 'subDescription' => '',
+                'created_by' => $actor->username,
                 'pwd' => (bool) ($data['pwd'] ?? false),
                 'rpwuds' => (bool) ($data['rpwuds'] ?? false),
             ]);
@@ -773,7 +842,7 @@ class PotentialDuplicates extends Page implements HasTable
         Notification::make()
             ->success()
             ->title('Participant replacement saved')
-            ->body('The registration now belongs to the new participant under IN PLACE OF DUPLICATES. Shirt size and race distance were kept, and the original values are available in Audit Logs.')
+            ->body('The registration now belongs to the new participant under IN PLACE OF DUPLICATES and is registered under your account. Shirt size and race distance were kept, and the original values are available in Audit Logs.')
             ->send();
     }
 

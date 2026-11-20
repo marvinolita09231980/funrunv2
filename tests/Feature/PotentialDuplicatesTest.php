@@ -201,17 +201,19 @@ class PotentialDuplicatesTest extends TestCase
         $this->assertStringContainsString('XS', $comparisonHtml);
         $this->assertStringContainsString('2XL', $comparisonHtml);
         $this->assertStringContainsString('Choose This Record to Update', $comparisonHtml);
-        $this->assertStringContainsString('Latest registration — eligible for replacement', $comparisonHtml);
+        $this->assertStringContainsString('Available to update', $comparisonHtml);
         $this->assertStringContainsString('data-replace-duplicate="'.$differentBirthDate->getKey().'"', $comparisonHtml);
-        $this->assertStringNotContainsString('data-replace-duplicate="'.$firstDuplicate->getKey().'"', $comparisonHtml);
-        $this->assertStringNotContainsString('data-replace-duplicate="'.$secondDuplicate->getKey().'"', $comparisonHtml);
+        $this->assertStringContainsString('data-replace-duplicate="'.$firstDuplicate->getKey().'"', $comparisonHtml);
+        $this->assertStringContainsString('data-replace-duplicate="'.$secondDuplicate->getKey().'"', $comparisonHtml);
         $this->assertStringContainsString('data-duplicate-comparison', $comparisonHtml);
         $this->assertStringContainsString('grid-template-columns: repeat(2, minmax(0, 1fr))', $comparisonHtml);
 
         $replacementSelection = Livewire::test(PotentialDuplicates::class)
             ->call('loadPotentialDuplicates')
             ->mountTableAction('review', $firstDuplicate)
-            ->call('mountTableAction', 'replaceDuplicate', (string) $differentBirthDate->getKey());
+            ->call('mountAction', 'replaceDuplicate', [
+                'participant' => (string) $differentBirthDate->getKey(),
+            ]);
 
         $this->assertSame(
             'replaceDuplicate',
@@ -221,8 +223,10 @@ class PotentialDuplicatesTest extends TestCase
             $replacementSelection->instance()->getMountedTableAction()?->getRecord()?->is($differentBirthDate),
         );
         $replacementSelection->assertTableActionDataSet([
-                'firstName' => 'Maria',
-                'lastName' => 'Santos',
+                'originalFirstName' => 'Maria',
+                'firstName' => null,
+                'originalLastName' => 'Santos',
+                'lastName' => null,
                 'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
                 'shirtSize' => 'medium',
                 'distanceCategory' => '5km',
@@ -487,8 +491,8 @@ class PotentialDuplicatesTest extends TestCase
 
         $this->assertTrue(PotentialDuplicates::canReplacePotentialDuplicate($admin, $recordToReplace));
         $this->assertTrue(PotentialDuplicates::canReplacePotentialDuplicate($officer, $recordToReplace));
-        $this->assertFalse(PotentialDuplicates::canReplacePotentialDuplicate($admin, $original));
-        $this->assertFalse(PotentialDuplicates::canReplacePotentialDuplicate($officer, $original));
+        $this->assertTrue(PotentialDuplicates::canReplacePotentialDuplicate($admin, $original));
+        $this->assertTrue(PotentialDuplicates::canReplacePotentialDuplicate($officer, $original));
         $this->assertFalse(PotentialDuplicates::canReplacePotentialDuplicate($officer, $unassignedCategoryRecord));
 
         $this->actingAs($admin);
@@ -533,6 +537,7 @@ class PotentialDuplicatesTest extends TestCase
             'shirtSize' => 'large',
             'distanceCategory' => '10km',
             'address' => 'Replacement participant address',
+            'created_by' => $officer->username,
         ]);
 
         $replacementLog = AuditLog::query()
@@ -550,6 +555,8 @@ class PotentialDuplicatesTest extends TestCase
         $this->assertSame('10km', $replacementLog->old_values['distanceCategory']);
         $this->assertSame('10km', $replacementLog->new_values['distanceCategory']);
         $this->assertSame('CATEGORY A', $replacementLog->old_values['categoryDescription']);
+        $this->assertSame('duplicate-admin', $replacementLog->old_values['created_by']);
+        $this->assertSame($officer->username, $replacementLog->new_values['created_by']);
         $this->assertSame(
             PotentialDuplicates::REPLACEMENT_CATEGORY,
             $replacementLog->new_values['categoryDescription'],

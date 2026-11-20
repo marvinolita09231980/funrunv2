@@ -138,12 +138,10 @@
                     'Recorded By' => $participant->creator_name,
                     'Registered At' => $participant->created_at?->format('F j, Y g:i A') ?? 'Not recorded',
                 ];
-                $isLatestRegistration = (int) $participant->getKey() === (int) $replaceableParticipantId;
-                $canReplaceParticipant = $isLatestRegistration
-                    && PotentialDuplicates::canReplacePotentialDuplicate(
-                        Auth::user(),
-                        $participant,
-                    );
+                $canReplaceParticipant = PotentialDuplicates::canReplacePotentialDuplicate(
+                    Auth::user(),
+                    $participant,
+                );
                 $canOpenParticipant = Auth::user()?->can('update', $participant) ?? false;
             @endphp
 
@@ -151,8 +149,8 @@
                 <header class="potential-duplicate-comparison-header">
                     <h3 class="potential-duplicate-comparison-name">{{ $name }}</h3>
                     <p>Participant record #{{ $participant->getKey() }}</p>
-                    @if ($isLatestRegistration)
-                        <p><strong>Latest registration — eligible for replacement</strong></p>
+                    @if ($canReplaceParticipant)
+                        <p><strong>Available to update</strong></p>
                     @endif
                 </header>
 
@@ -185,9 +183,9 @@
                                 size="sm"
                                 color="success"
                                 icon="heroicon-o-user-plus"
-                                wire:click="mountTableAction('replaceDuplicate', '{{ $participant->getKey() }}')"
+                                wire:click="mountAction('replaceDuplicate', { participant: '{{ $participant->getKey() }}' })"
                                 wire:loading.attr="disabled"
-                                wire:target="mountTableAction"
+                                wire:target="mountAction"
                                 data-replace-duplicate="{{ $participant->getKey() }}"
                             >
                                 Choose This Record to Update
