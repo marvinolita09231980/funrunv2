@@ -83,6 +83,23 @@ class AuditLogger
         );
     }
 
+    public static function recordRestoration(
+        mixed $model,
+        array $oldValues,
+        array $newValues,
+    ): void {
+        if (! self::shouldAudit($model)) {
+            return;
+        }
+
+        self::store(
+            event: 'restored',
+            model: $model,
+            oldValues: $oldValues,
+            newValues: $newValues,
+        );
+    }
+
     private static function shouldAudit(mixed $model): bool
     {
         return $model instanceof Model

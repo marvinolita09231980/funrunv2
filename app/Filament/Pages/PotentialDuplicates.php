@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Exports\InPlaceOfDuplicatesExport;
 use App\Filament\Resources\Participants\ParticipantResource;
+use App\Models\AuditLog;
 use App\Models\Participant;
 use App\Models\User;
 use App\Services\AuditLogger;
@@ -999,6 +1000,121 @@ class PotentialDuplicates extends Page implements HasTable
                     === Participant::normalizedIdentityName($firstName)
                 && Participant::normalizedIdentityName($registeredParticipant->lastName)
                     === Participant::normalizedIdentityName($lastName));
+    }
+
+    public static function replacementAuditLogFor(Participant $participant): ?AuditLog
+    {
+        return AuditLog::query()
+            ->where('event', 'replaced')
+            ->where('auditable_type', Participant::class)
+            ->where('auditable_id', (string) $participant->getKey())
+            ->latest('created_at')
+            ->latest('id')
+            ->get()
+            ->first(fn (AuditLog $log): bool =>
+                ($log->new_values['categoryDescription'] ?? null) === self::REPLACEMENT_CATEGORY);
+    }
+
+    public static function canRestoreReplacedParticipant(
+        ?User $user,
+        Participant $participant,
+    ): bool {
+        if (
+            ! $user
+            || ! $participant->exists
+            || $participant->categoryDescription !== self::REPLACEMENT_CATEGORY
+        ) {
+            return false;
+        }
+
+        $replacementLog = self::replacementAuditLogFor($participant);
+
+        if (! $replacementLog) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(['admin', 'superadmin', 'super_admin'])) {
+            return true;
+        }
+
+        $originalCategory = $replacementLog->old_values['categoryDescription'] ?? null;
+
+        return $user->isAdministrativeOfficer()
+            && filled($originalCategory)
+            && $user->administersCategory((string) $originalCategory);
+    }
+
+    public static function restoreReplacedParticipant(
+        Participant $participant,
+        ?User $user = null,
+    ): void {
+        $user ??= Auth::user();
+
+        abort_unless(self::canRestoreReplacedParticipant($user, $participant), 403);
+
+        DB::transaction(function () use ($participant): void {
+            /** @var Participant|null $participantToRestore */
+            $participantToRestore = Participant::query()
+                ->whereKey($participant->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if (! $participantToRestore) {
+                throw ValidationException::withMessages([
+                    'record' => 'The replaced participant no longer exists.',
+                ]);
+            }
+
+            $replacementLog = self::replacementAuditLogFor($participantToRestore);
+
+            if (
+                ! $replacementLog
+                || $participantToRestore->categoryDescription !== self::REPLACEMENT_CATEGORY
+            ) {
+                throw ValidationException::withMessages([
+                    'record' => 'This participant is no longer eligible to be restored.',
+                ]);
+            }
+
+            $replacementValues = $participantToRestore->getAttributes();
+            unset($replacementValues['created_at'], $replacementValues['updated_at']);
+
+            $originalValues = $replacementLog->old_values ?? [];
+            unset(
+                $originalValues['id'],
+                $originalValues['created_at'],
+                $originalValues['updated_at'],
+            );
+
+            if ($originalValues === []) {
+                throw ValidationException::withMessages([
+                    'record' => 'The original participant snapshot is unavailable.',
+                ]);
+            }
+
+            $participantToRestore->updateQuietly($originalValues);
+
+            $restoredValues = $participantToRestore->fresh()->getAttributes();
+            unset($restoredValues['created_at'], $restoredValues['updated_at']);
+
+            AuditLogger::recordRestoration(
+                $participantToRestore,
+                $replacementValues,
+                $restoredValues,
+            );
+
+            if ($finisher = $participantToRestore->finisher) {
+                $finisher->update([
+                    'firstName' => $participantToRestore->firstName,
+                    'lastName' => $participantToRestore->lastName,
+                    'middleInitial' => $participantToRestore->middleInitial,
+                    'gender' => $participantToRestore->gender,
+                    'birthDate' => $participantToRestore->birthDate,
+                    'categoryDescription' => $participantToRestore->categoryDescription,
+                    'subDescription' => $participantToRestore->subDescription,
+                ]);
+            }
+        });
     }
 
     public function getPotentialDuplicateStats(): array

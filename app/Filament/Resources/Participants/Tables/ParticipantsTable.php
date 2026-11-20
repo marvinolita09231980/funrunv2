@@ -207,6 +207,31 @@ class ParticipantsTable
             ->deferFilters(false)
             ->recordActions([
                  EditAction::make(),
+                 Action::make('restoreReplacement')
+                    ->label('Restore Original Runner')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('Restore original runner?')
+                    ->modalDescription('This replaces the current IN PLACE OF DUPLICATES runner with the complete original participant data preserved in the replacement audit log.')
+                    ->modalSubmitActionLabel('Restore Original Runner')
+                    ->authorize(fn (Participant $record): bool => PotentialDuplicates::canRestoreReplacedParticipant(
+                        Auth::user(),
+                        $record,
+                    ))
+                    ->visible(fn (Participant $record): bool => PotentialDuplicates::canRestoreReplacedParticipant(
+                        Auth::user(),
+                        $record,
+                    ))
+                    ->action(function (Participant $record): void {
+                        PotentialDuplicates::restoreReplacedParticipant($record, Auth::user());
+
+                        Notification::make()
+                            ->success()
+                            ->title('Original runner restored')
+                            ->body('The replacement was undone and the original participant data was restored.')
+                            ->send();
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

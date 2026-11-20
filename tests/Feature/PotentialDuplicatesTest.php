@@ -7,6 +7,7 @@ use App\Exports\FilteredSheetExport;
 use App\Exports\FoodAttendanceSheetExport;
 use App\Exports\InPlaceOfDuplicatesExport;
 use App\Filament\Pages\PotentialDuplicates;
+use App\Filament\Resources\Participants\Pages\ListParticipants;
 use App\Filament\Resources\Participants\Tables\ParticipantsTable;
 use App\Models\AuditLog;
 use App\Models\CategoryAllocation;
@@ -596,6 +597,46 @@ class PotentialDuplicatesTest extends TestCase
             'in-place-of-duplicates-'.now()->year.'.xlsx',
             fn (InPlaceOfDuplicatesExport $export): bool => $export->comparisonRows()->count() === 1,
         );
+
+        $recordToRestore = $recordToReplace->fresh();
+        $this->assertTrue(PotentialDuplicates::canRestoreReplacedParticipant(
+            $admin,
+            $recordToRestore,
+        ));
+        $this->assertTrue(PotentialDuplicates::canRestoreReplacedParticipant(
+            $officer,
+            $recordToRestore,
+        ));
+
+        Livewire::test(ListParticipants::class)
+            ->assertTableActionVisible('restoreReplacement', $recordToRestore)
+            ->callTableAction('restoreReplacement', $recordToRestore)
+            ->assertNotified('Original runner restored');
+
+        $this->assertDatabaseHas('participants', [
+            'id' => $recordToReplace->getKey(),
+            'firstName' => 'Alfred John',
+            'lastName' => 'Milar',
+            'birthDate' => '1999-01-09',
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+            'shirtSize' => 'large',
+            'distanceCategory' => '10km',
+            'created_by' => 'duplicate-admin',
+        ]);
+        $restorationLog = AuditLog::query()
+            ->where('event', 'restored')
+            ->where('auditable_id', (string) $recordToReplace->getKey())
+            ->sole();
+        $this->assertSame('Brenda Mae', $restorationLog->old_values['firstName']);
+        $this->assertSame('Alfred John', $restorationLog->new_values['firstName']);
+        $this->assertSame(
+            PotentialDuplicates::REPLACEMENT_CATEGORY,
+            $restorationLog->old_values['categoryDescription'],
+        );
+        $this->assertSame('CATEGORY A', $restorationLog->new_values['categoryDescription']);
+        $this->assertSame('Duplicate Officer', $restorationLog->actor_name);
+        $this->assertDatabaseCount('audit_logs', 2);
     }
 
     public function test_page_shows_generation_status_before_loading_duplicate_results(): void
