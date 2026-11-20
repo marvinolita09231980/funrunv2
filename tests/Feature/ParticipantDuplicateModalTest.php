@@ -30,14 +30,15 @@ class ParticipantDuplicateModalTest extends TestCase
         $this->createSubcategory('CATEGORY A', 'Office A');
         $this->createSubcategory('CATEGORY B', 'Office B');
         $existing = $this->createParticipant($creator, 'CATEGORY A', 'Office A');
+        $existing->update(['firstName' => 'Existing    Runner']);
 
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         $this->actingAs($admin);
 
         Livewire::test(CreateParticipant::class)
             ->fillForm([
-                'firstName' => $existing->firstName,
-                'lastName' => $existing->lastName,
+                'firstName' => 'existing runner',
+                'lastName' => strtoupper($existing->lastName),
                 'birthDate' => $existing->birthDate,
                 'gender' => 'male',
                 'address' => 'Test Address',

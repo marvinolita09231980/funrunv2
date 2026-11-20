@@ -244,9 +244,7 @@ class ParticipantForm
         
         if ($firstName && $lastName && $birthDate) {
             $participant = Participant::where('year', $yearNow)
-                ->where('firstName', $firstName)
-                ->where('lastName', $lastName)
-                ->whereDate('birthDate', $birthDate)
+                ->matchingIdentity($firstName, $lastName, $birthDate)
                 ->first();
 
             if ($participant) {

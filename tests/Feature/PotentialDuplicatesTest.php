@@ -65,6 +65,8 @@ class PotentialDuplicatesTest extends TestCase
             'contactNumber' => '09171111111',
             'categoryDescription' => 'CATEGORY A',
             'subDescription' => 'Office A',
+            'shirtSize' => 'xs',
+            'distanceCategory' => '3km',
         ]);
         $secondDuplicate = $this->participant([
             'year' => $year,
@@ -73,6 +75,8 @@ class PotentialDuplicatesTest extends TestCase
             'birthDate' => '1994-06-15',
             'categoryDescription' => 'CATEGORY B',
             'subDescription' => 'Office B',
+            'shirtSize' => '2xl',
+            'distanceCategory' => '10km',
         ]);
         $differentBirthDate = $this->participant([
             'year' => $year,
@@ -127,7 +131,17 @@ class PotentialDuplicatesTest extends TestCase
             ->assertTableColumnStateSet('duplicate_group', '└─ Duplicate Group 1', $differentBirthDate)
             ->assertTableColumnStateSet('duplicate_group', '┌─ Duplicate Group 2', $exactOnlyFirst)
             ->assertTableColumnStateSet('duplicate_group', '└─ Duplicate Group 2', $exactOnlySecond)
+            ->assertTableColumnStateSet('shirtSize', 'xs', $firstDuplicate)
+            ->assertTableColumnStateSet('shirtSize', '2xl', $secondDuplicate)
+            ->assertTableColumnStateSet('distanceCategory', '3km', $firstDuplicate)
+            ->assertTableColumnStateSet('distanceCategory', '10km', $secondDuplicate)
             ->assertSee('Phone 09171111111')
+            ->assertSee('Shirt Size')
+            ->assertSee('XS')
+            ->assertSee('2XL')
+            ->assertSee('Race Distance')
+            ->assertSee('Rave Run (3K)')
+            ->assertSee('10KM')
             ->assertSee('High-Probability Groups')
             ->assertSee('Records for Review')
             ->assertSee('High Probability')

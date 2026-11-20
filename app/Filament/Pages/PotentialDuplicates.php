@@ -225,6 +225,10 @@ class PotentialDuplicates extends Page implements HasTable
                         filled($record->contactNumber)
                             ? "Phone {$record->contactNumber}"
                             : 'Phone not provided',
+                        filled($record->shirtSize)
+                            ? 'Shirt '.strtoupper(trim((string) $record->shirtSize))
+                            : 'Shirt size not provided',
+                        'Distance '.$record->distance_label,
                         $record->categoryDescription,
                         $record->subDescription,
                     ])->filter()->join(' • '))
@@ -284,6 +288,16 @@ class PotentialDuplicates extends Page implements HasTable
                         : 'No subcategory recorded')
                     ->searchable()
                     ->wrap()
+                    ->visibleFrom('md'),
+                TextColumn::make('shirtSize')
+                    ->label('Shirt Size')
+                    ->formatStateUsing(fn (?string $state): string => filled($state)
+                        ? strtoupper(trim($state))
+                        : 'Not provided')
+                    ->visibleFrom('md'),
+                TextColumn::make('distanceCategory')
+                    ->label('Race Distance')
+                    ->formatStateUsing(fn (?string $state): string => Participant::distanceLabel($state))
                     ->visibleFrom('md'),
                 TextColumn::make('creator_name')
                     ->label('Recorded By')

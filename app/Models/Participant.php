@@ -69,6 +69,26 @@ class Participant extends Model
         return self::distanceLabel($this->distanceCategory);
     }
 
+    public static function normalizedIdentityName(?string $name): string
+    {
+        return mb_strtolower((string) preg_replace('/\s+/u', ' ', trim((string) $name)));
+    }
+
+    public function scopeMatchingIdentity(
+        Builder $query,
+        string $firstName,
+        string $lastName,
+        mixed $birthDate,
+    ): Builder {
+        $firstNameSql = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(firstName), '  ', ' '), '  ', ' '), '  ', ' '), '  ', ' '), '  ', ' '))";
+        $lastNameSql = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(lastName), '  ', ' '), '  ', ' '), '  ', ' '), '  ', ' '), '  ', ' '))";
+
+        return $query
+            ->whereRaw("{$firstNameSql} = ?", [self::normalizedIdentityName($firstName)])
+            ->whereRaw("{$lastNameSql} = ?", [self::normalizedIdentityName($lastName)])
+            ->whereDate('birthDate', $birthDate);
+    }
+
     public function isPadacMember(): bool
     {
         $category = strtolower(trim((string) $this->categoryDescription));

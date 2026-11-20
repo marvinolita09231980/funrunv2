@@ -81,14 +81,10 @@ class CreateParticipant extends CreateRecord
             return false;
         }
 
-        return strcasecmp(
-            trim((string) ($this->data['firstName'] ?? '')),
-            trim((string) $participant->firstName),
-        ) === 0
-            && strcasecmp(
-                trim((string) ($this->data['lastName'] ?? '')),
-                trim((string) $participant->lastName),
-            ) === 0
+        return Participant::normalizedIdentityName($this->data['firstName'] ?? null)
+            === Participant::normalizedIdentityName($participant->firstName)
+            && Participant::normalizedIdentityName($this->data['lastName'] ?? null)
+            === Participant::normalizedIdentityName($participant->lastName)
             && Carbon::parse($enteredBirthDate)->isSameDay(Carbon::parse($participant->birthDate));
     }
 
@@ -141,9 +137,11 @@ class CreateParticipant extends CreateRecord
 
             $existingParticipant = Participant::with('creator.roles')
             ->where('year', $this->data['year'])
-            ->where('firstName', $this->data['firstName'])
-            ->where('lastName', $this->data['lastName'])
-            ->whereDate('birthDate', $this->data['birthDate'])
+            ->matchingIdentity(
+                $this->data['firstName'],
+                $this->data['lastName'],
+                $this->data['birthDate'],
+            )
             ->first();
             
             if ($existingParticipant) {

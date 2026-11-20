@@ -97,6 +97,42 @@ class RegisterFormTest extends TestCase
             ->assertSet('categoryFull', true);
     }
 
+    public function test_registration_rejects_an_existing_runner_with_different_name_capitalization(): void
+    {
+        $existing = Participant::query()->create([
+            'year' => now()->year,
+            'participantNumber' => '1',
+            'firstName' => 'ALFRED    JOHN',
+            'lastName' => 'MILAR',
+            'middleInitial' => null,
+            'categoryDescription' => 'OPEN CATEGORY',
+            'subDescription' => 'Individual',
+            'shirtSize' => 'medium',
+            'birthDate' => '1999-01-09',
+            'gender' => 'male',
+            'waiver' => true,
+            'distanceCategory' => '5km',
+            'referenceNumber' => '0',
+            'address' => 'Existing address',
+            'contactNumber' => '09123456789',
+            'pwd' => false,
+            'rpwuds' => false,
+            'couple' => false,
+            'created_by' => 'opencategory',
+        ]);
+
+        Livewire::test(RegisterForm::class)
+            ->set('data.firstName', 'Alfred John')
+            ->set('data.lastName', 'Milar')
+            ->set('data.birthDate', '1999-01-09')
+            ->assertSet('participantExists', true)
+            ->assertSet('receiptParticipantId', $existing->getKey())
+            ->assertSet('existingParticipant.name', 'ALFRED    JOHN MILAR')
+            ->call('create');
+
+        $this->assertDatabaseCount('participants', 1);
+    }
+
     public function test_registration_type_reveals_its_conditional_fields(): void
     {
         Livewire::test(RegisterForm::class)

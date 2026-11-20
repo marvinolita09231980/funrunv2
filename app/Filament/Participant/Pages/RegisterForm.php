@@ -746,9 +746,7 @@ class RegisterForm extends Page implements HasSchemas
 
         $exists = Participant::query()
             ->where('year', now()->year)
-            ->where('firstName', $firstName)
-            ->where('lastName', $lastName)
-            ->where('birthDate', $birthDate)
+            ->matchingIdentity($firstName, $lastName, $birthDate)
             ->exists();
 
         if ($exists) {
@@ -771,9 +769,11 @@ class RegisterForm extends Page implements HasSchemas
 
         $alreadyRegistered = Participant::query()
             ->where('year', now()->year)
-            ->where('firstName', trim((string) $itemData['firstName']))
-            ->where('lastName', trim((string) $itemData['lastName']))
-            ->where('birthDate', $itemData['birthDate'])
+            ->matchingIdentity(
+                (string) $itemData['firstName'],
+                (string) $itemData['lastName'],
+                $itemData['birthDate'],
+            )
             ->exists();
 
         if ($alreadyRegistered) {
@@ -834,11 +834,11 @@ class RegisterForm extends Page implements HasSchemas
             return null;
         }
 
-        return mb_strtolower(implode('|', [
-            $firstName,
-            $lastName,
+        return implode('|', [
+            Participant::normalizedIdentityName($firstName),
+            Participant::normalizedIdentityName($lastName),
             (string) $birthDate,
-        ]));
+        ]);
     }
 
     private function validateRegistrantDuplicates(
@@ -849,11 +849,11 @@ class RegisterForm extends Page implements HasSchemas
         $submittedIdentities = [];
 
         foreach ($registrants as $index => $registrant) {
-            $identity = mb_strtolower(implode('|', [
-                $registrant['firstName'],
-                $registrant['lastName'],
+            $identity = implode('|', [
+                Participant::normalizedIdentityName($registrant['firstName']),
+                Participant::normalizedIdentityName($registrant['lastName']),
                 (string) $registrant['birthDate'],
-            ]));
+            ]);
             $name = trim($registrant['firstName'].' '.$registrant['lastName']);
 
             if (isset($submittedIdentities[$identity])) {
@@ -873,28 +873,29 @@ class RegisterForm extends Page implements HasSchemas
             ->where(function ($query) use ($registrants): void {
                 foreach ($registrants as $registrant) {
                     $query->orWhere(function ($identityQuery) use ($registrant): void {
-                        $identityQuery
-                            ->where('firstName', $registrant['firstName'])
-                            ->where('lastName', $registrant['lastName'])
-                            ->where('birthDate', $registrant['birthDate']);
+                        $identityQuery->matchingIdentity(
+                            $registrant['firstName'],
+                            $registrant['lastName'],
+                            $registrant['birthDate'],
+                        );
                     });
                 }
             })
             ->get()
             ->mapWithKeys(fn (Participant $participant): array => [
-                mb_strtolower(implode('|', [
-                    trim((string) $participant->firstName),
-                    trim((string) $participant->lastName),
+                implode('|', [
+                    Participant::normalizedIdentityName($participant->firstName),
+                    Participant::normalizedIdentityName($participant->lastName),
                     (string) $participant->birthDate,
-                ])) => true,
+                ]) => true,
             ]);
 
         foreach ($registrants as $index => $registrant) {
-            $identity = mb_strtolower(implode('|', [
-                $registrant['firstName'],
-                $registrant['lastName'],
+            $identity = implode('|', [
+                Participant::normalizedIdentityName($registrant['firstName']),
+                Participant::normalizedIdentityName($registrant['lastName']),
                 (string) $registrant['birthDate'],
-            ]));
+            ]);
 
             if ($existingIdentities->has($identity)) {
                 $name = trim($registrant['firstName'].' '.$registrant['lastName']);
@@ -969,9 +970,7 @@ class RegisterForm extends Page implements HasSchemas
 
         $participant = Participant::query()
             ->where('year', now()->year)
-            ->where('firstName', $firstName)
-            ->where('lastName', $lastName)
-            ->whereDate('birthDate', $birthDate)
+            ->matchingIdentity($firstName, $lastName, $birthDate)
             ->first();
 
         if (! $participant) {
@@ -1117,9 +1116,7 @@ class RegisterForm extends Page implements HasSchemas
         $participant = $birthDate
             ? Participant::query()
                 ->where('year', now()->year)
-                ->where('firstName', $firstName)
-                ->where('lastName', $lastName)
-                ->whereDate('birthDate', $birthDate)
+                ->matchingIdentity($firstName, $lastName, $birthDate)
                 ->first()
             : null;
 
@@ -1227,9 +1224,7 @@ class RegisterForm extends Page implements HasSchemas
         return Participant::query()
             ->whereKey($this->receiptParticipantId)
             ->where('year', now()->year)
-            ->where('firstName', $firstName)
-            ->where('lastName', $lastName)
-            ->whereDate('birthDate', $birthDate)
+            ->matchingIdentity($firstName, $lastName, $birthDate)
             ->first();
     }
 
