@@ -32,7 +32,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
-use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -124,14 +123,14 @@ class PotentialDuplicates extends Page implements HasTable
                 ->color('primary')
                 ->action(fn (): StreamedResponse => $this->downloadPdfReport()),
             Action::make('downloadReplacementHistory')
-                ->label('Export IN PLACE OF DUPLICATES')
-                ->icon('heroicon-o-arrow-down-tray')
+                ->label('Export IN PLACE OF DUPLICATES PDF')
+                ->icon('heroicon-o-document-arrow-down')
                 ->color('success')
                 ->action(fn () => $this->downloadReplacementHistory()),
         ];
     }
 
-    public function downloadReplacementHistory(): mixed
+    public function downloadReplacementHistory(): ?StreamedResponse
     {
         abort_unless(static::canAccess(), 403);
 
@@ -148,9 +147,20 @@ class PotentialDuplicates extends Page implements HasTable
             return null;
         }
 
-        return Excel::download(
-            $export,
-            "in-place-of-duplicates-{$year}.xlsx",
+        $pdfContent = Pdf::loadView('pdf.in-place-of-duplicates-report', [
+            'year' => $year,
+            'rows' => $export->comparisonRows(),
+            'generatedAt' => CarbonImmutable::now(),
+        ])
+            ->setPaper('a4', 'landscape')
+            ->output();
+
+        return response()->streamDownload(
+            static function () use ($pdfContent): void {
+                echo $pdfContent;
+            },
+            "in-place-of-duplicates-{$year}.pdf",
+            ['Content-Type' => 'application/pdf'],
         );
     }
 

@@ -12,6 +12,7 @@ use App\Filament\Resources\Participants\Tables\ParticipantsTable;
 use App\Models\AuditLog;
 use App\Models\CategoryAllocation;
 use App\Models\Participant;
+use App\Models\Subcategory;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\Action;
@@ -22,11 +23,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
-use Maatwebsite\Excel\Facades\Excel;
 use Mockery;
 use Spatie\Permission\Models\Role;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Tests\TestCase;
 
 class PotentialDuplicatesTest extends TestCase
@@ -467,6 +466,13 @@ class PotentialDuplicatesTest extends TestCase
             'allocated_participants' => 0,
         ]);
         $allocation->administrativeOfficers()->attach($officer);
+        $focal = $this->userWithRole('Duplicate Focal', 'duplicate-focal', 'focal user');
+        Subcategory::query()->create([
+            'categoryDescription' => 'CATEGORY A',
+            'subDescription' => 'Office A',
+            'nop' => 10,
+            'username' => $focal->username,
+        ]);
 
         $original = $this->participant([
             'firstName' => 'ALFRED JOHN',
@@ -575,27 +581,33 @@ class PotentialDuplicatesTest extends TestCase
         $comparison = (new InPlaceOfDuplicatesExport(now()->year))
             ->comparisonRows()
             ->sole();
-        $this->assertSame('Alfred John', $comparison['original']['First Name']);
-        $this->assertSame('Brenda Mae', $comparison['replacement']['First Name']);
+        $this->assertSame('Alfred John Milar', $comparison['original']['Name']);
+        $this->assertSame('Brenda Mae Q. Cruz', $comparison['replacement']['Name']);
         $this->assertSame('CATEGORY A', $comparison['original']['Category']);
         $this->assertSame(
             PotentialDuplicates::REPLACEMENT_CATEGORY,
             $comparison['replacement']['Category'],
         );
-        $this->assertSame('duplicate-admin', $comparison['original']['Registered By']);
-        $this->assertSame($officer->username, $comparison['replacement']['Registered By']);
-        $this->assertSame('Duplicate Officer', $comparison['details']['Replaced By']);
-        $this->assertNotEmpty(Excel::raw(
-            new InPlaceOfDuplicatesExport(now()->year),
-            \Maatwebsite\Excel\Excel::XLSX,
-        ));
+        $this->assertSame('Female', $comparison['replacement']['Gender']);
+        $this->assertSame('', $comparison['replacement']['Subcategory']);
+        $this->assertSame('Duplicate Focal', $comparison['original']['Assigned Focal / AO']);
+        $replacementPdfHtml = view('pdf.in-place-of-duplicates-report', [
+            'year' => now()->year,
+            'rows' => collect([$comparison]),
+            'generatedAt' => now(),
+        ])->render();
+        $this->assertStringContainsString('ORIGINAL DATA', $replacementPdfHtml);
+        $this->assertStringContainsString('REPLACED DATA', $replacementPdfHtml);
+        $this->assertStringContainsString('Alfred John Milar', $replacementPdfHtml);
+        $this->assertStringContainsString('Brenda Mae Q. Cruz', $replacementPdfHtml);
+        $this->assertStringContainsString('Assigned Focal / AO', $replacementPdfHtml);
+        $this->assertStringContainsString('Duplicate Focal', $replacementPdfHtml);
 
-        Excel::fake();
         $response = $replacementComponent->instance()->downloadReplacementHistory();
-        $this->assertInstanceOf(BinaryFileResponse::class, $response);
-        Excel::assertDownloaded(
-            'in-place-of-duplicates-'.now()->year.'.xlsx',
-            fn (InPlaceOfDuplicatesExport $export): bool => $export->comparisonRows()->count() === 1,
+        $this->assertInstanceOf(StreamedResponse::class, $response);
+        $this->assertStringContainsString(
+            'in-place-of-duplicates-'.now()->year.'.pdf',
+            (string) $response->headers->get('Content-Disposition'),
         );
 
         $recordToRestore = $recordToReplace->fresh();
@@ -653,6 +665,62 @@ class PotentialDuplicatesTest extends TestCase
             ->assertSet('duplicatesReady', true)
             ->assertDontSee('Generating potential duplicates')
             ->assertSee('High-Probability Duplicate Review');
+    }
+
+    public function test_replacement_pdf_uses_category_ao_when_original_has_no_subcategory(): void
+    {
+        $officer = $this->userWithRole(
+            'Direct Category Officer',
+            'direct-category-officer',
+            'administrative officer',
+        );
+        $allocation = CategoryAllocation::query()->create([
+            'categoryDescription' => 'DIRECT CATEGORY',
+            'allocated_participants' => 10,
+        ]);
+        $allocation->administrativeOfficers()->attach($officer);
+        $participant = $this->participant([
+            'firstName' => 'Replacement',
+            'lastName' => 'Runner',
+            'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+            'subDescription' => '',
+        ]);
+        AuditLog::query()->create([
+            'event' => 'replaced',
+            'actor_user_id' => $officer->getKey(),
+            'actor_name' => $officer->name,
+            'actor_username' => $officer->username,
+            'auditable_type' => Participant::class,
+            'auditable_id' => (string) $participant->getKey(),
+            'subject_label' => 'Replacement Runner',
+            'old_values' => [
+                'id' => $participant->getKey(),
+                'year' => now()->year,
+                'firstName' => 'Original',
+                'lastName' => 'Runner',
+                'gender' => 'male',
+                'categoryDescription' => 'DIRECT CATEGORY',
+                'subDescription' => '',
+            ],
+            'new_values' => [
+                'id' => $participant->getKey(),
+                'year' => now()->year,
+                'firstName' => 'Replacement',
+                'lastName' => 'Runner',
+                'gender' => 'male',
+                'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+                'subDescription' => '',
+            ],
+        ]);
+
+        $comparison = (new InPlaceOfDuplicatesExport(now()->year))
+            ->comparisonRows()
+            ->sole();
+
+        $this->assertSame(
+            'Direct Category Officer',
+            $comparison['original']['Assigned Focal / AO'],
+        );
     }
 
     public function test_replacement_rejects_a_runner_who_is_already_registered(): void
