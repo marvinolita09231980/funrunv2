@@ -86,6 +86,8 @@ class ParticipantRunnerGroupFilterTest extends TestCase
 
         $component = Livewire::test(ListParticipants::class)
             ->assertTableFilterExists('runner_group')
+            ->assertTableColumnExists('participantNumber')
+            ->assertTableColumnStateSet('participantNumber', $regular->participantNumber, $regular)
             ->assertTableColumnExists('distanceCategory')
             ->assertTableColumnStateSet('distanceCategory', '5km', $regular)
             ->assertSee('Runner Group')

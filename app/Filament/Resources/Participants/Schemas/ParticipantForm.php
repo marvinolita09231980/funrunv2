@@ -270,9 +270,9 @@ class ParticipantForm
     public static function categoryOptionsForUser(?User $user): array
     {
         if ($user?->isAdministrativeOfficer()) {
-            return $user->administeredCategoryAllocations()
-                ->orderBy('categoryDescription')
-                ->pluck('categoryDescription', 'categoryDescription')->all();
+            return collect($user->administeredCategoryNames())
+                ->mapWithKeys(fn (string $category): array => [$category => $category])
+                ->all();
         }
 
         if ($user?->hasAnyRole(['admin', 'superadmin', 'super_admin'])) {

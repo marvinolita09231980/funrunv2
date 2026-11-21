@@ -32,7 +32,7 @@ class ParticipantVisibilityTest extends TestCase
         $this->assertCount(2, $participants);
     }
 
-    public function test_non_admin_role_remains_limited_to_its_own_participants(): void
+    public function test_non_admin_role_can_see_participants_created_by_other_users(): void
     {
         $encoder = $this->createUser('encoder-one');
         $encoder->assignRole(Role::query()->firstOrCreate([
@@ -48,8 +48,11 @@ class ParticipantVisibilityTest extends TestCase
             $encoder,
         )->get();
 
-        $this->assertCount(1, $participants);
-        $this->assertSame('Own', $participants->first()->firstName);
+        $this->assertCount(2, $participants);
+        $this->assertSame(
+            ['Other', 'Own'],
+            $participants->pluck('firstName')->sort()->values()->all(),
+        );
     }
 
     public function test_participant_creator_name_resolves_from_the_username(): void

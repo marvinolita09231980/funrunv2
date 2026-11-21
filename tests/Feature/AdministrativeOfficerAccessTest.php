@@ -129,7 +129,26 @@ class AdministrativeOfficerAccessTest extends TestCase
         $officeATwo = $this->createSubcategory('CATEGORY A', 'Office A Two');
         $officeB = $this->createSubcategory('CATEGORY B', 'Office B');
 
+        $managedFocal = $this->createUser('Managed Focal', 'managed-focal');
+        $managedFocal->update([
+            'assigned_category' => 'CATEGORY A',
+            'created_by' => $officer->username,
+        ]);
+        $managedFocal->assignRole(Role::findByName('focal user'));
+
+        $otherFocal = $this->createUser('Other AO Focal', 'other-ao-focal');
+        $otherFocal->update([
+            'assigned_category' => 'CATEGORY B',
+            'created_by' => 'other-officer',
+        ]);
+        $otherFocal->assignRole(Role::findByName('focal user'));
+
         $categoryAParticipant = $this->createParticipant('Category A', 'CATEGORY A');
+        $categoryAParticipant->update(['created_by' => $managedFocal->username]);
+        $officerParticipant = $this->createParticipant('Officer Owned', 'CATEGORY A');
+        $officerParticipant->update(['created_by' => $officer->username]);
+        $otherFocalParticipant = $this->createParticipant('Other Focal', 'CATEGORY A');
+        $otherFocalParticipant->update(['created_by' => $otherFocal->username]);
         $categoryBParticipant = $this->createParticipant('Category B', 'CATEGORY B');
 
         $visibleParticipants = ParticipantsTable::applyVisibilityForUser(
@@ -137,7 +156,7 @@ class AdministrativeOfficerAccessTest extends TestCase
             $officer,
         )->get();
 
-        $this->assertCount(2, $visibleParticipants);
+        $this->assertCount(4, $visibleParticipants);
 
         $policy = new ParticipantPolicy();
 
@@ -147,6 +166,9 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->assertTrue($policy->create($officer));
         $this->assertTrue($policy->update($officer, $categoryAParticipant));
         $this->assertTrue($policy->delete($officer, $categoryAParticipant));
+        $this->assertTrue($policy->update($officer, $officerParticipant));
+        $this->assertFalse($policy->update($officer, $otherFocalParticipant));
+        $this->assertFalse($policy->delete($officer, $otherFocalParticipant));
         $this->assertFalse($policy->update($officer, $categoryBParticipant));
         $this->assertFalse($policy->delete($officer, $categoryBParticipant));
 
@@ -177,6 +199,9 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->actingAs($officer);
 
         Livewire::test(ListParticipants::class)
+            ->assertTableActionVisible('edit', $categoryAParticipant)
+            ->assertTableActionVisible('edit', $officerParticipant)
+            ->assertTableActionHidden('edit', $otherFocalParticipant)
             ->assertTableActionVisible('attendance_export')
             ->assertTableActionVisible('food_attendance_export');
     }
@@ -837,7 +862,7 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->assertDatabaseMissing('users', ['id' => $focalUser->getKey()]);
     }
 
-    public function test_focal_user_can_manage_participants_only_in_assigned_subcategories(): void
+    public function test_focal_user_can_manage_only_their_own_participants_in_assigned_subcategories(): void
     {
         $focalUser = $this->createUser('Category A Focal', 'category-a-focal');
         $focalUser->update(['assigned_category' => 'CATEGORY A']);
@@ -853,6 +878,13 @@ class AdministrativeOfficerAccessTest extends TestCase
             'CATEGORY A',
             'Office A',
         );
+        $assignedParticipant->update(['created_by' => $focalUser->username]);
+        $otherFocalParticipant = $this->createParticipant(
+            'Other Focal',
+            'CATEGORY A',
+            'Office A',
+        );
+        $otherFocalParticipant->update(['created_by' => 'another-focal']);
         $sameCategoryParticipant = $this->createParticipant(
             'Same Category',
             'CATEGORY A',
@@ -869,8 +901,11 @@ class AdministrativeOfficerAccessTest extends TestCase
             $focalUser,
         )->get();
 
-        $this->assertCount(1, $visibleParticipants);
-        $this->assertSame($assignedParticipant->getKey(), $visibleParticipants->first()->getKey());
+        $this->assertCount(4, $visibleParticipants);
+        $this->assertTrue($visibleParticipants->contains($assignedParticipant));
+        $this->assertTrue($visibleParticipants->contains($otherFocalParticipant));
+        $this->assertTrue($visibleParticipants->contains($sameCategoryParticipant));
+        $this->assertTrue($visibleParticipants->contains($otherCategoryParticipant));
         $this->assertTrue($focalUser->canManageParticipantData('CATEGORY A', 'Office A'));
         $this->assertFalse($focalUser->canManageParticipantData('CATEGORY A', 'Office A Two'));
         $this->assertFalse($focalUser->canManageParticipantData('CATEGORY B', 'Office B'));
@@ -880,12 +915,15 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->assertTrue($policy->viewAny($focalUser));
         $this->assertTrue($policy->create($focalUser));
         $this->assertTrue($policy->view($focalUser, $assignedParticipant));
+        $this->assertTrue($policy->view($focalUser, $otherFocalParticipant));
         $this->assertTrue($policy->update($focalUser, $assignedParticipant));
         $this->assertTrue($policy->delete($focalUser, $assignedParticipant));
-        $this->assertFalse($policy->view($focalUser, $sameCategoryParticipant));
+        $this->assertFalse($policy->update($focalUser, $otherFocalParticipant));
+        $this->assertFalse($policy->delete($focalUser, $otherFocalParticipant));
+        $this->assertTrue($policy->view($focalUser, $sameCategoryParticipant));
         $this->assertFalse($policy->update($focalUser, $sameCategoryParticipant));
         $this->assertFalse($policy->delete($focalUser, $sameCategoryParticipant));
-        $this->assertFalse($policy->view($focalUser, $otherCategoryParticipant));
+        $this->assertTrue($policy->view($focalUser, $otherCategoryParticipant));
 
         $this->assertFalse($focalUser->can('ForceDelete:Participant'));
         $focalUser->givePermissionTo(Permission::findOrCreate('ForceDelete:Participant'));
@@ -908,18 +946,111 @@ class AdministrativeOfficerAccessTest extends TestCase
         $this->actingAs($focalUser);
 
         Livewire::test(ListParticipants::class)
+            ->assertTableActionVisible('edit', $assignedParticipant)
+            ->assertTableActionHidden('edit', $otherFocalParticipant)
             ->assertTableActionHidden('attendance_export')
             ->assertTableActionHidden('food_attendance_export');
 
-        $this->assertSame(1, $assignedSubcategory->registeredParticipants());
-        $this->assertSame(99, $assignedSubcategory->registrationSlotsRemaining());
+        $this->assertSame(2, $assignedSubcategory->registeredParticipants());
+        $this->assertSame(98, $assignedSubcategory->registrationSlotsRemaining());
 
         Livewire::test(ParticipantAllocationOverview::class)
             ->assertSee('Your Subcategory Participant Allocation')
             ->assertSee('CATEGORY A — Office A')
-            ->assertSee('99 remaining')
+            ->assertSee('98 remaining')
             ->assertSee('100 allocated')
-            ->assertSee('1 registered');
+            ->assertSee('2 registered');
+    }
+
+    public function test_admin_cannot_update_superadmin_participants_but_superadmin_can_update_everyone(): void
+    {
+        $updatePermission = Permission::findOrCreate('Update:Participant');
+        $viewAnyPermission = Permission::findOrCreate('ViewAny:Participant');
+        $accessPanelPermission = Permission::findOrCreate('access_admin_panel');
+        $adminRole = Role::findOrCreate('admin', 'web');
+        $superadminRole = Role::findOrCreate('superadmin', 'web');
+        $adminRole->givePermissionTo([
+            $updatePermission,
+            $viewAnyPermission,
+            $accessPanelPermission,
+        ]);
+        $superadminRole->givePermissionTo([$updatePermission, $viewAnyPermission]);
+
+        $admin = $this->createUser('Administrator', 'admin-user');
+        $admin->assignRole($adminRole);
+        $superadmin = $this->createUser('Super Administrator', 'superadmin-user');
+        $superadmin->assignRole($superadminRole);
+
+        $focalCreator = $this->createUser('Focal Creator', 'category-a-focal');
+        $focalCreator->assignRole(Role::findByName('focal user'));
+        $aoCreator = $this->createUser('AO Creator', 'category-a-ao');
+        $aoCreator->assignRole(Role::findByName('administrative officer'));
+
+        $focalParticipant = $this->createParticipant('Focal Created', 'CATEGORY A', 'Office A');
+        $focalParticipant->update(['created_by' => $focalCreator->username]);
+        $aoParticipant = $this->createParticipant('AO Created', 'CATEGORY A', 'Office A');
+        $aoParticipant->update(['created_by' => $aoCreator->username]);
+        $superadminParticipant = $this->createParticipant('Superadmin Created', 'CATEGORY A', 'Office A');
+        $superadminParticipant->update(['created_by' => $superadmin->username]);
+
+        $policy = new ParticipantPolicy();
+
+        $this->assertTrue($policy->update($admin, $focalParticipant));
+        $this->assertTrue($policy->update($admin, $aoParticipant));
+        $this->assertFalse($policy->update($admin, $superadminParticipant));
+        $this->assertTrue($policy->update($superadmin, $focalParticipant));
+        $this->assertTrue($policy->update($superadmin, $aoParticipant));
+        $this->assertTrue($policy->update($superadmin, $superadminParticipant));
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($admin);
+
+        Livewire::test(ListParticipants::class)
+            ->assertTableActionVisible('edit', $focalParticipant)
+            ->assertTableActionVisible('edit', $aoParticipant)
+            ->assertTableActionHidden('edit', $superadminParticipant);
+
+        $this->actingAs($superadmin);
+
+        Livewire::test(ListParticipants::class)
+            ->assertTableActionVisible('edit', $focalParticipant)
+            ->assertTableActionVisible('edit', $aoParticipant)
+            ->assertTableActionVisible('edit', $superadminParticipant);
+    }
+
+    public function test_legacy_ao_category_assignment_can_manage_legacy_focal_participants(): void
+    {
+        $officer = $this->createUser('Legacy PLGU Officer', 'legacy-plgu-ao');
+        $officer->forceFill([
+            'administered_category' => null,
+            'assigned_category' => 'PLGU',
+        ])->save();
+        $officer->assignRole(Role::findByName('administrative officer'));
+
+        $legacyFocal = $this->createUser('Legacy PLGU Focal', 'legacy-plgu-focal');
+        $legacyFocal->forceFill([
+            'assigned_category' => 'PLGU',
+            'created_by' => $officer->username,
+        ])->save();
+
+        $legacyParticipant = $this->createParticipant('Legacy Focal Created', 'PLGU', 'Office A');
+        $legacyParticipant->update(['created_by' => $legacyFocal->username]);
+        $missingCreatorParticipant = $this->createParticipant('Archived Focal Created', 'PLGU', 'Office A');
+        $missingCreatorParticipant->update(['created_by' => 'archived-plgu-focal']);
+
+        $policy = new ParticipantPolicy();
+
+        $this->assertSame(['PLGU'], $officer->administeredCategoryNames());
+        $this->assertTrue($officer->administersCategory('PLGU'));
+        $this->assertTrue($policy->update($officer, $legacyParticipant));
+        $this->assertTrue($policy->update($officer, $missingCreatorParticipant));
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($officer);
+
+        Livewire::test(ListParticipants::class)
+            ->assertTableActionVisible('edit', $legacyParticipant)
+            ->assertTableActionVisible('edit', $missingCreatorParticipant);
     }
 
     private function createUser(

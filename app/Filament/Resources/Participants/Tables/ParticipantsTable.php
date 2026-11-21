@@ -82,6 +82,9 @@ class ParticipantsTable
                         $runnerGroup = $livewire->getTableFilterState('runner_group')['value'] ?? null;
 
                         return collect([
+                            filled($record->participantNumber) && $record->participantNumber !== '0'
+                                ? "ID: {$record->participantNumber}"
+                                : 'ID: Not assigned',
                             $record->categoryDescription,
                             $record->subDescription,
                             Participant::distanceLabel($record->distanceCategory),
@@ -118,6 +121,12 @@ class ParticipantsTable
 
                         return in_array($runnerGroup, ['couple', 'family'], true);
                     })
+                    ->visibleFrom('md'),
+                TextColumn::make('participantNumber')
+                    ->label('ID Number')
+                    ->placeholder('Not assigned')
+                    ->searchable()
+                    ->sortable()
                     ->visibleFrom('md'),
                 TextColumn::make('firstName')
                     ->label('First Name')
@@ -668,41 +677,7 @@ class ParticipantsTable
 
     public static function applyVisibilityForUser(Builder $query, ?User $user): Builder
     {
-        if (! $user || $user->hasAnyRole(['admin', 'superadmin', 'super_admin'])) {
-            return $query;
-        }
-
-        if ($user->isAdministrativeOfficer()) {
-            return $query;
-        }
-
-        if ($user->hasRole('focal user')) {
-            $assignments = Subcategory::query()
-                ->where('username', $user->username)
-                ->get(['categoryDescription', 'subDescription']);
-
-            if ($assignments->isEmpty()) {
-                return $query->whereRaw('1 = 0');
-            }
-
-            return $query->where(function (Builder $query) use ($assignments): void {
-                foreach ($assignments as $assignment) {
-                    $query->orWhere(function (Builder $query) use ($assignment): void {
-                        $query->where('categoryDescription', $assignment->categoryDescription);
-
-                        if ($assignment->categoryDescription !== 'OPEN CATEGORY') {
-                            $query->where('subDescription', $assignment->subDescription);
-                        }
-                    });
-                }
-            });
-        }
-
-        if ($user->username === 'phrmdo') {
-            return $query->where('categoryDescription', 'PLGU');
-        }
-
-        return $query->where('created_by', $user->username);
+        return $query;
     }
 
     public static function canUseAttendanceExports(?User $user): bool

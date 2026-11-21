@@ -19,11 +19,7 @@ class ParticipantPolicy
 
     public function view(User $authUser, Participant $participant): bool
     {
-        return $authUser->can('View:Participant')
-            && (
-                ! $authUser->hasRole('focal user')
-                || $authUser->canManageParticipant($participant)
-            );
+        return $authUser->can('View:Participant');
     }
 
     public function create(User $authUser): bool

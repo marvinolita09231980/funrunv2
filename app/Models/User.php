@@ -126,37 +126,79 @@ class User extends Authenticatable implements FilamentUser
     public function administeredCategoryNames(): array
     {
         return $this->administeredCategoryAllocations()
-            ->orderBy('categoryDescription')
             ->pluck('categoryDescription')
+            ->push($this->administered_category)
+            ->push($this->assigned_category)
+            ->filter(fn (mixed $category): bool => filled($category))
+            ->unique(fn (mixed $category): string => mb_strtolower(trim((string) $category)))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
             ->all();
     }
 
     public function administersCategory(?string $category): bool
     {
-        return ! $this->isAdministrativeOfficer()
-            || (
-                filled($category)
-                && $this->administeredCategoryAllocations()
-                    ->where('categoryDescription', $category)
-                    ->exists()
+        if (! $this->isAdministrativeOfficer()) {
+            return true;
+        }
+
+        $normalizedCategory = mb_strtolower(trim((string) $category));
+
+        return $normalizedCategory !== ''
+            && collect($this->administeredCategoryNames())->contains(
+                fn (mixed $administeredCategory): bool => mb_strtolower(
+                    trim((string) $administeredCategory),
+                ) === $normalizedCategory,
             );
     }
 
     public function canManageParticipant(Participant $participant): bool
     {
-        if ($this->isAdministrativeOfficer()) {
-            return $this->administersCategory($participant->categoryDescription);
-        }
-
-        if ($this->hasAnyRole(['admin', 'superadmin', 'super_admin'])) {
+        if ($this->isSuperAdmin()) {
             return true;
         }
 
+        $creator = $participant->creator;
+
+        if ($this->hasRole('admin')) {
+            return ! $creator?->isSuperAdmin();
+        }
+
+        if ($this->isAdministrativeOfficer()) {
+            if (! $this->administersCategory($participant->categoryDescription)) {
+                return false;
+            }
+
+            if ($participant->created_by === $this->username) {
+                return true;
+            }
+
+            if (! $creator) {
+                return true;
+            }
+
+            if ($creator->isAdministrativeOfficer() || $creator->hasAnyRole([
+                'admin',
+                'superadmin',
+                'super_admin',
+            ])) {
+                return false;
+            }
+
+            return $creator->created_by === $this->username
+                || (
+                    filled($creator->assigned_category)
+                    && mb_strtolower(trim((string) $creator->assigned_category))
+                        === mb_strtolower(trim((string) $participant->categoryDescription))
+                );
+        }
+
         if ($this->hasRole('focal user')) {
-            return $this->canManageParticipantData(
-                $participant->categoryDescription,
-                $participant->subDescription,
-            );
+            return $participant->created_by === $this->username
+                && $this->canManageParticipantData(
+                    $participant->categoryDescription,
+                    $participant->subDescription,
+                );
         }
 
         return $participant->created_by === $this->username;
@@ -199,9 +241,7 @@ class User extends Authenticatable implements FilamentUser
                     'superadmin',
                     'super_admin',
                 ])
-                && $this->administeredCategoryAllocations()
-                    ->where('categoryDescription', $category)
-                    ->exists()
+                && $this->administersCategory($category)
             );
     }
 
