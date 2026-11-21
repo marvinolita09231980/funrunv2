@@ -172,6 +172,10 @@ class FinisherAwardTest extends TestCase
             ->getComponent('participant_id');
         $this->assertInstanceOf(Select::class, $runnerLookup);
         $this->assertSame(150, $runnerLookup->getSearchDebounce());
+        $this->assertArrayHasKey(
+            'x-on:keydown.enter.capture',
+            $runnerLookup->getExtraAlpineAttributes(),
+        );
         $this->assertSame([], $runnerLookup->getSearchResults(''));
         $this->assertSame([
             $participant->getKey() => 'Runner, Awarded - 01/01/1990',
@@ -303,6 +307,53 @@ class FinisherAwardTest extends TestCase
             $secondParticipant->getKey(),
             Finisher::awardHolder($award->getKey())?->participants_id,
         );
+    }
+
+    public function test_pressing_enter_on_a_name_search_shows_all_matching_runners(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $role = Role::query()->firstOrCreate([
+            'name' => 'finisher-name-searcher',
+            'guard_name' => 'web',
+        ]);
+        $role->givePermissionTo([
+            Permission::findOrCreate('access_admin_panel'),
+            Permission::findOrCreate('ViewAny:Finisher'),
+            Permission::findOrCreate('Create:Finisher'),
+        ]);
+
+        $user = User::query()->create([
+            'name' => 'Finisher Name Searcher',
+            'username' => 'finisher-name-searcher',
+            'email' => 'finisher-name-searcher@example.test',
+            'password' => 'password',
+        ]);
+        $user->assignRole($role);
+        $this->actingAs($user);
+
+        $firstMatch = $this->participant([
+            'participantNumber' => '101',
+            'firstName' => 'Juan',
+            'lastName' => 'Panaglan',
+        ]);
+        $secondMatch = $this->participant([
+            'participantNumber' => '102',
+            'firstName' => 'Maria',
+            'lastName' => 'Panaglan-Santos',
+        ]);
+        $nonMatch = $this->participant([
+            'participantNumber' => '103',
+            'firstName' => 'Other',
+            'lastName' => 'Runner',
+        ]);
+
+        Livewire::test(CreateFinisher::class)
+            ->call('showRunnerMatches', '  Panaglan  ')
+            ->assertSet('runnerSearch', 'Panaglan')
+            ->assertCanSeeTableRecords([$firstMatch, $secondMatch])
+            ->assertCanNotSeeTableRecords([$nonMatch])
+            ->assertSee('Showing all runners matching “Panaglan”');
     }
 
     public function test_used_award_retains_its_finisher_relationship(): void

@@ -33,6 +33,8 @@ class CreateFinisher extends Page implements HasTable
 {
     use InteractsWithTable;
 
+    public string $runnerSearch = '';
+
     protected static string $resource = FinisherResource::class;
 
     protected string $view = 'filament.resources.finishers.pages.create-finisher';
@@ -123,9 +125,31 @@ class CreateFinisher extends Page implements HasTable
                         Select::make('participant_id')
                             ->label('Name')
                             ->placeholder('Type a first or last name to find a runner')
+                            ->helperText(fn (): string => filled($this->runnerSearch)
+                                ? "Showing all matching runners for “{$this->runnerSearch}”. Type another name and press Enter to replace this search."
+                                : 'Choose a suggestion for one runner, or press Enter to show all matching runners in the table.')
                             ->searchable()
                             ->searchDebounce(150)
                             ->live()
+                            ->afterStateUpdated(function (mixed $state): void {
+                                if (filled($state)) {
+                                    $this->runnerSearch = '';
+                                }
+                            })
+                            ->extraAlpineAttributes([
+                                'x-on:keydown.enter.capture' => <<<'JS'
+                                    if ($event.target !== select?.searchInput) return
+
+                                    const search = select.searchInput.value.trim()
+
+                                    if (! search) return
+
+                                    $event.preventDefault()
+                                    $event.stopImmediatePropagation()
+                                    select.closeDropdown()
+                                    $wire.showRunnerMatches(search)
+                                    JS,
+                            ])
                             ->getSearchResultsUsing(function (string $search): array {
                                 $search = trim($search);
 
@@ -168,11 +192,21 @@ class CreateFinisher extends Page implements HasTable
                     ->query(function (Builder $query, array $data): Builder {
                         $participantId = $data['participant_id'] ?? null;
 
-                        if (blank($participantId)) {
+                        if (filled($participantId)) {
+                            return $query->whereKey($participantId);
+                        }
+
+                        $search = trim($this->runnerSearch);
+
+                        if ($search === '') {
                             return $query->whereRaw('1 = 0');
                         }
 
-                        return $query->whereKey($participantId);
+                        return $query->where(function (Builder $query) use ($search): void {
+                            $query
+                                ->where('lastName', 'like', "{$search}%")
+                                ->orWhere('firstName', 'like', "{$search}%");
+                        });
                     })
                     ->indicateUsing(fn (): array => []),
             ], layout: FiltersLayout::AboveContent)
@@ -421,12 +455,31 @@ class CreateFinisher extends Page implements HasTable
             ])
             ->recordUrl(null)
             ->heading('Participant Lookup Results')
-            ->description('Record a race result or assign another eligible award to an existing finisher.')
+            ->description(fn (): string => filled($this->runnerSearch)
+                ? "Showing all runners matching “{$this->runnerSearch}”. Select Record Runner beside the correct participant."
+                : 'Record a race result or assign another eligible award to an existing finisher.')
             ->striped()
             ->paginationPageOptions([10, 25, 50, 100])
             ->defaultPaginationPageOption(25)
             ->emptyStateHeading('Search for a runner')
             ->emptyStateDescription('Enter a last name or first name to display matching runners.');
+    }
+
+    public function showRunnerMatches(string $search): void
+    {
+        $search = mb_substr(trim($search), 0, 100);
+
+        if ($search === '') {
+            return;
+        }
+
+        $this->runnerSearch = $search;
+
+        $filters = $this->tableFilters ?? [];
+        $filters['runner_name']['participant_id'] = null;
+        $this->tableFilters = $filters;
+        $this->getTableFiltersForm()->fill($filters);
+        $this->resetPage();
     }
 
     private static function participantName(Participant $participant): string
