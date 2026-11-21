@@ -18,6 +18,7 @@ use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 use Throwable;
@@ -265,6 +266,24 @@ class FeedbackForm extends Page implements HasSchemas
 
     public function certificateUrl(): ?string
     {
+        $participant = $this->validatedCurrentCertificateParticipant();
+
+        return $participant
+            ? self::certificateUrlForParticipant($participant, 'feedback.certificate.download')
+            : null;
+    }
+
+    public function certificatePreviewUrl(): ?string
+    {
+        $participant = $this->validatedCurrentCertificateParticipant();
+
+        return $participant
+            ? self::certificateUrlForParticipant($participant, 'feedback.certificate.preview')
+            : null;
+    }
+
+    private function validatedCurrentCertificateParticipant(): ?Participant
+    {
         if (! (bool) ($this->data['feedback_exists'] ?? false)) {
             return null;
         }
@@ -289,7 +308,7 @@ class FeedbackForm extends Page implements HasSchemas
             return null;
         }
 
-        return self::certificateUrlForParticipant($participant);
+        return $participant;
     }
 
     public function openCertificateLookup(): void
@@ -361,7 +380,16 @@ class FeedbackForm extends Page implements HasSchemas
         $participant = $this->validatedCertificateLookupParticipant();
 
         return $participant
-            ? self::certificateUrlForParticipant($participant)
+            ? self::certificateUrlForParticipant($participant, 'feedback.certificate.download')
+            : null;
+    }
+
+    public function certificateLookupPreviewUrl(): ?string
+    {
+        $participant = $this->validatedCertificateLookupParticipant();
+
+        return $participant
+            ? self::certificateUrlForParticipant($participant, 'feedback.certificate.preview')
             : null;
     }
 
@@ -391,38 +419,16 @@ class FeedbackForm extends Page implements HasSchemas
         return $participant;
     }
 
-    private static function certificateUrlForParticipant(Participant $participant): string
+    private static function certificateUrlForParticipant(
+        Participant $participant,
+        string $routeName,
+    ): string
     {
-        $fullName = collect([
-            $participant->firstName,
-            filled($participant->middleInitial)
-                ? rtrim((string) $participant->middleInitial, '.').'.'
-                : null,
-            $participant->lastName,
-        ])->filter()->join(' ');
-
-        return 'https://paps.davaodeoro.gov.ph/jasperserver/flow.html?'.http_build_query([
-            'pp' => 'u=Jamshasadid|r=Manager|o=EMEA,Sales|pa1=Sweden',
-            '_flowId' => 'viewReportFlow',
-            'ParentFolderUri' => '/reports/marvin_reports',
-            'reportUnit' => '/reports/marvin_reports/kontrun_certificate',
-            'standAlone' => 'true',
-            'output' => 'pdf',
-            'name' => $fullName,
-            'distance' => self::certificateDistanceLabel($participant->distanceCategory),
-        ], '', '&', PHP_QUERY_RFC3986);
-    }
-
-    private static function certificateDistanceLabel(?string $distance): string
-    {
-        $normalized = strtolower((string) preg_replace('/\s+/', '', trim((string) $distance)));
-
-        return match ($normalized) {
-            '3k', '3km' => '3K',
-            '5k', '5km' => '5K',
-            '10k', '10km' => '10K',
-            default => '',
-        };
+        return URL::temporarySignedRoute(
+            $routeName,
+            now()->addMinutes(30),
+            ['participant' => $participant->getKey()],
+        );
     }
 
     public static function findParticipant(callable $get, callable $set): bool

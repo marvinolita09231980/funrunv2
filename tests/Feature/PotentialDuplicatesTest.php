@@ -649,6 +649,11 @@ class PotentialDuplicatesTest extends TestCase
         $this->assertSame('CATEGORY A', $restorationLog->new_values['categoryDescription']);
         $this->assertSame('Duplicate Officer', $restorationLog->actor_name);
         $this->assertDatabaseCount('audit_logs', 2);
+        $this->assertCount(
+            0,
+            (new InPlaceOfDuplicatesExport(now()->year))->comparisonRows(),
+            'Restored replacements should not remain in the active replacement report.',
+        );
     }
 
     public function test_page_shows_generation_status_before_loading_duplicate_results(): void
@@ -712,10 +717,43 @@ class PotentialDuplicatesTest extends TestCase
                 'subDescription' => '',
             ],
         ]);
+        $duplicateReplacement = $this->participant([
+            'firstName' => '  replacement ',
+            'lastName' => 'RUNNER',
+            'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+            'subDescription' => '',
+        ]);
+        AuditLog::query()->create([
+            'event' => 'replaced',
+            'actor_user_id' => $officer->getKey(),
+            'actor_name' => $officer->name,
+            'actor_username' => $officer->username,
+            'auditable_type' => Participant::class,
+            'auditable_id' => (string) $duplicateReplacement->getKey(),
+            'subject_label' => 'Replacement Runner',
+            'old_values' => [
+                'id' => $duplicateReplacement->getKey(),
+                'year' => now()->year,
+                'firstName' => 'Other Original',
+                'lastName' => 'Runner',
+                'gender' => 'female',
+                'categoryDescription' => 'DIRECT CATEGORY',
+                'subDescription' => '',
+            ],
+            'new_values' => [
+                'id' => $duplicateReplacement->getKey(),
+                'year' => now()->year,
+                'firstName' => 'Replacement',
+                'lastName' => 'Runner',
+                'gender' => 'male',
+                'categoryDescription' => PotentialDuplicates::REPLACEMENT_CATEGORY,
+                'subDescription' => '',
+            ],
+        ]);
 
-        $comparison = (new InPlaceOfDuplicatesExport(now()->year))
-            ->comparisonRows()
-            ->sole();
+        $rows = (new InPlaceOfDuplicatesExport(now()->year))->comparisonRows();
+        $this->assertCount(1, $rows);
+        $comparison = $rows->sole();
 
         $this->assertSame(
             'Direct Category Officer',

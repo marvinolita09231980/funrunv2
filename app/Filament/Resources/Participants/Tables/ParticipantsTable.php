@@ -84,6 +84,7 @@ class ParticipantsTable
                         return collect([
                             $record->categoryDescription,
                             $record->subDescription,
+                            Participant::distanceLabel($record->distanceCategory),
                             in_array($runnerGroup, ['couple', 'family'], true)
                                 ? collect([
                                     $record->relationship_group_marker,
@@ -134,6 +135,14 @@ class ParticipantsTable
                     ->label('Organization')
                     ->searchable()
                     ->wrap()
+                    ->visibleFrom('md'),
+                TextColumn::make('distanceCategory')
+                    ->label('Distance Category')
+                    ->formatStateUsing(
+                        fn (?string $state): string => Participant::distanceLabel($state),
+                    )
+                    ->searchable()
+                    ->sortable()
                     ->visibleFrom('md'),
                 TextColumn::make('gender')
                     ->label('Gender')

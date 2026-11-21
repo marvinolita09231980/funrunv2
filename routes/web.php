@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FinisherCertificateController;
 use App\Http\Controllers\ParticipantReportPdfController;
 use App\Support\FeedbackShareLink;
 use Illuminate\Support\Facades\Route;
@@ -7,6 +8,21 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return redirect('/admin/login');
 });
+
+Route::get(
+    '/feedback/certificates/{participant}/preview',
+    [FinisherCertificateController::class, 'preview'],
+)->middleware('signed')->name('feedback.certificate.preview');
+
+Route::get(
+    '/feedback/certificates/{participant}/certificate.pdf',
+    [FinisherCertificateController::class, 'inline'],
+)->middleware('signed')->name('feedback.certificate.inline');
+
+Route::get(
+    '/feedback/certificates/{participant}',
+    [FinisherCertificateController::class, 'download'],
+)->middleware('signed')->name('feedback.certificate.download');
 
 Route::get(
     '/admin/participant-reports/preview/age',

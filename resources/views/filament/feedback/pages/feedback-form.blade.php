@@ -43,7 +43,7 @@
                             Submit Feedback
                         </x-filament::button>
                     @endif
-                    @if ($data['feedback_exists'] && ($certificateUrl = $this->certificateUrl()))
+                    @if ($data['feedback_exists'] && ($certificatePreviewUrl = $this->certificatePreviewUrl()))
                         <div class="flex w-full flex-col items-center justify-between gap-3 rounded-xl border border-success-200 bg-success-50 px-4 py-3 text-success-800 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-300 sm:flex-row">
                             <p class="flex items-center gap-2 text-sm font-semibold">
                                 <x-filament::icon icon="heroicon-o-check-circle" class="h-5 w-5 shrink-0" />
@@ -51,7 +51,7 @@
                             </p>
                             <x-filament::button
                                 tag="a"
-                                :href="$certificateUrl"
+                                :href="$certificatePreviewUrl"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 size="sm"
@@ -67,7 +67,7 @@
     </div>
 
     <x-filament::modal id="certificate-lookup" alignment="center" width="md">
-        @if ($certificateUrl = $this->certificateLookupUrl())
+        @if ($certificatePreviewUrl = $this->certificateLookupPreviewUrl())
             <div class="space-y-5 text-center">
                 <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-50 text-success-600 ring-8 ring-success-50/60 dark:bg-success-500/10 dark:text-success-400 dark:ring-success-500/5">
                     <x-filament::icon icon="heroicon-o-check-badge" class="h-9 w-9" />
@@ -78,7 +78,7 @@
                         Certificate found
                     </h2>
                     <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                        Your current-year feedback has been verified. Your certificate is ready to download.
+                        Your current-year feedback has been verified. Preview your certificate before downloading it.
                     </p>
                 </div>
 
@@ -96,7 +96,7 @@
 
                     <x-filament::button
                         tag="a"
-                        :href="$certificateUrl"
+                        :href="$certificatePreviewUrl"
                         target="_blank"
                         rel="noopener noreferrer"
                         icon="heroicon-o-arrow-down-tray"

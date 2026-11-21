@@ -13,13 +13,19 @@ class InPlaceOfDuplicatesExport
 {
     private ?Collection $logs = null;
 
+    private ?Collection $activeParticipants = null;
+
     public function __construct(private readonly int $year)
     {
     }
 
     public function replacementLogs(): Collection
     {
-        return $this->logs ??= AuditLog::query()
+        if ($this->logs !== null) {
+            return $this->logs;
+        }
+
+        $logs = AuditLog::query()
             ->where('event', 'replaced')
             ->where('auditable_type', Participant::class)
             ->latest('created_at')
@@ -31,6 +37,33 @@ class InPlaceOfDuplicatesExport
 
                 return (int) ($newValues['year'] ?? $oldValues['year'] ?? 0) === $this->year
                     && ($newValues['categoryDescription'] ?? null) === PotentialDuplicates::REPLACEMENT_CATEGORY;
+            })
+            ->unique(fn (AuditLog $log): string => (string) $log->auditable_id)
+            ->values();
+
+        $this->activeParticipants = Participant::query()
+            ->whereKey($logs->pluck('auditable_id')->filter()->all())
+            ->get()
+            ->keyBy(fn (Participant $participant): string => (string) $participant->getKey());
+
+        return $this->logs = $logs
+            ->filter(function (AuditLog $log): bool {
+                $participant = $this->activeParticipants?->get((string) $log->auditable_id);
+
+                return $participant instanceof Participant
+                    && $participant->categoryDescription === PotentialDuplicates::REPLACEMENT_CATEGORY;
+            })
+            ->unique(function (AuditLog $log): string {
+                /** @var Participant $participant */
+                $participant = $this->activeParticipants->get((string) $log->auditable_id);
+                $name = collect([
+                    $participant->firstName,
+                    $participant->middleInitial,
+                    $participant->lastName,
+                ])->filter()->join(' ');
+
+                return Participant::normalizedIdentityName($name)
+                    ?: 'participant-'.(string) $participant->getKey();
             })
             ->values();
     }
@@ -44,13 +77,18 @@ class InPlaceOfDuplicatesExport
     public function comparisonRows(): Collection
     {
         return $this->replacementLogs()
-            ->map(fn (AuditLog $log): array => [
-                'original' => [
-                    ...$this->participantValues($log->old_values ?? []),
-                    'Assigned Focal / AO' => $this->assignedFocalOrAo($log->old_values ?? []),
-                ],
-                'replacement' => $this->participantValues($log->new_values ?? []),
-            ])
+            ->map(function (AuditLog $log): array {
+                /** @var Participant $activeReplacement */
+                $activeReplacement = $this->activeParticipants->get((string) $log->auditable_id);
+
+                return [
+                    'original' => [
+                        ...$this->participantValues($log->old_values ?? []),
+                        'Assigned Focal / AO' => $this->assignedFocalOrAo($log->old_values ?? []),
+                    ],
+                    'replacement' => $this->participantValues($activeReplacement->getAttributes()),
+                ];
+            })
             ->values();
     }
 

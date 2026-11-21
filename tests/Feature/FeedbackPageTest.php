@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Filament\Feedback\Pages\FeedbackForm;
 use App\Models\Feedback;
 use App\Models\Participant;
+use App\Services\FinisherCertificatePdf;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\URL;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -145,21 +147,55 @@ class FeedbackPageTest extends TestCase
 
         $component = $this->feedbackComponent($participant)
             ->assertSet('data.feedback_exists', true)
-            ->set('data.distanceCategory', '5km');
+            ->set('data.distanceCategory', '5km')
+            ->assertSee('Download Certificate')
+            ->assertDontSee('Preview Certificate');
 
-        foreach ([
-            '3km' => '3K',
-            '5km' => '5K',
-            '10km' => '10K',
-        ] as $storedDistance => $certificateDistance) {
+        foreach (['3km', '5km', '10km'] as $storedDistance) {
             $participant->update(['distanceCategory' => $storedDistance]);
 
             $certificateUrl = $component->instance()->certificateUrl();
-            parse_str((string) parse_url((string) $certificateUrl, PHP_URL_QUERY), $parameters);
+            $certificatePreviewUrl = $component->instance()->certificatePreviewUrl();
 
-            $this->assertSame('Feedback Q. Runner', $parameters['name'] ?? null);
-            $this->assertSame($certificateDistance, $parameters['distance'] ?? null);
+            $this->assertSame(
+                '/feedback/certificates/'.$participant->getKey(),
+                parse_url((string) $certificateUrl, PHP_URL_PATH),
+            );
+            $this->get((string) $certificateUrl)
+                ->assertOk()
+                ->assertHeader('Content-Type', 'application/pdf')
+                ->assertDownload(
+                    'feedback-q-runner-finisher-certificate-'.$this->currentYear().'.pdf',
+                );
+            $this->assertSame(
+                '/feedback/certificates/'.$participant->getKey().'/preview',
+                parse_url((string) $certificatePreviewUrl, PHP_URL_PATH),
+            );
+            $this->get((string) $certificatePreviewUrl)
+                ->assertOk()
+                ->assertSee('Certificate Preview')
+                ->assertSee('Download PDF')
+                ->assertSee('Finisher certificate preview');
+
+            $inlineUrl = URL::temporarySignedRoute(
+                'feedback.certificate.inline',
+                now()->addMinutes(30),
+                ['participant' => $participant->getKey()],
+            );
+            $this->get($inlineUrl)
+                ->assertOk()
+                ->assertHeader(
+                    'Content-Disposition',
+                    'inline; filename="feedback-q-runner-finisher-certificate-'.$this->currentYear().'.pdf"',
+                );
         }
+    }
+
+    public function test_certificate_uses_the_requested_distance_labels(): void
+    {
+        $this->assertSame('Rave Run (3 km)', FinisherCertificatePdf::distanceLabel('3km'));
+        $this->assertSame('5 km', FinisherCertificatePdf::distanceLabel('5km'));
+        $this->assertSame('10 km', FinisherCertificatePdf::distanceLabel('10km'));
     }
 
     public function test_existing_feedback_can_be_validated_separately_for_certificate_download(): void
@@ -177,10 +213,36 @@ class FeedbackPageTest extends TestCase
             ->assertSet('certificateParticipantId', $participant->getKey());
 
         $certificateUrl = $component->instance()->certificateLookupUrl();
-        parse_str((string) parse_url((string) $certificateUrl, PHP_URL_QUERY), $parameters);
 
-        $this->assertSame('Feedback Runner', $parameters['name'] ?? null);
-        $this->assertSame('5K', $parameters['distance'] ?? null);
+        $this->assertSame(
+            '/feedback/certificates/'.$participant->getKey(),
+            parse_url((string) $certificateUrl, PHP_URL_PATH),
+        );
+        $this->get((string) $certificateUrl)
+            ->assertOk()
+            ->assertDownload(
+                'feedback-runner-finisher-certificate-'.$this->currentYear().'.pdf',
+            );
+    }
+
+    public function test_certificate_download_requires_a_valid_signature_and_completed_feedback(): void
+    {
+        $participant = $this->participant();
+
+        $this->get(route('feedback.certificate.download', $participant))
+            ->assertForbidden();
+        $this->get(route('feedback.certificate.preview', $participant))
+            ->assertForbidden();
+        $this->get(route('feedback.certificate.inline', $participant))
+            ->assertForbidden();
+
+        $signedUrl = URL::temporarySignedRoute(
+            'feedback.certificate.download',
+            now()->addMinutes(30),
+            ['participant' => $participant->getKey()],
+        );
+
+        $this->get($signedUrl)->assertNotFound();
     }
 
     public function test_certificate_lookup_rejects_feedback_from_a_previous_year(): void
