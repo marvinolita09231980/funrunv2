@@ -93,6 +93,18 @@ class RegisterFormTest extends TestCase
             'categoryDescription' => 'OPEN CATEGORY',
         ]);
 
+        $participant = Participant::query()
+            ->where('firstName', 'Open')
+            ->where('lastName', 'Runner')
+            ->sole();
+
+        $this->assertSame((string) $participant->getKey(), $participant->participantNumber);
+        $this->assertDatabaseMissing('audit_logs', [
+            'event' => 'updated',
+            'auditable_type' => Participant::class,
+            'auditable_id' => (string) $participant->getKey(),
+        ]);
+
         Livewire::test(RegisterForm::class)
             ->assertSet('categoryFull', true);
     }

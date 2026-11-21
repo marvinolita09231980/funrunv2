@@ -655,7 +655,7 @@ class RegisterForm extends Page implements HasSchemas
 
                 $primaryParticipant->forceFill([
                     'participantNumber' => $participantNumber,
-                ])->save();
+                ])->saveQuietly();
 
                 foreach (array_slice($registrants, 1) as $registrant) {
                     Participant::create([
