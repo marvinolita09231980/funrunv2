@@ -82,9 +82,7 @@ class ParticipantsTable
                         $runnerGroup = $livewire->getTableFilterState('runner_group')['value'] ?? null;
 
                         return collect([
-                            filled($record->participantNumber) && $record->participantNumber !== '0'
-                                ? "ID: {$record->participantNumber}"
-                                : 'ID: Not assigned',
+                            "ID: {$record->getKey()}",
                             $record->categoryDescription,
                             $record->subDescription,
                             Participant::distanceLabel($record->distanceCategory),
@@ -122,9 +120,8 @@ class ParticipantsTable
                         return in_array($runnerGroup, ['couple', 'family'], true);
                     })
                     ->visibleFrom('md'),
-                TextColumn::make('participantNumber')
+                TextColumn::make('id')
                     ->label('ID Number')
-                    ->placeholder('Not assigned')
                     ->searchable()
                     ->sortable()
                     ->visibleFrom('md'),
